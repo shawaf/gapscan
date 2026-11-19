@@ -1,6 +1,6 @@
 # GapScan GitHub Action: scan a pull request, upload the results to the Security tab, comment on
-# the PR, and optionally send the report to your GapScan project. A thin wrapper over the CLI
-# (`gapscan ci run` / `ci comment` / `team push`); the engine makes no network call during the scan.
+# the PR. A thin wrapper over the CLI (`gapscan ci run` / `ci comment`); the engine makes no
+# network call during the scan.
 #
 # Usage (see docs/github-action.md):
 #   - uses: actions/checkout@v4

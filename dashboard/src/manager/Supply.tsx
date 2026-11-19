@@ -1,4 +1,5 @@
 import { useMemo, useState } from "preact/hooks";
+import { Patch } from "../components/Patch";
 import { PageHead, ScannerNotice, Sev, Verdict } from "./common";
 import { Icon } from "./icons";
 import { useData } from "../context";
@@ -27,7 +28,7 @@ export function DepsPage() {
       </div>
       {tab === "packages" && (
         <section class="cc-card" style="padding:0">
-          {d.packages.length === 0 ? <div class="cc-empty"><Icon name="deps" size={24} /><h2>No open vulnerable packages</h2><p>Nothing installed matches a known advisory in the local database.</p></div> : (
+          {d.packages.length === 0 ? <div class="cc-empty"><Patch state="done" size={72} label="Patch: no open vulnerable packages" /><h2>No open vulnerable packages</h2><p>Nothing installed matches a known advisory in the local database.</p></div> : (
             <div class="tbl-wrap" style="border:0"><table class="tbl"><thead><tr><th>Package</th><th>Worst severity</th><th>Advisories</th><th>Exploit signals</th><th>Fixed in</th><th>Reachability</th><th>Review</th></tr></thead>
               <tbody>{d.packages.map((p) => (
                 <tr key={`${p.package}@${p.version}`} class="click" onClick={() => p.finding_ids[0] && navigate("findings", p.finding_ids[0])}>

@@ -1,4 +1,5 @@
 import { useMemo } from "preact/hooks";
+import { Patch } from "../components/Patch";
 import { AiText, Meter, SeverityBadge, VerdictBadge } from "../components/Badges";
 import { EChart, useChartPalette } from "../components/EChart";
 import { useData } from "../context";
@@ -74,7 +75,7 @@ export function Overview() {
 
       <div class="card" style={{ marginTop: "14px" }}>
         <h2>Top 10 risks to fix first</h2>
-        {data.top_risks.length === 0 ? <div class="empty">No open findings.</div> : (
+        {data.top_risks.length === 0 ? <div class="empty patch-tip"><Patch state="done" size={72} label="Patch: no open findings" /><span>No open findings. Checked with no finding is not the same as secure: see the coverage page for controls that need a person.</span></div> : (
           <table class="t" aria-label="Top 10 risks"><thead><tr><th>#</th><th>Severity</th><th>Finding</th><th>Why it matters</th><th>Review</th></tr></thead>
             <tbody>{data.top_risks.map((t, i) => (
               <tr key={t.finding_id}><td>{i + 1}</td><td><SeverityBadge severity={t.severity} /></td>

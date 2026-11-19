@@ -1,0 +1,13 @@
+/* Control Center, GapScan edition (the default look). Every rule is scoped to [data-ui="gapscan"].
+   Tokens come from ../styles-gapscan.css: dark first, one accent, 8px controls and 14px cards. */
+:root[data-ui="gapscan"] { --r: 14px; --rs: 8px; }
+:root[data-ui="gapscan"] .cc-side { background: var(--bg); }
+:root[data-ui="gapscan"] .cc-brand .wordmark { font-family: var(--display); font-size: 20px; }
+:root[data-ui="gapscan"] .cc-switch > button,
+:root[data-ui="gapscan"] .cc-nav a,
+:root[data-ui="gapscan"] .cc-menu button, :root[data-ui="gapscan"] .cc-menu a { border-radius: 8px; }
+:root[data-ui="gapscan"] .cc-nav a[aria-current="page"] { background: var(--accent-weak); color: var(--text); box-shadow: inset 3px 0 0 var(--accent); }
+:root[data-ui="gapscan"] .cc-card { border-radius: 14px; }
+:root[data-ui="gapscan"] .cc-seg { border-radius: 999px; overflow: hidden; }
+:root[data-ui="gapscan"] .cc-body h1 { font-family: var(--display); }
+:root[data-ui="gapscan"] .cc-group { letter-spacing: 0.8px; }

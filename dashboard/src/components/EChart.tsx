@@ -9,6 +9,11 @@ import { uiStore, useStore, type Ui } from "../store";
 echarts.use([BarChart, PieChart, TreemapChart, GridComponent, LegendComponent, TooltipComponent, TitleComponent, CanvasRenderer]);
 
 const PALETTES = {
+  // The GapScan design system: gap orange leads, severities from its tokens, readable on dark and light.
+  gapscan: {
+    sev: { critical: "#e8603c", high: "#e9a23b", medium: "#7d8fe8", low: "#8a97a8", info: "#6a7889" },
+    accent: "#7d8fe8", neutral: "#8a97a8", bad: "#e8803c", good: "#5f86b0", treemapBorder: "transparent",
+  },
   // Okabe-Ito based, as in the original design.
   classic: {
     sev: { critical: "#d55e00", high: "#e69f00", medium: "#c8b900", low: "#56b4e9", info: "#8a94a6" },
@@ -54,6 +59,23 @@ function soften(option: Opt, line: string, muted: string): Opt {
   };
 }
 
+/** The GapScan look: axis text, gridlines and value labels follow the theme tokens (no outlined labels on dark). */
+function tone(option: Opt, line: string, muted: string, text: string): Opt {
+  const axis = (a: Opt): Opt => ({
+    axisLine: { lineStyle: { color: line } }, axisTick: { show: false },
+    axisLabel: { color: muted }, splitLine: { lineStyle: { color: line } }, ...a,
+  });
+  const series = asList(option.series).map((s) => s.type === "bar"
+    ? { barMaxWidth: 24, ...s, label: { color: text, textBorderWidth: 0, ...(s.label as Opt | undefined) }, itemStyle: { borderRadius: s.stack ? 0 : 4, ...(s.itemStyle as Opt | undefined) } }
+    : s);
+  return {
+    ...option,
+    ...(option.xAxis ? { xAxis: Array.isArray(option.xAxis) ? asList(option.xAxis).map(axis) : axis(option.xAxis as Opt) } : {}),
+    ...(option.yAxis ? { yAxis: Array.isArray(option.yAxis) ? asList(option.yAxis).map(axis) : axis(option.yAxis as Opt) } : {}),
+    ...(option.series ? { series } : {}),
+  };
+}
+
 function cssVar(name: string, fallback: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
@@ -77,7 +99,7 @@ export function EChart({ option, height, label, tall = false }: { option: EChart
     if (!c) return;
     const apply = () => c.setOption({
       backgroundColor: "transparent", textStyle: { color: cssVar("--text", "#22263a"), fontFamily: "inherit" },
-      animation: false, ...(uiStore.get() === "soft" ? soften : (o: Opt) => o)(option as Opt, cssVar("--line", "#e4e7f0"), cssVar("--muted", "#5f6580")),
+      animation: false, ...(uiStore.get() === "soft" ? soften : uiStore.get() === "gapscan" ? tone : (o: Opt) => o)(option as Opt, cssVar("--line", "#e4e7f0"), cssVar("--muted", "#5f6580"), cssVar("--text", "#22263a")),
     } as EChartsCoreOption, true);
     apply();
     const mq = window.matchMedia("(prefers-color-scheme: dark)");

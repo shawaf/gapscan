@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { Patch } from "../components/Patch";
 import { api, ApiError } from "./api";
 import type { DataInfo, PlanStep, Project, SetupStatus } from "./api";
 import { Err, Skeleton } from "./common";
@@ -58,7 +59,7 @@ export function WelcomePage() {
 
   return (
     <div style="max-width:760px;margin:0 auto">
-      <div class="cc-h" style="margin-bottom:8px"><div><h1>Welcome to GapScan</h1>
+      <div class="cc-h patch-tip" style="margin-bottom:8px"><Patch state="greet" size={96} /><div><h1>Welcome to GapScan</h1>
         <p class="sub">Find the gaps between your code and the standard it answers to, prove them with evidence, and prove when they are closed. GapScan starts with application security: OWASP ASVS 5.0 and Top 10:2025. This is local mode: nothing is uploaded, and nothing in your projects is ever run.</p></div></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:12px 0 16px">
         {[["asvs", "Measured", "Every gap is a control from a standard that your code does not meet."], ["findings", "Proven", "Each gap links to its evidence: the code, the scanner result and a fix."], ["lock", "Local", "Your code never leaves this computer. Scans run without a network."]].map(([icon, title, text]) => (

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import { Patch } from "../components/Patch";
 import { ACTIVE, api, ApiError } from "./api";
 import type { GitRefs, Models, ProjectDetail, QueueRun, Scan, ScannerAvail, Settings } from "./api";
 import { ConfirmDialog, Drawer, Err, Grade, Pipeline, Segmented, StatusBadge, duration, elapsed, presetLabel, stepLabel, stepsFor } from "./common";
@@ -153,7 +154,7 @@ export function Runs({ project, queue, reload }: { project: ProjectDetail; queue
             </section>
           )}
           {live ? <LiveRun run={live} project={project} onOpen={() => setOpen(live.id)} onCancel={() => setConfirmCancel(live.id)} /> : benchmarking ? null : (
-            <section class="cc-card"><div class="cc-empty" style="padding:24px"><Icon name="runs" size={24} /><h2>No run in progress</h2><p>Start one on the left, or open a finished run below.</p></div></section>
+            <section class="cc-card"><div class="cc-empty" style="padding:24px"><Patch state="offline" size={72} label="Patch, idle: no run in progress" /><h2>No run in progress</h2><p>Start one on the left, or open a finished run below.</p></div></section>
           )}
           {waiting.length > 0 && (
             <section class="cc-card" aria-label="Waiting in queue">

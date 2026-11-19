@@ -286,15 +286,15 @@ def test_keyboard_navigation_and_theme(dash):
     )
 
 
-DARK_BG = {"soft": "rgb(21, 23, 31)", "classic": "rgb(14, 19, 24)"}
+DARK_BG = {"soft": "rgb(21, 23, 31)", "classic": "rgb(14, 19, 24)", "gapscan": "rgb(14, 19, 24)"}
 
 
 def test_dark_and_light_screenshots(browser, report_file):
     for scheme in ("light", "dark"):
         p = Page(browser, report_file.as_uri(), scheme=scheme)
         try:
-            for ui in ("soft", "classic"):
-                for _ in range(3):  # the look cycles through three editions; press until it lands
+            for ui in ("gapscan", "soft", "classic"):
+                for _ in range(4):  # the look cycles through four editions; press until it lands
                     if p.page.evaluate("document.documentElement.getAttribute('data-ui')") == ui:
                         break
                     p.page.keyboard.press("u")

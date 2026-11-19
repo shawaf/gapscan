@@ -23,7 +23,7 @@ import type { Domain } from "./Targets";
 import { SettingsPage } from "./Settings";
 import { fetchProject, fetchReport, latestDone, useLoad } from "./useApi";
 import { DataContext } from "../context";
-import { applyTheme, cycleTheme, initDecisions, initRouter, navigate, routeStore, setServerBase, setTheme, setUi, themeStore, toggleUi, uiStore, useStore } from "../store";
+import { applyTheme, cycleTheme, initDecisions, initRouter, navigate, routeStore, setServerBase, setTheme, setUi, themeStore, toggleUi, uiStore, useStore, UI_ORDER, UI_LABEL } from "../store";
 import type { Theme, Ui } from "../store";
 import type { ReportData } from "../types";
 
@@ -178,8 +178,8 @@ export function App() {
           )}
           {pid && <button class="btn primary" onClick={() => navigate("runs")}><Icon name="plus" size={14} /> New scan</button>}
           <div class="cc-seg" role="radiogroup" aria-label="Look" title="Shortcut: u">
-            {(["classic", "soft", "glassy"] as Ui[]).map((u) => (
-              <button key={u} role="radio" aria-checked={ui === u} onClick={() => setUi(u)}>{u === "soft" ? "Soft" : u === "classic" ? "Classic" : "Glassy"}</button>
+            {UI_ORDER.map((u: Ui) => (
+              <button key={u} role="radio" aria-checked={ui === u} onClick={() => setUi(u)}>{UI_LABEL[u]}</button>
             ))}
           </div>
           <div class="cc-seg icons" role="radiogroup" aria-label="Theme" title="Shortcut: t">
@@ -234,7 +234,7 @@ function Palette({ onClose, pid, projects, domains }: { onClose: () => void; pid
     ...(pid ? ALL_NAV.filter((n) => isComplianceAvailable() || n.id !== "compliance").map((n) => ({ label: `Go to ${n.label}`, hint: n.key ? String(n.key) : "", run: () => navigate(n.id) })) : []),
     ...(pid ? [{ label: "Start a new scan", hint: "", run: () => navigate("runs") }] : []),
     { label: "Switch theme", hint: "t", run: cycleTheme },
-    { label: "Switch look (classic / soft / glassy)", hint: "u", run: toggleUi },
+    { label: "Switch look (GapScan / classic / soft / glassy)", hint: "u", run: toggleUi },
     { label: "All domains", hint: "", run: () => navigate("home", null, null) },
     ...domains.map((d) => ({ label: `Go to ${d.label}${d.ready ? " projects" : " (planned)"}`, hint: "", run: () => navigate(d.id, null, null) })),
     ...projects.map((p) => ({ label: `Open project ${p.name}`, hint: "", run: () => navigate("overview", null, String(p.id)) })),

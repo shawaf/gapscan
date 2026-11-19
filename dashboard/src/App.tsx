@@ -4,7 +4,7 @@ import { Logo } from "./components/Logo";
 import { loadData } from "./data";
 import { download, reportFilename } from "./download";
 import { Icon } from "./manager/icons";
-import { applyTheme, cycleTheme, setTheme, toggleUi, uiStore, decisionStore, initDecisions, initRouter, navigate, routeStore, themeStore, useStore } from "./store";
+import { applyTheme, cycleTheme, setTheme, toggleUi, uiStore, UI_LABEL, decisionStore, initDecisions, initRouter, navigate, routeStore, themeStore, useStore } from "./store";
 import type { Theme } from "./store";
 import type { ReportData } from "./types";
 import { Asvs } from "./pages/Asvs";
@@ -99,7 +99,7 @@ export function App() {
           <div class="topbar no-print">
             <span class="muted">Risk <b class={`grade-${data.score.grade}`}>{data.score.grade} ({data.score.value.toFixed(0)})</b> · {openCount} open findings</span>
             <div class="toolbar">
-              <button class="btn" onClick={toggleUi} aria-label={`Look: ${ui}. Press to change the look`} title="Shortcut: u">Look: {ui === "soft" ? "Soft" : ui === "classic" ? "Classic" : "Glassy"}</button>
+              <button class="btn" onClick={toggleUi} aria-label={`Look: ${ui}. Press to change the look`} title="Shortcut: u">Look: {UI_LABEL[ui]}</button>
               <div class="seg" role="radiogroup" aria-label="Theme" title="Shortcut: t">
                 {(["light", "dark", "system"] as Theme[]).map((t) => {
                   const label = t === "light" ? "Light" : t === "dark" ? "Dark" : "System";

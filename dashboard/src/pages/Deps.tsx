@@ -1,4 +1,5 @@
 import { useMemo, useState } from "preact/hooks";
+import { Patch } from "../components/Patch";
 import { SeverityBadge, VerdictBadge, Tags } from "../components/Badges";
 import { useData } from "../context";
 import { navigate } from "../store";
@@ -21,7 +22,7 @@ export function Deps() {
       <h1>Dependencies &amp; supply chain</h1>
       <h2>Vulnerable packages ({d.packages.length})</h2>
       <div class="card">
-        {d.packages.length === 0 ? <div class="empty">No open vulnerable packages.</div> : (
+        {d.packages.length === 0 ? <div class="empty patch-tip"><Patch state="done" size={72} label="Patch: no open vulnerable packages" /><span>No open vulnerable packages.</span></div> : (
           <table class="t"><thead><tr><th>Package</th><th>Worst severity</th><th>Advisories</th><th>Exploit signals</th><th>Fixed in</th><th>Reachability</th><th>Review</th></tr></thead>
             <tbody>{d.packages.map((p) => (
               <tr key={`${p.package}@${p.version}`}>

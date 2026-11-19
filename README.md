@@ -30,7 +30,7 @@ never leaves the machine.
 Runs Semgrep, OSV-Scanner, Trivy, Gitleaks, Checkov and Bandit (plus any SARIF file) over a folder
 and merges everything into one finding schema with **stable IDs**. Secret values are redacted.
 
-- **Own rule library**: Apache-2.0 Semgrep rules in 9 languages, each with tests, CWE and a
+- **Own rule library**: 371 Apache-2.0 Semgrep rules in 9 languages, each with tests, CWE and a
   fix-oriented message ([`docs/rules.md`](docs/rules.md)).
 - **Cross-file data flow**: GapScan's own taint engine follows attacker data through helpers and
   across files in Java, Python and JavaScript/TypeScript, and shows the whole path as evidence

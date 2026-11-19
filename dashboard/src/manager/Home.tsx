@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import { Patch } from "../components/Patch";
 import { api, ApiError } from "./api";
 import type { FsListing, GitHead, Project } from "./api";
 import { ConfirmDialog, Err, Grade, Segmented, StatusBadge } from "./common";
@@ -60,7 +61,7 @@ export function Home({ projects, error, reload }: { projects: Project[] | null; 
   const empty = projects?.length === 0;
   return (
     <>
-      <div class="cc-h"><div><h1>{empty ? "Welcome to GapScan" : "Application security projects"}</h1>
+      <div class="cc-h patch-tip">{empty && <Patch state="greet" size={96} />}<div><h1>{empty ? "Welcome to GapScan" : "Application security projects"}</h1>
         <p>{empty ? "Add the folder of a project to measure it against its target standards and find its gaps. In local mode everything stays on this computer and nothing in the folder is executed." : "Each project is measured against OWASP ASVS 5.0 and Top 10:2025. Folders registered here are the only ones GapScan will scan."}</p></div></div>
       <Err text={error} />
       {!empty && active.length > 0 && <div style="margin-bottom:12px"><Segmented label="View" value={view} onChange={pick} options={[{ id: "cards", label: "Cards" }, { id: "table", label: "Table" }]} /></div>}

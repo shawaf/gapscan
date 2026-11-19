@@ -1,0 +1,14 @@
+/* Patch, in every look. The halo keeps his ink outline visible on dark grounds. */
+.patch { display: block; overflow: visible; }
+.patch-stage { display: inline-flex; background: var(--halo, #E6EBFB); border-radius: 14px; padding: 12px; flex: none; }
+@keyframes patch-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes patch-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes patch-sweep { 0% { transform: translateY(-14px); } 50% { transform: translateY(14px); } 100% { transform: translateY(-14px); } }
+@keyframes patch-talk { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.4); } }
+.patch-live .patch-bob { animation: patch-bob 3.2s ease-in-out infinite; }
+.patch-live .patch-antenna, .patch-live .patch-dots { animation: patch-pulse 1.2s ease-in-out infinite; }
+.patch-live .patch-scan { animation: patch-sweep 1.6s ease-in-out infinite; transform-box: fill-box; }
+.patch-live .patch-mouth { animation: patch-talk 0.45s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@media (prefers-reduced-motion: reduce) { .patch-live * { animation: none !important; } }
+.patch-tip { display: flex; gap: 16px; align-items: center; }
+.patch-tip > div { min-width: 0; }

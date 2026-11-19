@@ -38,9 +38,7 @@ def test_check_databases_missing(tmp_path, monkeypatch) -> None:
     cfg = Config()
     by_name = {c.name: c for c in check_databases(cfg)}
     # Required datasets are MISSING when absent...
-    assert all(
-        by_name[n].status is Status.MISSING for n in ("osv db", "trivy cache", "kb index")
-    )
+    assert all(by_name[n].status is Status.MISSING for n in ("osv db", "trivy cache", "kb index"))
     # ...but the optional Semgrep community rules only warn (GapScan's own rules are packaged).
     assert by_name["semgrep rules"].status is Status.WARN
 

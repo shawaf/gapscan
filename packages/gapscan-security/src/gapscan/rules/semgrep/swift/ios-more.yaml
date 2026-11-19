@@ -1,0 +1,274 @@
+# GapScan Rules: Swift / iOS, second set (covers the OWASP MASTG weakness classes). Licensed Apache-2.0.
+# Every rule has a vulnerable and a safe case in tests/rules/swift/ios-more.swift (run: make rules-test).
+# Like the first set these are text rules (the `generic` language), because Semgrep's Swift grammar cannot express
+# every pattern; they are robust to formatting but see text, not types.
+rules:
+  - id: gapscan.swift.weak-key-size
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      A key is created with too few bits (RSA below 2048). Such keys can be factored. Use 2048 bits or more, or an
+      elliptic curve key (`kSecAttrKeyTypeECSECPrimeRandom`, 256 bits).
+    metadata:
+      cwe: ["CWE-326: Inadequate Encryption Strength"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: 'kSecAttrKeySizeInBits(?:\s+as\s+String)?\s*[:=]\s*(?:512|768|1024)\b'
+
+  - id: gapscan.swift.tls-min-version-lowered
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      The minimum TLS version is lowered below TLS 1.2, which allows connections that can be broken or downgraded. Leave
+      the default (TLS 1.2 or newer).
+    metadata:
+      cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm", "CWE-319: Cleartext Transmission of Sensitive Information"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern-regex: 'tlsMinimumSupportedProtocol(?:Version)?\s*=\s*\.?(?:TLSv10|TLSv11|SSLv3|tlsProtocol1[01]|sslProtocol3)'
+      - pattern-regex: 'sec_protocol_options_set_min_tls_protocol_version\([^,]+,\s*\.?(?:TLSv10|TLSv11|tls_protocol_version_TLSv1[01])'
+
+  - id: gapscan.swift.raw-socket-bypasses-ats
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      A raw socket or Network framework connection is opened. App Transport Security does not apply to these, so nothing
+      forces encryption. Use URLSession with HTTPS, or add TLS (`NWParameters.tls`) yourself.
+    metadata:
+      cwe: ["CWE-319: Cleartext Transmission of Sensitive Information"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: LOW
+    pattern-either:
+      - pattern-regex: '\bsocket\(\s*(?:AF_INET6?|\w+\.pointee\.ai_family)'
+      - pattern-regex: '\bNWConnection\(\s*host:'
+      - pattern-regex: 'NWParameters\.tcp\b'
+
+  - id: gapscan.swift.webview-file-access
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      The web view is allowed to read files from the app's folders (or local pages may read other local files). A page or
+      script that gets in can read private files. Grant access to the single file or folder that is needed, and keep
+      user input out of local HTML.
+    metadata:
+      cwe: ["CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: 'loadFileURL\([^)]*allowingReadAccessTo:'
+      - pattern-regex: 'forKey:\s*"(?:allowFileAccessFromFileURLs|allowUniversalAccessFromFileURLs)"'
+
+  - id: gapscan.swift.url-scheme-handler-unvalidated
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      This handler receives a URL that any app (or web page) can send. Check who sent it (`sourceApplication` or a
+      signed Universal Link), validate every parameter, and never perform a sensitive action from the link alone.
+    metadata:
+      cwe: ["CWE-939: Improper Authorization in Handler for Custom URL Scheme", "CWE-20: Improper Input Validation"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: LOW
+    pattern-regex: '(?:func\s+application\s*\(\s*_[^)]*\bopen\s+url\b|\.onOpenURL\s*\{|openURLContexts)(?![\s\S]{0,1500}?sourceApplication)'
+
+  - id: gapscan.swift.unsafe-deserialization
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      Unarchiving without secure coding can build any class the data names, which can run code. Use
+      `NSKeyedUnarchiver.unarchivedObject(ofClasses:from:)` with a short list of classes, and set `requiresSecureCoding`
+      to true.
+    metadata:
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: 'NSKeyedUnarchiver\.unarchiveObject\('
+      - pattern-regex: 'NSKeyedUnarchiver\.unarchiveTopLevelObjectWithData\('
+      - pattern-regex: 'requiresSecureCoding\s*=\s*false'
+      - pattern-regex: 'decodeObject\((?!of)'
+
+  # --- idioms of real apps (found in deliberately vulnerable iOS apps) ---------------------------------------------
+  - id: gapscan.swift.sql-string-interpolated
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      An SQL statement is written as a string with a value interpolated into it, then used as a query. A user value
+      can change the statement (SQL injection). Use `sqlite3_bind_*` placeholders (`?`) or your database library's
+      parameter binding.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '"\s*(?:SELECT\b[^"\n]*\bFROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b[^"\n]*\\\('
+
+  - id: gapscan.swift.hardcoded-key-literal
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      A key, password or secret is written into the source as a string. Anyone with the app binary can read it, so the
+      encryption it protects is worthless. Generate keys per device and keep them in the Keychain.
+    metadata:
+      cwe: ["CWE-321: Use of Hard-coded Cryptographic Key", "CWE-798: Use of Hard-coded Credentials"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '(?i)\b(?:let|var)\s+\w*(?:encrypt|crypto|aes|des|signing|secret|private|master)\w*key\w*\s*(?::\s*String)?\s*=\s*"[^"\s\\]{6,}"'
+      - pattern-regex: '(?:withPassword|password|passphrase|secretKey|encryptionKey)\s*:\s*"[^"\s\\]{8,}"'
+
+  - id: gapscan.swift.credential-field-persisted
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      What the user typed into a password, PIN or token field is stored as it is (in a model object, a dictionary or a
+      property list), which writes it to the device in clear text. Keep secrets in the Keychain and store only a hash
+      where you need to verify them.
+    metadata:
+      cwe: ["CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '\w+\??\.(?:password|passwd|pwd|pin|secret|token)\s*=\s*\w*(?:[Pp]assword|[Pp]asswd|[Pp]in|[Tt]oken|[Ss]ecret)\w*\??\.text\b'
+      - pattern-regex: '\.setValue\(\s*[^,\n]+,\s*forKey:\s*"(?:password|passwd|pwd|pin|secret|token|apikey|api_key)"'
+      - pattern-regex: '\[\s*"(?:password|passwd|pwd|pin|secret|token)"\s*\]\s*=\s*\w+\??\.text\b'
+
+  - id: gapscan.swift.pasteboard-general
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      Data is placed on the system-wide pasteboard, which other apps can read. Do not copy secrets to it; if you must,
+      use a local-only pasteboard item with an expiry.
+    metadata:
+      cwe: ["CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: LOW
+    pattern-regex: 'UIPasteboard\.general\.(?:string|strings|url|urls|image|images|items|setItems|setValue|addItems)\b'
+
+  - id: gapscan.swift.webview-html-interpolated
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      A web view loads HTML that has a value interpolated into it. If the value comes from a user, it can carry markup or
+      script (cross-site scripting). Escape it, or pass data to the page with a message handler.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: 'loadHTMLString\(\s*"[^"\n]*(?:\\\(|"\s*\+)'
+      # the HTML is built with interpolation in a variable first, then loaded a few lines below
+      - pattern-regex: '\b(?:let|var)\s+(\w+)\s*(?::\s*String)?\s*=\s*"[^"\n]*<[^"\n]*\\\([^\n]*\n(?:[^\n]*\n){0,6}?[^\n]*\bloadHTMLString\(\s*\1\b'
+
+  - id: gapscan.swift.uiwebview-used
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      `UIWebView` is deprecated and unmaintained, has no process isolation and no secure JavaScript bridge. Use
+      `WKWebView`.
+    metadata:
+      cwe: ["CWE-1104: Use of Unmaintained Third Party Components"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '\bUIWebView\b'
+
+  - id: gapscan.swift.response-cache-sensitive
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      The request prefers cached data, so a response that holds a token or personal data can be written to the URL cache
+      on disk and read later. Use `.reloadIgnoringLocalCacheData` or mark the response `no-store` for sensitive calls.
+    metadata:
+      cwe: ["CWE-524: Use of Cache Containing Sensitive Information"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: LOW
+    pattern-regex: 'cachePolicy\s*=\s*\.(?:returnCacheDataElseLoad|returnCacheDataDontLoad)'
+
+  - id: gapscan.swift.credential-file-name
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      A file that looks like it holds credentials is read or written in the app's folders in clear text. Keep credentials
+      in the Keychain.
+    metadata:
+      cwe: ["CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: LOW
+    pattern-regex: '"[^"\n]*(?:[Cc]redentials?|[Pp]asswords?|[Ss]ecrets?)[^"\n/]*\.(?:plist|txt|json|db|sqlite|dat)"'
+
+  - id: gapscan.swift.database-not-encrypted
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      A local database is opened without an encryption key (Realm and many embedded databases store plain files). Anyone
+      with a backup or a jailbroken device can read what is in it. Pass an `encryptionKey` kept in the Keychain, or avoid
+      storing sensitive records.
+    metadata:
+      cwe: ["CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: LOW
+    pattern-either:
+      - pattern-regex: '\bRealm\(\s*\)'
+      - pattern-regex: 'Realm\.Configuration\((?![^)]*encryptionKey)[^)]*\)'
+      - pattern-regex: 'YapDatabase\(\s*(?:path|url)\s*:'
+      # SQLite opened with no SQLCipher key set anywhere below; Couchbase Lite opened with no configuration (so no key)
+      - pattern-regex: '\bsqlite3_open(?:_v2)?\s*\((?![\s\S]*\bsqlite3_key(?:_v2)?\s*\()'
+      - pattern-regex: '\btry\s+Database\(\s*name:\s*[^,)\n]+\)'
+
+  - id: gapscan.swift.file-protection-none
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      The file is saved with no data protection, so its contents are available even while the device is locked. Use
+      `.completeFileProtection` (or `completeUntilFirstUserAuthentication` for background access).
+    metadata:
+      cwe: ["CWE-311: Missing Encryption of Sensitive Data", "CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '\bFileProtectionType\.none\b|\.noFileProtection\b|\bNSFileProtectionNone\b'
+
+  - id: gapscan.swift.weak-random-api
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      `rand()`, `random()` and `drand48()` are predictable. That is fine for a game, but a key, token or code made with
+      them can be guessed. Use `SecRandomCopyBytes` or `SystemRandomNumberGenerator` (`Int.random(in:)`).
+    metadata:
+      cwe: ["CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator", "CWE-330: Use of Insufficiently Random Values"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: LOW
+    pattern-regex: '(?<![\w.])(?:rand|random|srand|srandom|drand48|lrand48)\s*\('

@@ -1,0 +1,48 @@
+# GapScan Rules: Android Gradle build files (build.gradle.kts and build.gradle). Licensed Apache-2.0.
+# Every rule has a vulnerable and a safe case in tests/rules/kotlin/gradle.kts (run: make rules-test).
+# These read the build file as text; a `release { }` block is recognised by name and must not contain nested braces.
+rules:
+  - id: gapscan.kotlin.gradle-release-debuggable
+    languages: [generic]
+    paths: {include: ["*.gradle.kts", "*.gradle", "gradle.kts"]}
+    severity: ERROR
+    message: >-
+      The release build type is marked debuggable, so the shipped app accepts a debugger: anyone with the device can
+      read its memory, step through its checks and run code inside it. Remove `isDebuggable = true` (`debuggable true`)
+      from the release build type.
+    metadata:
+      cwe: ["CWE-489: Active Debug Code"]
+      masvs: ["MASVS-RESILIENCE-4"]
+      category: security
+      confidence: HIGH
+    pattern-regex: '(?:getByName\(\s*"release"\s*\)|named\(\s*"release"\s*\)|\brelease)\s*\{[^{}]*?(?:isDebuggable\s*=\s*true|\bdebuggable\s*(?:=\s*)?true)'
+
+  - id: gapscan.kotlin.gradle-release-not-minified
+    languages: [generic]
+    paths: {include: ["*.gradle.kts", "*.gradle", "gradle.kts"]}
+    severity: INFO
+    message: >-
+      The release build is not shrunk or obfuscated (`isMinifyEnabled = false`), so class, method and field names ship
+      as written and the app is much easier to reverse engineer and patch. Turn on R8 for release builds
+      (`isMinifyEnabled = true`, with `proguard-rules.pro` keeping only what reflection needs).
+    metadata:
+      cwe: ["CWE-693: Protection Mechanism Failure"]
+      masvs: ["MASVS-RESILIENCE-3"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?:getByName\(\s*"release"\s*\)|named\(\s*"release"\s*\)|\brelease)\s*\{[^{}]*?(?:isMinifyEnabled\s*=\s*false|\bminifyEnabled\s*(?:=\s*)?false)'
+
+  - id: gapscan.kotlin.gradle-min-sdk-outdated
+    languages: [generic]
+    paths: {include: ["*.gradle.kts", "*.gradle", "gradle.kts"]}
+    severity: INFO
+    message: >-
+      The app still installs on Android versions older than 6.0 (API 23), which no longer receive security updates
+      and lack runtime permissions, hardware-backed AES keys in the Keystore and modern TLS defaults. Raise `minSdk` to
+      a supported version (24 or later is common today), or make sure security features have a safe fallback.
+    metadata:
+      cwe: ["CWE-1104: Use of Unmaintained Third Party Components"]
+      masvs: ["MASVS-CODE-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '\bminSdk(?:Version)?\s*(?:=\s*|\(\s*|\s+)(?:[1-9]|1\d|2[0-2])\b'

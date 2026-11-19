@@ -1,0 +1,10 @@
+# Struts 2 fills an action's fields from request parameters through its setters, so the fields of
+# an action class (one that declares execute() or extends ActionSupport) that have a setter are
+# attacker controlled.
+name = "java-struts2"
+languages = ["java"]
+requires = 'org\.apache\.struts2|com\.opensymphony\.xwork2'
+
+[[action_fields]]
+kind = "http_param"
+action_class = 'extends\s+\w*(ActionSupport|Action|Controller)\b|\bString\s+execute\s*\('

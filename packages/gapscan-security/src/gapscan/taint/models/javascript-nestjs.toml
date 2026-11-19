@@ -1,0 +1,16 @@
+name = "javascript-nestjs"
+languages = ["typescript", "tsx", "javascript"]
+requires = '@nestjs/'
+
+# Controller handler parameters bound from the request by NestJS decorators.
+# Body, query, cookies and the raw request can carry objects (`?id[$ne]=1`, JSON bodies).
+[[param_source]]
+kind = "http_param"
+pattern = '@(Query|Body|Req|Request|UploadedFile|UploadedFiles|Cookies|Session)\b'
+
+# Route parameters, headers and the client address are always strings: they cannot inject a
+# NoSQL operator object, but they still reach SQL, shell and file paths as text.
+[[param_source]]
+kind = "http_param"
+pattern = '@(Param|Headers|Ip|HostParam)\b'
+safe_for = ["nosql"]

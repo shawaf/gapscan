@@ -1,0 +1,488 @@
+{
+ "schema": 1,
+ "note": "Planned compliance and legal framework packs. Editions are not pinned here; each pack pins its edition from the publisher when it is built.",
+ "groups": [
+  {
+   "id": "standards",
+   "label": "Security standards",
+   "name": "Security and secure-development standards",
+   "text": "Secure-development and security-management standards that customers and auditors ask for, built on the same scan evidence."
+  },
+  {
+   "id": "industry",
+   "label": "Industry regulations",
+   "name": "Industry and sector regulations",
+   "text": "Sector rules for payments, healthcare, government, defense, medical devices, industrial systems, IoT and cars."
+  },
+  {
+   "id": "eu",
+   "label": "EU regulation",
+   "name": "EU cyber and digital regulation",
+   "text": "EU laws for products with digital elements, essential services, the financial sector and AI systems."
+  },
+  {
+   "id": "privacy",
+   "label": "Privacy laws",
+   "name": "Privacy and data-protection laws",
+   "text": "Data-protection laws worldwide. They need the personal-data evidence planned in ROADMAP 5.2.4: where personal data flows, is stored and leaves."
+  },
+  {
+   "id": "mena",
+   "label": "Middle East and North Africa",
+   "name": "Middle East and North Africa",
+   "text": "Cybersecurity and data-protection rules for Saudi Arabia, the UAE, Egypt and the Gulf, after legal review, with Arabic and English reports."
+  }
+ ],
+ "frameworks": [
+  {
+   "id": "owasp",
+   "name": "OWASP ASVS, Top 10, API Top 10, MASVS, GenAI LLM Top 10",
+   "group": "standards",
+   "region": "International",
+   "wave": 0,
+   "status": "available",
+   "text": "open",
+   "evidence": "Built in: every finding maps through its CWE; the pivot for every other framework."
+  },
+  {
+   "id": "nist-ssdf",
+   "name": "NIST SSDF (SP 800-218)",
+   "group": "standards",
+   "region": "US",
+   "wave": 1,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Secure code, review and testing (PW), vulnerability response (RV), SBOM and protecting the software (PS)."
+  },
+  {
+   "id": "iso-27001",
+   "name": "ISO/IEC 27001 Annex A",
+   "group": "standards",
+   "region": "International",
+   "wave": 1,
+   "status": "planned",
+   "text": "restricted",
+   "evidence": "Secure development and coding, cryptography, logging, configuration, technical vulnerabilities."
+  },
+  {
+   "id": "soc2",
+   "name": "SOC 2 (AICPA Trust Services Criteria)",
+   "group": "standards",
+   "region": "US",
+   "wave": 1,
+   "status": "planned",
+   "text": "restricted",
+   "evidence": "Logical access, change management, vulnerability management and monitoring criteria."
+  },
+  {
+   "id": "nist-csf",
+   "name": "NIST Cybersecurity Framework",
+   "group": "standards",
+   "region": "US",
+   "wave": 1,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Protect outcomes for data and platform security that code and config can show."
+  },
+  {
+   "id": "cis",
+   "name": "CIS Controls",
+   "group": "standards",
+   "region": "International",
+   "wave": 1,
+   "status": "planned",
+   "text": "restricted",
+   "evidence": "Secure configuration, software inventory (SBOM), application security, data protection."
+  },
+  {
+   "id": "nist-800-53",
+   "name": "NIST SP 800-53",
+   "group": "standards",
+   "region": "US",
+   "wave": 2,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Development (SA), integrity (SI), communications (SC), access, audit and configuration controls."
+  },
+  {
+   "id": "csa-ccm",
+   "name": "CSA Cloud Controls Matrix",
+   "group": "standards",
+   "region": "International",
+   "wave": 2,
+   "status": "planned",
+   "text": "restricted",
+   "evidence": "Application security, cryptography, IAM and infrastructure controls; feeds CAIQ questionnaires."
+  },
+  {
+   "id": "iso-27701",
+   "name": "ISO/IEC 27701, 27017, 27018",
+   "group": "standards",
+   "region": "International",
+   "wave": 3,
+   "status": "planned",
+   "text": "restricted",
+   "evidence": "Privacy and cloud extensions of ISO 27001."
+  },
+  {
+   "id": "pci-dss",
+   "name": "PCI DSS",
+   "group": "industry",
+   "region": "International",
+   "wave": 1,
+   "status": "planned",
+   "text": "restricted",
+   "evidence": "Secure software and public web apps (req. 6), card data at rest and in transit (3, 4), authentication (8), logging (10)."
+  },
+  {
+   "id": "hipaa",
+   "name": "HIPAA Security Rule",
+   "group": "industry",
+   "region": "US",
+   "wave": 2,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Technical safeguards: access control, audit, integrity, authentication, transmission security."
+  },
+  {
+   "id": "fedramp",
+   "name": "FedRAMP",
+   "group": "industry",
+   "region": "US",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Through the NIST 800-53 pack, with an OSCAL export."
+  },
+  {
+   "id": "cmmc",
+   "name": "CMMC and NIST SP 800-171",
+   "group": "industry",
+   "region": "US",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Access control, audit, configuration, system and communications protection."
+  },
+  {
+   "id": "hitrust",
+   "name": "HITRUST CSF",
+   "group": "industry",
+   "region": "US",
+   "wave": 3,
+   "status": "planned",
+   "text": "restricted",
+   "evidence": "Through mappings only; content needs a license."
+  },
+  {
+   "id": "swift-cscf",
+   "name": "SWIFT Customer Security Controls Framework",
+   "group": "industry",
+   "region": "International",
+   "wave": 3,
+   "status": "planned",
+   "text": "restricted",
+   "evidence": "Secure software, credentials and logging on SWIFT-connected systems."
+  },
+  {
+   "id": "fda-524b",
+   "name": "FDA premarket cybersecurity (section 524B)",
+   "group": "industry",
+   "region": "US",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "SBOM, vulnerability handling and secure development evidence for medical devices."
+  },
+  {
+   "id": "iec-62443",
+   "name": "IEC 62443-4-1 and 4-2",
+   "group": "industry",
+   "region": "International",
+   "wave": 3,
+   "status": "planned",
+   "text": "restricted",
+   "evidence": "Secure development lifecycle and component requirements for industrial systems."
+  },
+  {
+   "id": "etsi-303645",
+   "name": "ETSI EN 303 645",
+   "group": "industry",
+   "region": "EU",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Consumer IoT: no default passwords, secure updates, stored credentials, vulnerability disclosure."
+  },
+  {
+   "id": "unece-r155",
+   "name": "UNECE R155 / R156 and ISO/SAE 21434",
+   "group": "industry",
+   "region": "International",
+   "wave": 3,
+   "status": "planned",
+   "text": "restricted",
+   "evidence": "Automotive software update security and vulnerability management."
+  },
+  {
+   "id": "eu-cra",
+   "name": "Cyber Resilience Act",
+   "group": "eu",
+   "region": "EU",
+   "wave": 2,
+   "status": "planned",
+   "text": "open",
+   "evidence": "No known exploitable vulnerabilities, secure defaults, SBOM, vulnerability handling."
+  },
+  {
+   "id": "nis2",
+   "name": "NIS2 Directive",
+   "group": "eu",
+   "region": "EU",
+   "wave": 2,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Article 21 measures: secure development, vulnerability handling, cryptography, access control."
+  },
+  {
+   "id": "dora",
+   "name": "DORA",
+   "group": "eu",
+   "region": "EU",
+   "wave": 2,
+   "status": "planned",
+   "text": "open",
+   "evidence": "ICT risk management for finance: secure development, testing, vulnerability management."
+  },
+  {
+   "id": "eu-ai-act",
+   "name": "EU AI Act",
+   "group": "eu",
+   "region": "EU",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Robustness and cybersecurity of high-risk AI systems; reuses the GenAI LLM Top 10 evidence."
+  },
+  {
+   "id": "gdpr",
+   "name": "GDPR and UK GDPR",
+   "group": "privacy",
+   "region": "EU, UK",
+   "wave": 2,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Security of processing and data protection by design: personal-data flows, encryption, access."
+  },
+  {
+   "id": "ccpa",
+   "name": "CCPA/CPRA and other US state privacy laws",
+   "group": "privacy",
+   "region": "US",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Personal-data flows to third parties, security of personal information."
+  },
+  {
+   "id": "lgpd",
+   "name": "LGPD",
+   "group": "privacy",
+   "region": "Brazil",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Security of personal data and data flows."
+  },
+  {
+   "id": "pipeda",
+   "name": "PIPEDA",
+   "group": "privacy",
+   "region": "Canada",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Safeguards for personal information."
+  },
+  {
+   "id": "dpdp",
+   "name": "DPDP Act",
+   "group": "privacy",
+   "region": "India",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Reasonable security safeguards for personal data."
+  },
+  {
+   "id": "pdpa-sg",
+   "name": "PDPA",
+   "group": "privacy",
+   "region": "Singapore",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Protection obligation for personal data."
+  },
+  {
+   "id": "appi",
+   "name": "APPI",
+   "group": "privacy",
+   "region": "Japan",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Security control measures for personal data."
+  },
+  {
+   "id": "au-privacy",
+   "name": "Privacy Act and Essential Eight",
+   "group": "privacy",
+   "region": "Australia",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Security of personal information; Essential Eight baseline controls."
+  },
+  {
+   "id": "pipl",
+   "name": "PIPL",
+   "group": "privacy",
+   "region": "China",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Security measures and cross-border data flows."
+  },
+  {
+   "id": "africa-privacy",
+   "name": "POPIA, NDPA, Kenya DPA",
+   "group": "privacy",
+   "region": "South Africa, Nigeria, Kenya",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Security safeguards for personal data."
+  },
+  {
+   "id": "nca-ecc",
+   "name": "Saudi NCA Essential Cybersecurity Controls (ECC)",
+   "group": "mena",
+   "region": "Saudi Arabia",
+   "wave": 2,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Application security, cryptography, vulnerability and configuration management."
+  },
+  {
+   "id": "nca-ccc-dcc",
+   "name": "Saudi NCA Cloud and Data Cybersecurity Controls",
+   "group": "mena",
+   "region": "Saudi Arabia",
+   "wave": 2,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Cloud configuration, data protection and data residency."
+  },
+  {
+   "id": "sama-csf",
+   "name": "SAMA Cyber Security Framework",
+   "group": "mena",
+   "region": "Saudi Arabia",
+   "wave": 2,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Secure development, application security and vulnerability management for financial institutions."
+  },
+  {
+   "id": "sa-pdpl",
+   "name": "Saudi Personal Data Protection Law (PDPL)",
+   "group": "mena",
+   "region": "Saudi Arabia",
+   "wave": 2,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Personal-data security and transfer outside the kingdom."
+  },
+  {
+   "id": "uae-pdpl",
+   "name": "UAE Personal Data Protection Law (PDPL)",
+   "group": "mena",
+   "region": "UAE",
+   "wave": 2,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Personal-data security and cross-border transfer."
+  },
+  {
+   "id": "uae-ia",
+   "name": "UAE Information Assurance Regulation",
+   "group": "mena",
+   "region": "UAE",
+   "wave": 2,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Technical controls for application security, access and monitoring."
+  },
+  {
+   "id": "uae-local",
+   "name": "Dubai ISR and ADHICS",
+   "group": "mena",
+   "region": "UAE",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Information security regulation for Dubai government and Abu Dhabi healthcare."
+  },
+  {
+   "id": "cbuae",
+   "name": "Central Bank of the UAE requirements",
+   "group": "mena",
+   "region": "UAE",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Technical controls for licensed financial institutions."
+  },
+  {
+   "id": "eg-pdpl",
+   "name": "Egypt Personal Data Protection Law (Law 151 of 2020)",
+   "group": "mena",
+   "region": "Egypt",
+   "wave": 2,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Personal-data security and transfer, with its executive regulations."
+  },
+  {
+   "id": "cbe",
+   "name": "Central Bank of Egypt cybersecurity requirements",
+   "group": "mena",
+   "region": "Egypt",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Technical controls for banks."
+  },
+  {
+   "id": "qatar",
+   "name": "Qatar PDPPL and National Information Assurance standard",
+   "group": "mena",
+   "region": "Qatar",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Personal-data security and information assurance controls."
+  },
+  {
+   "id": "gulf-levant",
+   "name": "Bahrain, Oman, Kuwait and Jordan data protection laws",
+   "group": "mena",
+   "region": "Gulf and Levant",
+   "wave": 3,
+   "status": "planned",
+   "text": "open",
+   "evidence": "Personal-data security."
+  }
+ ]
+}

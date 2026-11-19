@@ -1,0 +1,510 @@
+{
+  "generated": "2026-10-05",
+  "semgrep_version": "1.176.0",
+  "rule_counts": {
+    "python": 33,
+    "javascript": 26,
+    "java": 40,
+    "kotlin": 42,
+    "swift": 30,
+    "dart": 22,
+    "go": 22
+  },
+  "total_rules": 215,
+  "fixtures": {
+    "description": "128 hand-labeled code sites (68 vulnerable, 60 safe look-alikes), scanners only, no AI review",
+    "gapscan_rules_only": {
+      "recall": 97.1,
+      "precision": 65.6
+    },
+    "community_plus_gapscan": {
+      "recall": 91.2,
+      "precision": 62.1
+    },
+    "before_python_js_java_go_rules": {
+      "recall": 47.1,
+      "precision": 59.3
+    }
+  },
+  "market_reference": {
+    "source": "cogniumhq/sast-benchmarks (a competitor's page, read with care): OWASP Benchmark Java, TPR minus FPR",
+    "semgrep_oss": 47.9,
+    "codeql": 59.9,
+    "cognium_dev": 73.5
+  },
+  "languages": [
+    {
+      "key": "java",
+      "name": "Java",
+      "benchmark": "OWASP Benchmark v1.2 (2,740 cases)",
+      "evidence": "standard benchmark",
+      "tuned_on_all_files": false,
+      "held_out": {
+        "community": {
+          "real": 684,
+          "fake": 670,
+          "caught": 88.9,
+          "false_alarms": 41.3,
+          "score": 47.5,
+          "cases": 1354
+        },
+        "gapscan": {
+          "real": 684,
+          "fake": 670,
+          "caught": 89.2,
+          "false_alarms": 42.2,
+          "score": 46.9,
+          "cases": 1354
+        }
+      },
+      "tuning_half": {
+        "community": {
+          "real": 731,
+          "fake": 655,
+          "caught": 87.6,
+          "false_alarms": 42.0,
+          "score": 45.6,
+          "cases": 1386
+        },
+        "gapscan": {
+          "real": 731,
+          "fake": 655,
+          "caught": 90.7,
+          "false_alarms": 39.5,
+          "score": 51.2,
+          "cases": 1386
+        }
+      }
+    },
+    {
+      "key": "python",
+      "name": "Python",
+      "benchmark": "OWASP Benchmark for Python v0.1 (1,230 cases)",
+      "evidence": "standard benchmark",
+      "tuned_on_all_files": false,
+      "held_out": {
+        "community": {
+          "real": 223,
+          "fake": 377,
+          "caught": 35.0,
+          "false_alarms": 14.6,
+          "score": 20.4,
+          "cases": 600
+        },
+        "gapscan": {
+          "real": 223,
+          "fake": 377,
+          "caught": 78.0,
+          "false_alarms": 27.3,
+          "score": 50.7,
+          "cases": 600
+        }
+      },
+      "tuning_half": {
+        "community": {
+          "real": 229,
+          "fake": 401,
+          "caught": 29.3,
+          "false_alarms": 12.7,
+          "score": 16.5,
+          "cases": 630
+        },
+        "gapscan": {
+          "real": 229,
+          "fake": 401,
+          "caught": 76.4,
+          "false_alarms": 26.2,
+          "score": 50.2,
+          "cases": 630
+        }
+      }
+    },
+    {
+      "key": "javascript",
+      "name": "JavaScript / TypeScript",
+      "benchmark": "Node.js synthetic set, Juice Shop, NodeGoat, Juice Shop code fixes (82 cases)",
+      "evidence": "small mixed set",
+      "tuned_on_all_files": false,
+      "held_out": {
+        "community": {
+          "real": 23,
+          "fake": 17,
+          "caught": 47.8,
+          "false_alarms": 5.9,
+          "score": 41.9,
+          "cases": 40
+        },
+        "gapscan": {
+          "real": 23,
+          "fake": 17,
+          "caught": 60.9,
+          "false_alarms": 0.0,
+          "score": 60.9,
+          "cases": 40
+        }
+      },
+      "tuning_half": {
+        "community": {
+          "real": 29,
+          "fake": 13,
+          "caught": 48.3,
+          "false_alarms": 7.7,
+          "score": 40.6,
+          "cases": 42
+        },
+        "gapscan": {
+          "real": 29,
+          "fake": 13,
+          "caught": 69.0,
+          "false_alarms": 0.0,
+          "score": 69.0,
+          "cases": 42
+        }
+      }
+    },
+    {
+      "key": "go",
+      "name": "Go",
+      "benchmark": "Go synthetic set and Vulnerability-goapp (42 labeled cases, with safe files)",
+      "evidence": "small mixed set",
+      "tuned_on_all_files": false,
+      "held_out": {
+        "community": {
+          "real": 14,
+          "fake": 8,
+          "caught": 28.6,
+          "false_alarms": 12.5,
+          "score": 16.1,
+          "cases": 22
+        },
+        "gapscan": {
+          "real": 14,
+          "fake": 8,
+          "caught": 85.7,
+          "false_alarms": 0.0,
+          "score": 85.7,
+          "cases": 22
+        }
+      },
+      "tuning_half": {
+        "community": {
+          "real": 11,
+          "fake": 9,
+          "caught": 63.6,
+          "false_alarms": 0.0,
+          "score": 63.6,
+          "cases": 20
+        },
+        "gapscan": {
+          "real": 11,
+          "fake": 9,
+          "caught": 90.9,
+          "false_alarms": 0.0,
+          "score": 90.9,
+          "cases": 20
+        }
+      }
+    },
+    {
+      "key": "kotlin",
+      "name": "Kotlin / Android",
+      "benchmark": "OWASP MASTG demo apps (44 cases)",
+      "evidence": "demo samples",
+      "tuned_on_all_files": false,
+      "held_out": {
+        "community": {
+          "real": 20,
+          "fake": 0,
+          "caught": 0.0,
+          "false_alarms": 0.0,
+          "score": 0.0,
+          "cases": 20
+        },
+        "gapscan": {
+          "real": 20,
+          "fake": 0,
+          "caught": 65.0,
+          "false_alarms": 0.0,
+          "score": 65.0,
+          "cases": 20
+        }
+      },
+      "tuning_half": {
+        "community": {
+          "real": 22,
+          "fake": 2,
+          "caught": 4.5,
+          "false_alarms": 0.0,
+          "score": 4.5,
+          "cases": 24
+        },
+        "gapscan": {
+          "real": 22,
+          "fake": 2,
+          "caught": 81.8,
+          "false_alarms": 0.0,
+          "score": 81.8,
+          "cases": 24
+        }
+      }
+    },
+    {
+      "key": "swift",
+      "name": "Swift / iOS",
+      "benchmark": "OWASP MASTG demo apps (34 cases)",
+      "evidence": "demo samples",
+      "tuned_on_all_files": false,
+      "held_out": {
+        "community": {
+          "real": 16,
+          "fake": 0,
+          "caught": 6.2,
+          "false_alarms": 0.0,
+          "score": 6.2,
+          "cases": 16
+        },
+        "gapscan": {
+          "real": 16,
+          "fake": 0,
+          "caught": 68.8,
+          "false_alarms": 0.0,
+          "score": 68.8,
+          "cases": 16
+        }
+      },
+      "tuning_half": {
+        "community": {
+          "real": 17,
+          "fake": 1,
+          "caught": 0.0,
+          "false_alarms": 0.0,
+          "score": 0.0,
+          "cases": 18
+        },
+        "gapscan": {
+          "real": 17,
+          "fake": 1,
+          "caught": 64.7,
+          "false_alarms": 0.0,
+          "score": 64.7,
+          "cases": 18
+        }
+      }
+    },
+    {
+      "key": "android-apps",
+      "name": "Android apps (Java)",
+      "benchmark": "DIVA and InsecureBankv2: 19 labeled files",
+      "evidence": "real apps",
+      "tuned_on_all_files": false,
+      "held_out": {
+        "community": {
+          "real": 14,
+          "fake": 0,
+          "caught": 7.1,
+          "false_alarms": 0.0,
+          "score": 7.1,
+          "cases": 14
+        },
+        "gapscan": {
+          "real": 14,
+          "fake": 0,
+          "caught": 50.0,
+          "false_alarms": 0.0,
+          "score": 50.0,
+          "cases": 14
+        }
+      },
+      "tuning_half": {
+        "community": {
+          "real": 5,
+          "fake": 0,
+          "caught": 0.0,
+          "false_alarms": 0.0,
+          "score": 0.0,
+          "cases": 5
+        },
+        "gapscan": {
+          "real": 5,
+          "fake": 0,
+          "caught": 60.0,
+          "false_alarms": 0.0,
+          "score": 60.0,
+          "cases": 5
+        }
+      }
+    },
+    {
+      "key": "swift-dvia",
+      "name": "iOS app (DVIA-v2)",
+      "benchmark": "10 labeled files",
+      "evidence": "real app",
+      "tuned_on_all_files": true,
+      "held_out": {
+        "community": {
+          "real": 6,
+          "fake": 0,
+          "caught": 0.0,
+          "false_alarms": 0.0,
+          "score": 0.0,
+          "cases": 6
+        },
+        "gapscan": {
+          "real": 6,
+          "fake": 0,
+          "caught": 50.0,
+          "false_alarms": 0.0,
+          "score": 50.0,
+          "cases": 6
+        }
+      },
+      "tuning_half": {
+        "community": {
+          "real": 4,
+          "fake": 0,
+          "caught": 0.0,
+          "false_alarms": 0.0,
+          "score": 0.0,
+          "cases": 4
+        },
+        "gapscan": {
+          "real": 4,
+          "fake": 0,
+          "caught": 100.0,
+          "false_alarms": 0.0,
+          "score": 100.0,
+          "cases": 4
+        }
+      }
+    },
+    {
+      "key": "swift-igoat",
+      "name": "iOS app (iGoat-Swift)",
+      "benchmark": "17 labeled files",
+      "evidence": "real app",
+      "tuned_on_all_files": true,
+      "held_out": {
+        "community": {
+          "real": 10,
+          "fake": 0,
+          "caught": 0.0,
+          "false_alarms": 0.0,
+          "score": 0.0,
+          "cases": 10
+        },
+        "gapscan": {
+          "real": 10,
+          "fake": 0,
+          "caught": 20.0,
+          "false_alarms": 0.0,
+          "score": 20.0,
+          "cases": 10
+        }
+      },
+      "tuning_half": {
+        "community": {
+          "real": 7,
+          "fake": 0,
+          "caught": 14.3,
+          "false_alarms": 0.0,
+          "score": 14.3,
+          "cases": 7
+        },
+        "gapscan": {
+          "real": 7,
+          "fake": 0,
+          "caught": 71.4,
+          "false_alarms": 0.0,
+          "score": 71.4,
+          "cases": 7
+        }
+      }
+    },
+    {
+      "key": "kotlin-apps",
+      "name": "Kotlin apps (InsecureShop, KotlinGoat)",
+      "benchmark": "17 labeled files",
+      "evidence": "real apps",
+      "tuned_on_all_files": true,
+      "held_out": {
+        "community": {
+          "real": 7,
+          "fake": 0,
+          "caught": 0.0,
+          "false_alarms": 0.0,
+          "score": 0.0,
+          "cases": 7
+        },
+        "gapscan": {
+          "real": 7,
+          "fake": 0,
+          "caught": 71.4,
+          "false_alarms": 0.0,
+          "score": 71.4,
+          "cases": 7
+        }
+      },
+      "tuning_half": {
+        "community": {
+          "real": 10,
+          "fake": 0,
+          "caught": 0.0,
+          "false_alarms": 0.0,
+          "score": 0.0,
+          "cases": 10
+        },
+        "gapscan": {
+          "real": 10,
+          "fake": 0,
+          "caught": 70.0,
+          "false_alarms": 0.0,
+          "score": 70.0,
+          "cases": 10
+        }
+      }
+    },
+    {
+      "key": "dart",
+      "name": "Dart / Flutter",
+      "benchmark": "DVMA: 107 modules whose folder holds logic",
+      "evidence": "real app (mostly behavioral simulations)",
+      "tuned_on_all_files": true,
+      "held_out": {
+        "community": {
+          "real": 56,
+          "fake": 0,
+          "caught": 0.0,
+          "false_alarms": 0.0,
+          "score": 0.0,
+          "cases": 56
+        },
+        "gapscan": {
+          "real": 56,
+          "fake": 0,
+          "caught": 7.1,
+          "false_alarms": 0.0,
+          "score": 7.1,
+          "cases": 56
+        }
+      },
+      "tuning_half": {
+        "community": {
+          "real": 51,
+          "fake": 0,
+          "caught": 0.0,
+          "false_alarms": 0.0,
+          "score": 0.0,
+          "cases": 51
+        },
+        "gapscan": {
+          "real": 51,
+          "fake": 0,
+          "caught": 11.8,
+          "false_alarms": 0.0,
+          "score": 11.8,
+          "cases": 51
+        }
+      }
+    }
+  ]
+}

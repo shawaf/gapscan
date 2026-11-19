@@ -1,0 +1,26 @@
+# Popular package names per ecosystem, used to spot look-alike names (typosquats). Not a
+# recommendation list: only names a squatter would target. Matching is by edit distance.
+
+PyPI = ["requests", "numpy", "pandas", "urllib3", "boto3", "botocore", "setuptools", "wheel", "six",
+  "python-dateutil", "pytz", "pyyaml", "certifi", "idna", "charset-normalizer", "cryptography",
+  "cffi", "pycparser", "packaging", "typing-extensions", "attrs", "jinja2", "markupsafe", "click",
+  "flask", "django", "pytest", "pillow", "scipy", "scikit-learn", "matplotlib", "tensorflow",
+  "torch", "sqlalchemy", "psycopg2", "redis", "celery", "fastapi", "uvicorn", "pydantic", "httpx",
+  "aiohttp", "beautifulsoup4", "lxml", "openpyxl", "tqdm", "colorama", "rich", "typer", "black",
+  "flake8", "mypy", "ruff", "docker", "paramiko", "pexpect", "protobuf", "grpcio", "awscli",
+  "s3transfer", "jmespath", "rsa", "pyasn1", "oauthlib", "werkzeug", "gunicorn", "simplejson",
+  "ujson", "orjson", "regex", "joblib", "networkx", "sympy", "selenium", "scrapy", "tornado",
+  "twisted", "pyjwt", "bcrypt", "passlib", "itsdangerous", "coverage", "tox", "virtualenv",
+  "cython", "numba", "keras", "transformers", "pyopenssl", "cachetools", "google-auth", "pymysql",
+  "mysqlclient", "pymongo", "psutil", "pexpect", "decorator", "wrapt", "zipp", "importlib-metadata"]
+
+npm = ["react", "react-dom", "lodash", "express", "axios", "moment", "chalk", "commander", "debug",
+  "request", "async", "underscore", "bluebird", "vue", "webpack", "typescript", "jquery", "next",
+  "eslint", "prettier", "jest", "mocha", "uuid", "dotenv", "cors", "body-parser", "mongoose",
+  "mysql", "redis", "socket.io", "cheerio", "puppeteer", "rxjs", "tslib", "yargs", "minimist",
+  "glob", "rimraf", "mkdirp", "semver", "colors", "ws", "node-fetch", "passport", "jsonwebtoken",
+  "bcrypt", "nodemon", "gulp", "grunt", "angular", "bootstrap", "redux", "react-router",
+  "classnames", "prop-types", "core-js", "inquirer", "ora", "fs-extra", "nanoid", "date-fns",
+  "dayjs", "joi", "zod", "ajv", "handlebars", "ejs", "pug", "marked", "three", "d3", "chart.js",
+  "babel-core", "cross-env", "concurrently", "express-session", "helmet", "morgan", "multer",
+  "sequelize", "knex", "pg", "sqlite3", "lodash-es", "event-stream", "left-pad", "is-promise"]

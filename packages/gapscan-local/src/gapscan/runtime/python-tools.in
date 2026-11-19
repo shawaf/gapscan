@@ -1,0 +1,5 @@
+# The Python scanners the setup wizard installs on a private Python. Pinned to the versions GapScan was
+# tested with; `tools/make_pack_manifest.py` resolves them (and everything they need) to hashed files.
+semgrep==1.176.0
+checkov==3.3.20
+bandit==1.9.4

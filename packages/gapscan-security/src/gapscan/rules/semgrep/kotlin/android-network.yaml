@@ -1,0 +1,118 @@
+# GapScan Rules: Kotlin / Android, sixth set (TLS details, WebView content, broadcasts, XML parsing). Licensed Apache-2.0.
+# Every rule has a vulnerable and a safe case in tests/rules/kotlin/android-network.kt (run: make rules-test).
+rules:
+  - id: gapscan.kotlin.trust-manager-never-rejects
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      This `checkServerTrusted` never rejects a certificate: it neither throws nor hands the chain to a real trust
+      manager (it only logs, catches, or returns). Every certificate, including an attacker's, is accepted. Delegate to
+      the platform trust manager (`defaultTm.checkServerTrusted(chain, authType)`) and throw `CertificateException` on
+      any doubt, or use the network security config for pinning instead of a custom TrustManager.
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern: |
+          override fun checkServerTrusted(...) { $...BODY }
+      - metavariable-regex:
+          metavariable: $...BODY
+          # a non-empty body (empty bodies are tls-trust-all) without a throw, a delegate call or a verify step
+          regex: (?s)^(?=.*\S)(?!.*(\bthrow\b|checkServerTrusted|checkValidity|\.verify\(|\bcheck[A-Z]\w*\(|require\(|error\()).*$
+
+  - id: gapscan.kotlin.weak-tls-protocol
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      An obsolete protocol (SSL, TLS 1.0 or 1.1) is requested or allowed, or cleartext is added to the OkHttp connection
+      specs. These versions have known attacks and are rejected by current servers' best practice. Use
+      `SSLContext.getInstance("TLS")` (the platform picks TLS 1.2/1.3) and `ConnectionSpec.MODERN_TLS` /
+      `RESTRICTED_TLS`.
+    metadata:
+      cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm", "CWE-757: Selection of Less-Secure Algorithm During Negotiation ('Algorithm Downgrade')"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern-regex: 'SSLContext\.getInstance\(\s*"(?:SSL|SSLv2|SSLv3|TLSv1|TLSv1\.1)"'
+      - pattern-regex: '\.tlsVersions\([^)]*TlsVersion\.(?:SSL_3_0|TLS_1_0|TLS_1_1)'
+      - pattern-regex: '\.(?:setEnabledProtocols|enabledProtocols\s*=)\s*\(?\s*arrayOf\([^)]*"(?:SSLv3|TLSv1|TLSv1\.1)"'
+      - pattern-regex: 'connectionSpecs\([^)]*ConnectionSpec\.(?:CLEARTEXT|COMPATIBLE_TLS)'
+
+  - id: gapscan.kotlin.webview-mixed-content
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      The WebView loads plain-HTTP resources (scripts, frames, images) into HTTPS pages. Someone on the network can
+      replace a script and take over the page, including any JavaScript bridge. Keep the default
+      `MIXED_CONTENT_NEVER_ALLOW` and serve every resource over HTTPS.
+    metadata:
+      cwe: ["CWE-319: Cleartext Transmission of Sensitive Information"]
+      masvs: ["MASVS-PLATFORM-2", "MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $S.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+      - pattern: $S.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW)
+      - pattern: $S.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+      - pattern: $S.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE)
+      - pattern: $S.mixedContentMode = MIXED_CONTENT_ALWAYS_ALLOW
+      - pattern: $S.mixedContentMode = 0
+
+  - id: gapscan.kotlin.sticky-broadcast
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A sticky broadcast stays in the system after it is sent: any app can read its data later and any app can send
+      a replacement, with no permission check. Sticky broadcasts are deprecated; send a normal broadcast to an explicit
+      package with a receiver permission, or use a bound service.
+    metadata:
+      cwe: ["CWE-927: Use of Implicit Intent for Sensitive Communication"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: sendStickyBroadcast(...)
+      - pattern: $C.sendStickyBroadcast(...)
+      - pattern: sendStickyOrderedBroadcast(...)
+      - pattern: $C.sendStickyOrderedBroadcast(...)
+      - pattern: $C.sendStickyBroadcastAsUser(...)
+
+  - id: gapscan.kotlin.xxe-parser-not-hardened
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      An XML parser is created and the function never turns off DOCTYPEs or external entities. A document from outside
+      (a download, a shared file, a request body) can then read local files or make network calls through an entity
+      (XXE). Call `setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)` (or set
+      `XMLConstants.FEATURE_SECURE_PROCESSING` and disable external entities) before parsing, or use XmlPullParser,
+      which does not resolve them.
+    metadata:
+      cwe: ["CWE-611: Improper Restriction of XML External Entity Reference"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: DocumentBuilderFactory.newInstance()
+          - pattern: SAXParserFactory.newInstance()
+          - pattern: XMLInputFactory.newInstance()
+          - pattern: XMLInputFactory.newFactory()
+          - pattern: TransformerFactory.newInstance()
+          - pattern: SAXReader()
+          - pattern: SAXBuilder()
+      - pattern-either:
+          - patterns:
+              - pattern-inside: |
+                  fun $F(...) { $...BODY }
+              - metavariable-regex:
+                  metavariable: $...BODY
+                  regex: (?s)^(?!.*(disallow-doctype-decl|external-general-entities|FEATURE_SECURE_PROCESSING|ACCESS_EXTERNAL_DTD|SUPPORT_DTD|IS_SUPPORTING_EXTERNAL_ENTITIES|isExpandEntityReferences\s*=\s*false|setExpandEntityReferences\(false\))).*$
+          - patterns:
+              - pattern-inside: |
+                  fun $F(...) = $E
+              - metavariable-regex:
+                  metavariable: $E
+                  regex: (?s)^(?!.*(disallow-doctype-decl|external-general-entities|FEATURE_SECURE_PROCESSING|ACCESS_EXTERNAL_DTD|SUPPORT_DTD|IS_SUPPORTING_EXTERNAL_ENTITIES)).*$

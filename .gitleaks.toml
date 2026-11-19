@@ -1,0 +1,19 @@
+# Gitleaks config for scanning THIS repository (for example in CI or before going public).
+# GapScan's own scanner adapter never reads a target's config (scanners/gitleaks.py pins its own).
+#
+# The paths below hold deliberately fake, invalid credentials: scanner fixtures and rule tests that
+# exist so detectors have something to find. Real secrets must never be added anywhere,
+# including these folders. Everything else in the repository is scanned with the default rules.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Deliberately fake credentials in scanner fixtures and rule tests"
+paths = [
+  '''^eval/fixtures/''',
+  '''^tests/rules/''',
+  '''^tests/data/''',
+  '''^packages/gapscan-local/src/gapscan/sample_project/''',
+  '''^tools/eval_cases/''',
+  '''^tools/make_eval_fixtures\.py$''',
+]

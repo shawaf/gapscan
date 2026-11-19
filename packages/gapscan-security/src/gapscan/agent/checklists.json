@@ -1,0 +1,305 @@
+{
+  "_about": "What good looks like, per weakness class (agent/grouping.py weakness_class, plus the secret and dependency categories). Written by GapScan from the bundled OWASP Cheat Sheet Series snapshot (data/owasp/cheatsheets); each entry names its sheet. Shown to the deep-dive model as trusted guidance. 'signals' are code-shaped texts whose presence would show the control exists; the model searches them before claiming a control is missing.",
+  "version": 2,
+  "classes": {
+    "sql-injection": {
+      "source": "SQL_Injection_Prevention_Cheat_Sheet",
+      "controls": [
+        {
+          "control": "Prepared statements / parameterized queries: the query text is constant and values are bound separately",
+          "signals": [
+            "PreparedStatement",
+            "bindparam(",
+            "text(",
+            "setString(",
+            "$1",
+            ":name"
+          ]
+        },
+        {
+          "control": "Allow-list validation for parts that cannot be parameters (table or column names, sort order)",
+          "signals": [
+            "re.fullmatch(",
+            "ALLOWED_",
+            "in ("
+          ]
+        }
+      ],
+      "fix": "Use a parameterized query with the driver's placeholder (for example sqlite3: execute(\"... WHERE name = ?\", (name,)); SQLAlchemy: text() with bound parameters). Keep allow-list validation only for identifiers that cannot be parameters.",
+      "not_a_fix": [
+        "Escaping or stripping quotes by hand instead of binding parameters",
+        "Only validating input while still concatenating it into SQL"
+      ],
+      "verify": [
+        "No query in the project is built by string concatenation or formatting with request data",
+        "A value containing a quote is treated as data (returns no rows, raises no SQL error)"
+      ]
+    },
+    "command-injection": {
+      "source": "OS_Command_Injection_Defense_Cheat_Sheet",
+      "controls": [
+        {
+          "control": "Avoid calling OS commands: use a library/API for the task",
+          "signals": [
+            "socket.",
+            "ping3",
+            "os.mkdir(",
+            "shutil."
+          ]
+        },
+        {
+          "control": "If a command is unavoidable: no shell, arguments as a list",
+          "signals": [
+            "shell=False",
+            "subprocess.run([",
+            "ProcessBuilder(",
+            "execFile("
+          ]
+        },
+        {
+          "control": "Allow-list validation of every user-supplied argument",
+          "signals": [
+            "re.fullmatch(",
+            "ipaddress.ip_address(",
+            "ALLOWED_"
+          ]
+        }
+      ],
+      "fix": "Prefer a library call over a command. If a command is unavoidable, call it without a shell with the arguments as a list, and validate each user-supplied argument against an allow-list (for a host: parse it as an IP address or hostname first).",
+      "not_a_fix": [
+        "Blocking a few characters such as ; or & (deny-lists are bypassed)",
+        "Quoting the whole command string while still using shell=True"
+      ],
+      "verify": [
+        "No call passes request data to a shell",
+        "An argument containing shell metacharacters is rejected or passed literally"
+      ]
+    },
+    "deserialization": {
+      "source": "Deserialization_Cheat_Sheet",
+      "controls": [
+        {
+          "control": "Untrusted data is parsed with a data-only format",
+          "signals": [
+            "json.loads(",
+            "yaml.safe_load(",
+            "JSON.parse("
+          ]
+        },
+        {
+          "control": "If native serialization must be used: integrity check (signature) before deserializing",
+          "signals": [
+            "hmac.compare_digest(",
+            "hmac.new("
+          ]
+        }
+      ],
+      "fix": "Do not deserialize untrusted data with pickle (or yaml.load / jsonpickle); accept a data-only format such as JSON and validate it against the expected schema. If native objects must cross a trust boundary, sign them and verify the signature before loading.",
+      "not_a_fix": [
+        "Wrapping pickle.loads in try/except",
+        "Checking the size or type of the payload before pickle.loads"
+      ],
+      "verify": [
+        "No pickle/yaml.load call reads request data",
+        "The endpoint rejects a payload that is not valid JSON"
+      ]
+    },
+    "weak-hash": {
+      "source": "Password_Storage_Cheat_Sheet",
+      "controls": [
+        {
+          "control": "Passwords: a slow, salted password hash",
+          "signals": [
+            "argon2",
+            "hashlib.scrypt(",
+            "bcrypt.",
+            "pbkdf2_hmac",
+            "PBKDF2"
+          ]
+        },
+        {
+          "control": "Integrity or signatures (not passwords): SHA-256 or stronger",
+          "signals": [
+            "sha256",
+            "sha3_",
+            "blake2"
+          ]
+        }
+      ],
+      "fix": "Decide by purpose. For passwords use Argon2id (at least 19 MiB memory, 2 iterations, parallelism 1); if unavailable scrypt; bcrypt (work factor 10 or more) for legacy; PBKDF2-HMAC-SHA-256 with 600,000+ iterations where FIPS-140 is required. Rehash existing passwords at next login. For integrity checks use SHA-256 or stronger. A non-security use (cache key, ETag) is not a vulnerability.",
+      "not_a_fix": [
+        "Replacing MD5 with SHA-256 (or any fast hash) for passwords: fast hashes are not password hashes",
+        "Adding a salt to MD5"
+      ],
+      "verify": [
+        "Stored password hashes use the chosen password-hashing algorithm and parameters",
+        "Old MD5 hashes are migrated on next login and then removed"
+      ]
+    },
+    "xss": {
+      "source": "Cross_Site_Scripting_Prevention_Cheat_Sheet",
+      "controls": [
+        {
+          "control": "Context-aware output encoding, ideally by a template engine that escapes by default",
+          "signals": [
+            "render_template(",
+            "escape(",
+            "html.escape(",
+            "Markup(",
+            "textContent"
+          ]
+        },
+        {
+          "control": "HTML sanitization when HTML input must be allowed",
+          "signals": [
+            "bleach.clean(",
+            "DOMPurify"
+          ]
+        }
+      ],
+      "fix": "Return data through a template engine with autoescaping (or encode it for the exact output context), and set an explicit non-HTML content type for data responses. Sanitize with a vetted library only where HTML must be allowed.",
+      "not_a_fix": [
+        "Removing <script> with a regular expression",
+        "Encoding for the wrong context (HTML encoding inside a JavaScript string)"
+      ],
+      "verify": [
+        "A value containing <script> is shown as text, not executed",
+        "Data responses carry a non-HTML content type"
+      ]
+    },
+    "container-root": {
+      "source": "Docker_Security_Cheat_Sheet",
+      "controls": [
+        {
+          "control": "The image switches to an unprivileged user (rule #2)",
+          "signals": [
+            "USER ",
+            "useradd",
+            "adduser"
+          ]
+        },
+        {
+          "control": "No privilege escalation in the container (rule #4)",
+          "signals": [
+            "no-new-privileges",
+            "allowPrivilegeEscalation"
+          ]
+        }
+      ],
+      "fix": "Create an unprivileged user in the Dockerfile (for example RUN groupadd -r app && useradd -r -g app app) and switch to it with USER before the entrypoint; run with --security-opt=no-new-privileges.",
+      "not_a_fix": [
+        "Only documenting that the container should be run with -u"
+      ],
+      "verify": [
+        "docker inspect shows a non-root Config.User",
+        "The process inside the running container is not uid 0"
+      ]
+    },
+    "path-traversal": {
+      "source": "Input_Validation_Cheat_Sheet",
+      "controls": [
+        {
+          "control": "Canonicalize the path and check it stays inside the allowed base directory",
+          "signals": [
+            "realpath(",
+            "resolve()",
+            "is_relative_to(",
+            "getCanonicalPath("
+          ]
+        },
+        {
+          "control": "Allow-list or generated file names",
+          "signals": [
+            "secure_filename(",
+            "uuid4(",
+            "ALLOWED_"
+          ]
+        }
+      ],
+      "fix": "Resolve the requested path to its canonical form and reject it unless it is inside the base directory; better, map user input to an allow-listed or generated file name.",
+      "not_a_fix": [
+        "Removing ../ with a string replace"
+      ],
+      "verify": [
+        "A request for ../ or an absolute path is rejected"
+      ]
+    },
+    "ssrf": {
+      "source": "Server_Side_Request_Forgery_Prevention_Cheat_Sheet",
+      "controls": [
+        {
+          "control": "Allow-list of destination hosts or URLs",
+          "signals": [
+            "ALLOWED_HOSTS",
+            "ALLOWED_",
+            "urlparse("
+          ]
+        },
+        {
+          "control": "Block private, loopback and link-local addresses after resolution",
+          "signals": [
+            "ipaddress.",
+            "is_private",
+            "is_loopback"
+          ]
+        }
+      ],
+      "fix": "Only allow requests to an allow-list of destinations; when that is impossible, resolve the host and block private, loopback and link-local addresses, and disable redirects.",
+      "not_a_fix": [
+        "Checking the URL string for 'localhost' or '127.0.0.1'"
+      ],
+      "verify": [
+        "A request to an internal address is refused"
+      ]
+    },
+    "secret": {
+      "source": "Secrets_Management_Cheat_Sheet",
+      "controls": [
+        {
+          "control": "Server-side secrets come from the environment or a secrets manager, not source code",
+          "signals": [
+            "os.environ",
+            "getenv(",
+            "SecretManager",
+            "Vault"
+          ]
+        },
+        {
+          "control": "On mobile, keys are generated and kept in the platform keystore (Android Keystore, iOS Keychain), never shipped in the app",
+          "signals": [
+            "AndroidKeyStore",
+            "KeyGenParameterSpec",
+            "kSecClass",
+            "SecItemAdd"
+          ]
+        }
+      ],
+      "fix": "Treat the credential as exposed in every build that contains it: a constant compiled into an app can be extracted from that build even where the code path that uses it never runs. Revoke and rotate it first; then, server side, load it from the environment or a secrets manager, and in a mobile app generate the key in the platform keystore on the device (or fetch a short-lived credential from a backend), migrating data protected by the old secret. Remove it from source and purge it from git history, and add a secret scanner to CI.",
+      "not_a_fix": [
+        "Deleting the line without rotating the credential: it stays valid and stays in git history",
+        "Keeping a hardcoded fallback secret for some builds or flavors: it still ships in every build that compiles it"
+      ],
+      "verify": [
+        "The old credential is revoked",
+        "A secret scan of the full git history finds nothing"
+      ]
+    },
+    "dependency": {
+      "source": "Vulnerable_Dependency_Management_Cheat_Sheet",
+      "controls": [
+        {
+          "control": "The dependency is pinned at or above the fixed version",
+          "signals": []
+        }
+      ],
+      "fix": "Upgrade to the fixed version and re-run the tests. If no fixed version exists, apply the advisory's mitigation (or a virtual patch) and document the accepted risk until one does.",
+      "not_a_fix": [
+        "Pinning the vulnerable version"
+      ],
+      "verify": [
+        "The manifest and lockfile declare the fixed version",
+        "A rescan no longer reports the advisory"
+      ]
+    }
+  }
+}

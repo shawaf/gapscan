@@ -1,0 +1,8 @@
+{
+  "_comment": "The OWASP editions GapScan's mapping tables were built for. `gapscan bundle` fails when the official sources show a different edition, until the tables are regenerated, reviewed, and this file is updated in the same commit.",
+  "top10": "2025",
+  "asvs": "5.0",
+  "api_top10": "2023",
+  "genai_llm_top10": "2026",
+  "masvs": "2"
+}

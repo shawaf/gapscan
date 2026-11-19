@@ -1,0 +1,866 @@
+# GapScan Rules: C# (ASP.NET Core, ASP.NET MVC / Web Forms, ADO.NET, Entity Framework, Dapper).
+# Licensed Apache-2.0 with the rest of GapScan. Every rule has a vulnerable and a safe case in
+# tests/rules/csharp/ (run: make rules-test). Taint rules follow untrusted data within one function.
+
+x-request-sources: &request-sources
+  - pattern-either:
+      # ASP.NET Core: HttpRequest members (Request, HttpContext.Request, a parameter named req/request)
+      - patterns:
+          - pattern-either:
+              - pattern: $REQ.Query
+              - pattern: $REQ.Form
+              - pattern: $REQ.Headers
+              - pattern: $REQ.Cookies
+              - pattern: $REQ.RouteValues
+              - pattern: $REQ.QueryString
+              - pattern: $REQ.Path
+              - pattern: $REQ.Body
+              - pattern: $REQ.Params
+              - pattern: $REQ.ServerVariables
+              - pattern: $REQ.RawUrl
+              - pattern: $REQ.Url
+              - pattern: $REQ.UrlReferrer
+              - pattern: $REQ.UserAgent
+              - pattern: $REQ.InputStream
+              - pattern: $REQ[$K]
+          - metavariable-regex:
+              metavariable: $REQ
+              regex: ^(?:(?:\w+\.)*Request|req|request|httpRequest)$
+      # MVC / Web API action parameters (bound from the request); numbers, dates and ids cannot carry a payload
+      - patterns:
+          - pattern-inside: |
+              class $CLS : $BASE { ... }
+          - metavariable-regex:
+              metavariable: $BASE
+              regex: ^(?:.*\.)?(?:Controller|ControllerBase|ApiController|PageModel)$
+          - pattern-inside: |
+              public $RET $ACTION(..., $TYPE $PARAM, ...) { ... }
+          - metavariable-regex:
+              metavariable: $TYPE
+              regex: ^(?:string|String|object|dynamic|IFormCollection|JObject|JsonElement|string\[\]|List<string>|IEnumerable<string>|Dictionary<string, *string>)$
+          - focus-metavariable: $PARAM
+      # Console, environment, network and downloaded content
+      - pattern: Console.ReadLine()
+      - pattern: Environment.GetEnvironmentVariable(...)
+      - pattern: Environment.GetCommandLineArgs()
+      - pattern: $CLIENT.GetStream()
+      - pattern: $SOCK.Receive(...)
+      - pattern: (System.Net.WebClient $W).DownloadString(...)
+      - pattern: (WebClient $W).DownloadString(...)
+      - pattern: (WebClient $W).OpenRead(...)
+
+# A StringBuilder or collection that receives tainted data is tainted (Semgrep does not assume that).
+x-propagators: &propagators
+  - pattern: $SB.Append($X)
+    from: $X
+    to: $SB
+  - pattern: $SB.AppendLine($X)
+    from: $X
+    to: $SB
+  - pattern: $SB.AppendFormat($F, $X)
+    from: $X
+    to: $SB
+  - pattern: $SB.Insert($I, $X)
+    from: $X
+    to: $SB
+  - pattern: $L.Add($X)
+    from: $X
+    to: $L
+  - pattern: $L.AddRange($X)
+    from: $X
+    to: $L
+
+x-number-sanitizers: &number-sanitizers
+  - pattern-either:
+      - pattern: int.Parse(...)
+      - pattern: long.Parse(...)
+      - pattern: short.Parse(...)
+      - pattern: double.Parse(...)
+      - pattern: decimal.Parse(...)
+      - pattern: Guid.Parse(...)
+      - pattern: Int32.Parse(...)
+      - pattern: Int64.Parse(...)
+      - pattern: Convert.ToInt32(...)
+      - pattern: Convert.ToInt64(...)
+      - pattern: Convert.ToDouble(...)
+      - pattern: Convert.ToBoolean(...)
+      - pattern: DateTime.Parse(...)
+      - patterns:
+          - pattern-inside: |
+              if (<... $T.TryParse($X, out $V) ...>) { ... }
+          - pattern: $V
+
+rules:
+  # ----------------------------------------------------------------------------- injection (taint)
+  - id: gapscan.csharp.taint-sqli
+    languages: [csharp]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data reaches an SQL statement built from a string (SQL injection). Use parameters
+      (`cmd.Parameters.AddWithValue("@id", id)`, `FromSqlInterpolated`, Dapper `new { id }`) instead of
+      concatenation or `$"..."`.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: HIGH
+    pattern-sources: *request-sources
+    pattern-propagators: *propagators
+    pattern-sanitizers: *number-sanitizers
+    pattern-sinks:
+      - patterns:
+          - pattern: new $CMD($Q, ...)
+          - metavariable-regex:
+              metavariable: $CMD
+              regex: ^(?:\w+\.)*(?:SqlCommand|SqlDataAdapter|OleDbCommand|OleDbDataAdapter|OdbcCommand|OdbcDataAdapter|NpgsqlCommand|MySqlCommand|MySqlDataAdapter|SqliteCommand|SQLiteCommand|OracleCommand)$
+          - focus-metavariable: $Q
+      - patterns:
+          - pattern-either:
+              - pattern: $X.CommandText = $Q
+              - pattern: $X.CommandText += $Q
+              - pattern: $DB.Database.ExecuteSqlRaw($Q, ...)
+              - pattern: $DB.Database.ExecuteSqlRawAsync($Q, ...)
+              - pattern: $DB.Database.ExecuteSqlCommand($Q, ...)
+              - pattern: $DB.Database.SqlQueryRaw<$T>($Q, ...)
+              - pattern: $SET.FromSqlRaw($Q, ...)
+              - pattern: $DB.Database.SqlQuery<$T>($Q, ...)
+          - focus-metavariable: $Q
+
+  - id: gapscan.csharp.taint-dapper-sqli
+    languages: [csharp]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data reaches a Dapper query string (SQL injection). Pass values as parameters:
+      `conn.Query<User>("... WHERE id = @id", new { id })`.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources: *request-sources
+    pattern-propagators: *propagators
+    pattern-sanitizers: *number-sanitizers
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $CONN.$M($Q, ...)
+              - pattern: $CONN.$M<$T>($Q, ...)
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(?:Query|QueryAsync|QueryFirst|QueryFirstOrDefault|QuerySingle|QuerySingleOrDefault|QueryFirstAsync|QueryFirstOrDefaultAsync|QueryMultiple|Execute|ExecuteAsync|ExecuteScalar|ExecuteScalarAsync|ExecuteReader)$
+          - metavariable-regex:
+              metavariable: $CONN
+              regex: (?i)^(?:.*\.)?_?(?:conn|connection|db|cnn|con)\w*$
+          - focus-metavariable: $Q
+
+  - id: gapscan.csharp.taint-command-injection
+    languages: [csharp]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data chooses the program or its argument string (OS command injection). Run a fixed
+      program and add each value with `ProcessStartInfo.ArgumentList.Add(value)`; never through `cmd /c` or `sh -c`.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      category: security
+      confidence: HIGH
+    pattern-sources: *request-sources
+    pattern-propagators: *propagators
+    pattern-sanitizers: *number-sanitizers
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: Process.Start($A, ...)
+              - pattern: Process.Start($P, $A)
+              - pattern: System.Diagnostics.Process.Start($A, ...)
+              - pattern: new ProcessStartInfo($A, ...)
+              - pattern: new ProcessStartInfo($P, $A)
+              - pattern: $PSI.FileName = $A
+              - pattern: $PSI.Arguments = $A
+          - pattern-not: Process.Start((ProcessStartInfo $INFO))
+          - pattern-not: System.Diagnostics.Process.Start((ProcessStartInfo $INFO))
+          - focus-metavariable: $A
+
+  - id: gapscan.csharp.taint-path-traversal
+    languages: [csharp]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data is used as a file path (path traversal: `../` reaches other files). Keep only the file
+      name (`Path.GetFileName`), combine it with a fixed folder and check the full path stays inside it.
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"]
+      category: security
+      confidence: HIGH
+    pattern-sources: *request-sources
+    pattern-propagators: *propagators
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: Path.GetFileName(...)
+          - pattern: Path.GetFileNameWithoutExtension(...)
+          - pattern: Path.GetExtension(...)
+          - pattern: Guid.Parse(...)
+          - pattern: int.Parse(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: Path.Combine(..., $P)
+              - pattern: new FileStream($P, ...)
+              - pattern: new FileInfo($P)
+              - pattern: new DirectoryInfo($P)
+              - pattern: PhysicalFile($P, ...)
+              - pattern: File($P, ...)
+              - pattern: $RESP.TransmitFile($P, ...)
+              - pattern: $RESP.WriteFile($P, ...)
+          - focus-metavariable: $P
+      # a reader or writer opened on a path that was built here (not on a stream such as Request.Body)
+      - patterns:
+          - pattern-either:
+              - pattern: new $RW($A + $B, ...)
+              - pattern: new $RW($"...", ...)
+              - pattern: new $RW(Path.Combine(...), ...)
+              - pattern: new $RW((string $S), ...)
+          - metavariable-regex:
+              metavariable: $RW
+              regex: ^(?:System\.IO\.)?(?:StreamReader|StreamWriter)$
+      - patterns:
+          - pattern-either:
+              - pattern: File.$M($P, ...)
+              - pattern: System.IO.File.$M($P, ...)
+              - pattern: Directory.$M($P, ...)
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(?:Exists|ReadAllText|ReadAllBytes|ReadAllLines|ReadLines|ReadAllTextAsync|ReadAllBytesAsync|WriteAllText|WriteAllBytes|WriteAllLines|AppendAllText|WriteAllTextAsync|WriteAllBytesAsync|Open|OpenRead|OpenWrite|OpenText|Create|CreateText|Delete|Copy|Move|Replace|GetFiles|GetDirectories|EnumerateFiles|CreateDirectory)$
+          - focus-metavariable: $P
+
+  - id: gapscan.csharp.taint-ssrf
+    languages: [csharp]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data chooses the URL of a server-side request (SSRF: internal services and cloud metadata
+      become reachable). Allow only known hosts and schemes before making the request.
+    metadata:
+      cwe: ["CWE-918: Server-Side Request Forgery (SSRF)"]
+      category: security
+      confidence: HIGH
+    pattern-sources: *request-sources
+    pattern-propagators: *propagators
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: new HttpRequestMessage($METHOD, $U)
+              - pattern: WebRequest.Create($U)
+              - pattern: WebRequest.CreateHttp($U)
+              - pattern: HttpWebRequest.Create($U)
+              - pattern: new Uri($U)
+          - focus-metavariable: $U
+      - patterns:
+          - pattern: $HTTP.$M($U, ...)
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(?:GetAsync|GetStringAsync|GetStreamAsync|GetByteArrayAsync|PostAsync|PutAsync|DeleteAsync|PatchAsync|PostAsJsonAsync|GetFromJsonAsync)$
+          - focus-metavariable: $U
+      - patterns:
+          - pattern: (WebClient $W).$WM($U, ...)
+          - metavariable-regex:
+              metavariable: $WM
+              regex: ^(?:DownloadString|DownloadData|DownloadFile|OpenRead|UploadString|UploadData|DownloadStringTaskAsync)$
+          - focus-metavariable: $U
+
+  - id: gapscan.csharp.taint-xss
+    languages: [csharp]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data is written into an HTML response without encoding (cross-site scripting). Return it
+      through a Razor view (encoded by default) or encode it with `HtmlEncoder.Default.Encode` /
+      `WebUtility.HtmlEncode`; avoid `Html.Raw` and `HtmlString` on user data.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"]
+      category: security
+      confidence: HIGH
+    pattern-sources: *request-sources
+    pattern-propagators: *propagators
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: HtmlEncoder.Default.Encode(...)
+          - pattern: $ENC.Encode(...)
+          - pattern: WebUtility.HtmlEncode(...)
+          - pattern: HttpUtility.HtmlEncode(...)
+          - pattern: HttpUtility.HtmlAttributeEncode(...)
+          - pattern: SecurityElement.Escape(...)
+          - pattern: System.Security.SecurityElement.Escape(...)
+          - pattern: $SERVER.HtmlEncode(...)
+          - pattern: AntiXssEncoder.HtmlEncode(...)
+          - pattern: Encoder.HtmlEncode(...)
+          - pattern: HttpUtility.UrlEncode(...)
+          - pattern: WebUtility.UrlEncode(...)
+          - pattern: Uri.EscapeDataString(...)
+          - pattern: int.Parse(...)
+          - pattern: Convert.ToInt32(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $RESP.WriteAsync($X, ...)
+              - pattern: $RESP.Write($X, ...)
+              - pattern: $RESP.StatusDescription = $X
+          - metavariable-regex:
+              metavariable: $RESP
+              regex: ^(?:(?:\w+\.)*Response|resp|response|writer|Writer|output)$
+          - focus-metavariable: $X
+      - patterns:
+          - pattern-either:
+              - pattern: new HtmlString($X)
+              - pattern: Html.Raw($X)
+              - pattern: Content($X, "text/html", ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.csharp.taint-open-redirect
+    languages: [csharp]
+    mode: taint
+    severity: WARNING
+    message: >-
+      Untrusted data chooses where the user is redirected (open redirect, used in phishing). Use
+      `LocalRedirect(url)` or check `Url.IsLocalUrl(url)` first.
+    metadata:
+      cwe: ["CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"]
+      category: security
+      confidence: HIGH
+    pattern-sources: *request-sources
+    pattern-propagators: *propagators
+    pattern-sanitizers:
+      - patterns:
+          - pattern-inside: |
+              if (<... $URLH.IsLocalUrl($X) ...>) { ... }
+          - pattern: $X
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: Redirect($U)
+              - pattern: RedirectPermanent($U)
+              - pattern: new RedirectResult($U, ...)
+              - pattern: $RESP.Redirect($U, ...)
+              - pattern: $RESP.RedirectPermanent($U, ...)
+          - focus-metavariable: $U
+
+  - id: gapscan.csharp.taint-ldap-injection
+    languages: [csharp]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data is placed in an LDAP filter (LDAP injection: `*)(uid=*` changes the query). Escape
+      `* ( ) \ NUL` in values (RFC 4515) or validate them against a strict pattern.
+    metadata:
+      cwe: ["CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"]
+      category: security
+      confidence: HIGH
+    pattern-sources: *request-sources
+    pattern-propagators: *propagators
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: new DirectorySearcher($F)
+              - pattern: new DirectorySearcher($ROOT, $F, ...)
+              - pattern: $DS.Filter = $F
+              - pattern: new SearchRequest($DN, $F, ...)
+          - focus-metavariable: $F
+
+  - id: gapscan.csharp.taint-xpath-injection
+    languages: [csharp]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data is placed in an XPath expression (XPath injection). Use a compiled expression with
+      variables (`XsltArgumentList` / a custom `XsltContext`) or validate the value strictly.
+    metadata:
+      cwe: ["CWE-643: Improper Neutralization of Data within XPath Expressions ('XPath Injection')"]
+      category: security
+      confidence: HIGH
+    pattern-sources: *request-sources
+    pattern-propagators: *propagators
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: SecurityElement.Escape(...)
+          - pattern: System.Security.SecurityElement.Escape(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $NAV.Select($X, ...)
+              - pattern: $NAV.Evaluate($X, ...)
+              - pattern: $NAV.Compile($X)
+          - metavariable-regex:
+              metavariable: $NAV
+              regex: (?i).*(?:nav|xpath|doc|xml)
+          - focus-metavariable: $X
+      - patterns:
+          - pattern-either:
+              - pattern: $DOC.SelectNodes($X, ...)
+              - pattern: $DOC.SelectSingleNode($X, ...)
+              - pattern: XPathExpression.Compile($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.csharp.taint-code-injection
+    languages: [csharp]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data is compiled or run as code (code injection). Never evaluate user input; map it to a
+      fixed set of operations instead.
+    metadata:
+      cwe: ["CWE-94: Improper Control of Generation of Code ('Code Injection')"]
+      category: security
+      confidence: HIGH
+    pattern-sources: *request-sources
+    pattern-propagators: *propagators
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: CSharpScript.EvaluateAsync($X, ...)
+              - pattern: CSharpScript.EvaluateAsync<$T>($X, ...)
+              - pattern: CSharpScript.RunAsync($X, ...)
+              - pattern: CSharpScript.Create($X, ...)
+              - pattern: $PROV.CompileAssemblyFromSource($OPTS, $X, ...)
+              - pattern: CSharpSyntaxTree.ParseText($X, ...)
+              - pattern: $ENGINE.Execute($X, ...)
+              - pattern: $ENGINE.Evaluate($X, ...)
+              - pattern: Type.GetType($X, ...)
+              - pattern: Activator.CreateInstance($ASM, $X, ...)
+              - pattern: $T.InvokeMember($X, ...)
+              - pattern: $T.GetMethod($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.csharp.taint-deserialization
+    languages: [csharp]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data is deserialized with a type-carrying serializer (remote code execution through gadget
+      chains). Use `System.Text.Json` (or Json.NET with `TypeNameHandling.None`) into a fixed DTO type.
+    metadata:
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      category: security
+      confidence: HIGH
+    pattern-sources: *request-sources
+    pattern-propagators: *propagators
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: (BinaryFormatter $F).Deserialize($X, ...)
+              - pattern: (SoapFormatter $F).Deserialize($X, ...)
+              - pattern: (NetDataContractSerializer $F).Deserialize($X, ...)
+              - pattern: (LosFormatter $F).Deserialize($X, ...)
+              - pattern: (ObjectStateFormatter $F).Deserialize($X, ...)
+              - pattern: new BinaryFormatter().Deserialize($X, ...)
+              - pattern: new LosFormatter().Deserialize($X, ...)
+          - focus-metavariable: $X
+
+  # ----------------------------------------------------------------------------- injection (string built)
+  - id: gapscan.csharp.sqli-string-built
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      An SQL statement is built by concatenation or `$"..."` interpolation, so a value can change the
+      statement. Use parameters (`@name`) and pass the values separately.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: new $CMD("..." + $X, ...)
+              - pattern: new $CMD("..." + $X + ..., ...)
+              - pattern: new $CMD($"...", ...)
+          - metavariable-regex:
+              metavariable: $CMD
+              regex: ^(?:\w+\.)*(?:SqlCommand|SqlDataAdapter|OleDbCommand|OdbcCommand|NpgsqlCommand|MySqlCommand|SqliteCommand|SQLiteCommand|OracleCommand)$
+          - pattern-not: new $CMD("..." + "...", ...)
+          - pattern-not: new $CMD("...", ...)
+          - pattern-not: new $CMD("..." + (int $N), ...)
+          - pattern-not: new $CMD("..." + (long $N), ...)
+      - patterns:
+          - pattern-either:
+              - pattern: $C.CommandText = "..." + $X
+              - pattern: $C.CommandText = "..." + $X + ...
+              - pattern: $C.CommandText = $"..."
+              - pattern: $DB.Database.ExecuteSqlRaw("..." + $X, ...)
+              - pattern: $DB.Database.ExecuteSqlRaw("..." + $X + ..., ...)
+              - pattern: $DB.Database.ExecuteSqlRaw($"...", ...)
+              - pattern: $SET.FromSqlRaw("..." + $X, ...)
+              - pattern: $SET.FromSqlRaw("..." + $X + ..., ...)
+              - pattern: $SET.FromSqlRaw($"...", ...)
+          - pattern-not: $C.CommandText = "..." + "..."
+          - pattern-not: $C.CommandText = "..."
+
+  - id: gapscan.csharp.sqli-format-string
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      An SQL statement is built with `string.Format`. Use parameters (`@name`) instead.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern: string.Format("$SQL", $X, ...)
+      - metavariable-regex:
+          metavariable: $SQL
+          regex: (?i)^\s*(?:select|insert|update|delete|merge|exec)\b
+
+  # ----------------------------------------------------------------------------- unsafe APIs and settings
+  - id: gapscan.csharp.insecure-deserializer
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      BinaryFormatter, SoapFormatter, NetDataContractSerializer, LosFormatter and ObjectStateFormatter can
+      run code while reading data (Microsoft: "dangerous, do not use"). Use `System.Text.Json` with fixed types.
+    metadata:
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: new BinaryFormatter(...)
+      - pattern: new SoapFormatter(...)
+      - pattern: new NetDataContractSerializer(...)
+      - pattern: new LosFormatter(...)
+      - pattern: new ObjectStateFormatter(...)
+
+  - id: gapscan.csharp.jsonnet-type-name-handling
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      Json.NET `TypeNameHandling` other than `None` lets the JSON choose which .NET type to create (remote
+      code execution with a gadget type). Keep `TypeNameHandling.None`, or use a strict `SerializationBinder`.
+    metadata:
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: TypeNameHandling = TypeNameHandling.$V
+          - pattern: $S.TypeNameHandling = TypeNameHandling.$V
+      - metavariable-regex:
+          metavariable: $V
+          regex: ^(?:All|Auto|Objects|Arrays)$
+
+  - id: gapscan.csharp.xxe-dtd-processing
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      DTD processing or an XML resolver is enabled, so a document can read local files or reach internal
+      hosts (XXE). Keep `DtdProcessing.Prohibit` (or `Ignore`) and `XmlResolver = null`.
+    metadata:
+      cwe: ["CWE-611: Improper Restriction of XML External Entity Reference"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: DtdProcessing = DtdProcessing.Parse
+      - pattern: $S.DtdProcessing = DtdProcessing.Parse
+      - pattern: $S.ProhibitDtd = false
+      - pattern: $S.XmlResolver = new XmlUrlResolver()
+      - pattern: XmlResolver = new XmlUrlResolver()
+
+  - id: gapscan.csharp.xxe-xmldocument-default-resolver
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      On .NET Framework before 4.5.2, `XmlDocument` resolves external entities by default (XXE). Set
+      `XmlResolver = null` before `Load`/`LoadXml`; .NET Core and later are safe by default.
+    metadata:
+      cwe: ["CWE-611: Improper Restriction of XML External Entity Reference"]
+      category: security
+      confidence: LOW
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $D = new XmlDocument();
+              ...
+              $D.LoadXml(...);
+          - pattern: |
+              $D = new XmlDocument();
+              ...
+              $D.Load(...);
+          - pattern: |
+              XmlDocument $D = new XmlDocument();
+              ...
+              $D.LoadXml(...);
+          - pattern: |
+              var $D = new XmlDocument();
+              ...
+              $D.LoadXml(...);
+          - pattern: |
+              var $D = new XmlDocument();
+              ...
+              $D.Load(...);
+      - pattern-not: |
+          $D = new XmlDocument();
+          ...
+          $D.XmlResolver = null;
+          ...
+      - pattern-not: |
+          var $D = new XmlDocument();
+          ...
+          $D.XmlResolver = null;
+          ...
+      - pattern-not: |
+          var $D = new XmlDocument { ..., XmlResolver = null, ... };
+          ...
+
+  - id: gapscan.csharp.weak-hash
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      MD5 and SHA-1 are broken for security use (collisions). Use SHA-256 or better; for passwords use
+      `Rfc2898DeriveBytes.Pbkdf2` with a high iteration count, or ASP.NET Core Identity's `PasswordHasher`.
+    metadata:
+      cwe: ["CWE-328: Use of Weak Hash"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: MD5.Create(...)
+      - pattern: SHA1.Create(...)
+      - pattern: MD5.HashData(...)
+      - pattern: SHA1.HashData(...)
+      - pattern: new MD5CryptoServiceProvider()
+      - pattern: new SHA1CryptoServiceProvider()
+      - pattern: new SHA1Managed()
+      - pattern: HashAlgorithm.Create("MD5")
+      - pattern: HashAlgorithm.Create("SHA1")
+      - pattern: FormsAuthentication.HashPasswordForStoringInConfigFile($P, "MD5")
+      - pattern: FormsAuthentication.HashPasswordForStoringInConfigFile($P, "SHA1")
+
+  - id: gapscan.csharp.weak-cipher
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      DES, 3DES and RC2 are broken or too weak, and ECB mode leaks patterns in the data. Use AES-GCM
+      (`AesGcm`) with a random nonce.
+    metadata:
+      cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: DES.Create(...)
+      - pattern: TripleDES.Create(...)
+      - pattern: RC2.Create(...)
+      - pattern: new DESCryptoServiceProvider()
+      - pattern: new TripleDESCryptoServiceProvider()
+      - pattern: new RC2CryptoServiceProvider()
+      - pattern: $C.Mode = CipherMode.ECB
+      - pattern: Mode = CipherMode.ECB
+
+  - id: gapscan.csharp.tls-validation-disabled
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      Server certificate validation is turned off, so anyone on the network path can read and change the
+      traffic. Remove the callback, or pin the expected certificate instead of returning true.
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $H.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+      - pattern: ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+      - pattern: $H.ServerCertificateCustomValidationCallback = ($A, $B, $C, $D) => true
+      - pattern: ServerCertificateCustomValidationCallback = ($A, $B, $C, $D) => true
+      - pattern: ServicePointManager.ServerCertificateValidationCallback = ($A, $B, $C, $D) => true
+      - pattern: ServicePointManager.ServerCertificateValidationCallback += ($A, $B, $C, $D) => true
+      - pattern: $H.RemoteCertificateValidationCallback = ($A, $B, $C, $D) => true
+      - pattern: RemoteCertificateValidationCallback = ($A, $B, $C, $D) => true
+
+  - id: gapscan.csharp.weak-random-for-secret
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      `System.Random` is predictable; do not use it for tokens, passwords, keys or salts. Use
+      `RandomNumberGenerator.GetBytes` / `RandomNumberGenerator.GetInt32`.
+    metadata:
+      cwe: ["CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator (PRNG)"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $T $NAME = <... new Random(...) ...>;
+          - pattern: var $NAME = <... new Random(...) ...>;
+          - pattern: $NAME = <... new Random(...) ...>;
+          - pattern: $T $NAME = <... $RND.Next(...) ...>;
+          - pattern: var $NAME = <... $RND.Next(...) ...>;
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*(?:token|passw|secret|salt|nonce|otp|apikey|api_key|session|reset|verification|csrf|key$)
+
+  - id: gapscan.csharp.hardcoded-secret
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      A password, key or token is written in the source code, where everyone with the code (and the
+      binaries) can read it. Load it from configuration or a secret store (user secrets, Key Vault,
+      environment variables).
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $T $NAME = "$VALUE";
+          - pattern: var $NAME = "$VALUE";
+          - pattern: $NAME = "$VALUE";
+          - pattern: const string $NAME = "$VALUE";
+          - pattern: private const string $NAME = "$VALUE";
+          - pattern: public const string $NAME = "$VALUE";
+          - pattern: private static readonly string $NAME = "$VALUE";
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*(?:password|passwd|pwd|secret|apikey|api_key|accesskey|access_key|privatekey|private_key|clientsecret|client_secret|token)$
+      - metavariable-regex:
+          metavariable: $VALUE
+          regex: ^(?!(?i:changeme|password|example|xxx+|\*+|your[_-]|<|\{|\$|todo|placeholder|test|dummy)).{8,}$
+
+  - id: gapscan.csharp.connection-string-password
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      A connection string with a password is written in the code. Keep it in configuration or a secret
+      store, or use integrated / managed identity authentication.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern: '"$CS"'
+      - metavariable-regex:
+          metavariable: $CS
+          regex: (?i).*(?:server|data source|host)=[^;]+;.*(?:password|pwd)=(?!\s*;|\{|\$)[^;]{3,}
+
+  - id: gapscan.csharp.cookie-without-flags
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      A cookie is set without `Secure` or `HttpOnly`, so it can travel over plain HTTP or be read by
+      scripts after an XSS. Set `Secure = true`, `HttpOnly = true` and `SameSite`.
+    metadata:
+      cwe: ["CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: HttpOnly = false
+      - pattern: Secure = false
+      - pattern: $C.HttpOnly = false
+      - pattern: $C.Secure = false
+      - pattern: $O.Cookie.HttpOnly = false
+      - pattern: $O.Cookie.SecurePolicy = CookieSecurePolicy.None
+      - pattern: SecurePolicy = CookieSecurePolicy.None
+
+  - id: gapscan.csharp.cors-any-origin-with-credentials
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      CORS accepts every origin and also sends credentials, so any website can make authenticated requests
+      as the signed-in user. List the allowed origins with `WithOrigins(...)`.
+    metadata:
+      cwe: ["CWE-942: Permissive Cross-domain Policy with Untrusted Domains"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $P.SetIsOriginAllowed($O => true). ... .AllowCredentials()
+      - pattern: $P.AllowCredentials(). ... .SetIsOriginAllowed($O => true)
+      - pattern: $P.SetIsOriginAllowed(_ => true)
+
+  - id: gapscan.csharp.jwt-validation-disabled
+    languages: [csharp]
+    severity: ERROR
+    message: >-
+      JWT validation is switched off for the signature, lifetime, issuer or audience, so forged or expired
+      tokens are accepted. Keep every `Validate*` option true and `RequireSignedTokens = true`.
+    metadata:
+      cwe: ["CWE-347: Improper Verification of Cryptographic Signature"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: ValidateIssuerSigningKey = false
+      - pattern: RequireSignedTokens = false
+      - pattern: ValidateLifetime = false
+      - pattern: RequireExpirationTime = false
+      - pattern: ValidateAudience = false
+      - pattern: ValidateIssuer = false
+      - pattern: $P.ValidateIssuerSigningKey = false
+      - pattern: $P.RequireSignedTokens = false
+      - pattern: $P.ValidateLifetime = false
+      - pattern: SignatureValidator = ($T, $P) => new JwtSecurityToken($T)
+
+  - id: gapscan.csharp.developer-exception-page
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      The developer exception page shows stack traces, source and configuration to anyone. Enable it only
+      inside `if (env.IsDevelopment())`.
+    metadata:
+      cwe: ["CWE-209: Generation of Error Message Containing Sensitive Information"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern: $APP.UseDeveloperExceptionPage()
+      - pattern-not-inside: |
+          if (<... $E.IsDevelopment() ...>) { ... }
+      - pattern-not-inside: |
+          if (<... $E.IsDevelopment() ...>) $S;
+
+  - id: gapscan.csharp.csrf-validation-disabled
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      Anti-forgery validation is switched off for this endpoint, so another site can submit it on behalf of
+      a signed-in user (CSRF) when it uses cookie authentication. Remove `[IgnoreAntiforgeryToken]`.
+    metadata:
+      cwe: ["CWE-352: Cross-Site Request Forgery (CSRF)"]
+      category: security
+      confidence: LOW
+    pattern-either:
+      - pattern: |
+          [IgnoreAntiforgeryToken]
+          public $R $M(...) { ... }
+      - pattern: |
+          [IgnoreAntiforgeryToken]
+          class $C { ... }
+
+  - id: gapscan.csharp.request-validation-disabled
+    languages: [csharp]
+    severity: WARNING
+    message: >-
+      ASP.NET request validation is turned off for this action, so markup in the input reaches the page
+      unless every output is encoded. Encode output, and keep `[ValidateInput(false)]` / `[AllowHtml]` to
+      fields that need HTML (sanitized with an HTML sanitizer).
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"]
+      category: security
+      confidence: LOW
+    pattern: |
+      [ValidateInput(false)]
+      public $R $M(...) { ... }
+
+  - id: gapscan.csharp.regex-from-input
+    languages: [csharp]
+    mode: taint
+    severity: WARNING
+    message: >-
+      A regular expression is built from untrusted data without a timeout, so a crafted pattern can hang
+      the server (ReDoS). Escape the value with `Regex.Escape` and pass a `matchTimeout`.
+    metadata:
+      cwe: ["CWE-1333: Inefficient Regular Expression Complexity"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources: *request-sources
+    pattern-propagators: *propagators
+    pattern-sanitizers:
+      - pattern: Regex.Escape(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: new Regex($X)
+              - pattern: new Regex($X, $O)
+              - pattern: Regex.IsMatch($S, $X)
+              - pattern: Regex.Match($S, $X)
+              - pattern: Regex.Replace($S, $X, $R)
+          - focus-metavariable: $X

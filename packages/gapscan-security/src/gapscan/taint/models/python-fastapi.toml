@@ -1,0 +1,10 @@
+name = "python-fastapi"
+languages = ["python"]
+requires = 'fastapi|starlette'
+
+[[source]]
+kind = "http_param"
+pattern = '(?:\w+\.)?request\.(query_params|path_params|headers|cookies|json|body|form)\b'
+
+[[handler]]
+header = '@\w+\.(get|post|put|delete|patch|api_route)\('

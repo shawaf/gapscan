@@ -1,0 +1,104 @@
+# GapScan configuration (example).
+#
+# Copy to gapscan.toml and edit, or point at it with GAPSCAN_CONFIG=/path/to.toml.
+# Every value can also be overridden by an env var prefixed GAPSCAN_ with __ as
+# the nesting separator, e.g. GAPSCAN_LLM__MODEL=qwen2.5-coder:14b.
+#
+# Tool/model version choices are recorded here per CLAUDE.md. Re-check "what is
+# current" when upgrading and update these notes.
+
+[general]
+# ASVS level the coverage report targets: 1, 2 (default) or 3.
+asvs_level = 2
+# Max findings handed to the LLM for triage; the rest are reported untriaged.
+max_llm_findings = 200
+# Warn in reports if vulnerability data is older than this many days.
+vuln_data_max_age_days = 30
+
+[data]
+# Root for gitignored artifacts: models, vuln DBs, KB index, bundles.
+dir = "data"
+# Local vector store for the knowledge base (Phase 6).
+kb_dir = "data/kb"
+
+[llm]
+# Backend: "ollama" (native API) or "openai" (OpenAI-compatible: llama.cpp, vLLM).
+backend = "ollama"
+# MUST be localhost or an explicitly configured internal host. Public URLs are refused.
+endpoint = "http://localhost:11434"
+# Private addresses and .local / .internal / .home.arpa names are accepted as they are. An internal
+# model server known by a corporate DNS name must be listed explicitly (never a public service):
+# internal_hosts = ["llm.corp.example.com", "*.gpu.corp.example.com"]
+# Choose the model by profile (best | balanced | small | tiny, or your own below), or set `model`
+# to any model id your backend serves; an explicit `model` always wins over the profile.
+# Run `gapscan model list` to see profiles and `gapscan model bench` to compare models.
+# "best" = qwen3-coder:30b (~19 GB, needs ~24 GB free RAM). Picked by judgement, then scored
+# 18/18 on the starter triage bench (2026-10-01; too easy to rank strong models); use "small" (granite4.2:8b, ~5 GB) or "tiny" on weaker machines.
+profile = "best"
+# model = "granite4.2:8b"
+# Reasoning models: skip the thinking phase (faster, and keeps JSON output clean).
+think = false
+
+# Add or override profiles; budgets default to the profile's when not set at [llm] level.
+# [llm.profiles.mine]
+# model = "qwen2.5-coder:7b"
+# context_tokens = 16384
+# code_context_tokens = 4000
+# A team GPU server (the "server" tier). Checked on registry.ollama.ai on 2026-10-07: gpt-oss:120b
+# exists (~65 GB, Apache-2.0, so commercial use is allowed). Not benchmarked by GapScan yet: run
+# `gapscan model bench` on your server before relying on it.
+# [llm.profiles.server]
+# model = "gpt-oss:120b"
+# context_tokens = 32768
+# [llm.tiers.gpu]
+# profile = "server"
+# endpoint = "http://gpu01.internal:11434"   # localhost or an internal host only
+# Local embedding model used for the RAG knowledge base (Phase 6).
+embedding_model = "nomic-embed-text"
+# Deterministic triage.
+temperature = 0.0
+seed = 7
+# Per-request timeout (seconds).
+timeout_s = 120
+
+[agent]
+# Let the model call read-only tools (read_code, find_callers, lookup_cwe, search_kb) before it
+# answers; after max_tool_calls it must give its verdict.
+use_tools = true
+max_tool_calls = 4
+# Deep dive: confirmed or likely findings with priority >= deep_dive_min_priority get a detailed
+# investigation (protection in place, affected builds, related locations, what is missing,
+# ordered fix, how to verify). Every cited line is checked against what the tools showed.
+deep_dive_tool_calls = 12
+deep_dive_min_priority = 60
+
+[kb]
+# Optional folder of your own Markdown policies, indexed next to the OWASP/CWE material by
+# `gapscan kb build` and cited as `policy` in answers.
+policies_dir = "policies"
+
+[scanners]
+# Per-scanner wall-clock timeout (seconds).
+timeout_s = 300
+# Which scanners to run. A scanner that is unavailable is skipped, not fatal.
+enabled = ["semgrep", "osv", "trivy", "gitleaks", "checkov", "bandit", "taint", "malware"]
+# Packs allowed to register scanners (`gapscan.packs` entry points). Any other installed pack is
+# ignored, with a warning, before its code runs: its scanners would run during `scan`, so only an
+# admin adds a pack here. "security" is GapScan's own.
+packs = ["security"]
+
+[scanners.semgrep]
+# Local rules only; no network, no metrics.
+# LICENSE WARNING: the Semgrep community rules are under the Semgrep Rules License v1.0
+# (no use in a competing product or service). Fine for your own internal scans; do not
+# redistribute them in a bundle. See docs/licenses.md. Point this at your own rules for
+# anything you ship.
+rules_path = "data/semgrep-rules"
+
+[scanners.osv]
+# Offline OSV database directory.
+db_dir = "data/osv-db"
+
+[scanners.trivy]
+# Offline Trivy cache directory (DBs imported via `gapscan update`).
+cache_dir = "data/trivy-cache"

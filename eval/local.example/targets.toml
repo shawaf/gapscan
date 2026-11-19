@@ -1,0 +1,9 @@
+# Evaluate GapScan on your own projects with verdicts you confirmed by reading the code.
+# Copy this folder to eval/local/ (gitignored): the paths and notes stay on your machine.
+#   gapscan eval run --targets local --no-triage     # scanner precision on your labels
+#   gapscan eval run --targets local                 # + model review accuracy
+[[target]]
+name = "my-backend"
+path = "~/code/my-backend"            # read only; never built or run
+scan_subdir = "src"                   # optional: scan only this folder
+labels = "my-backend.labels.json"     # next to this file

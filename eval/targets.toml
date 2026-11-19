@@ -1,0 +1,55 @@
+# Intentionally vulnerable applications used to evaluate GapScan, pinned to exact commits.
+# Downloaded once with `gapscan eval fetch` (needs network, run on a connected machine) into
+# data/eval-targets/ and never executed: they are only scanned.
+#
+# LICENSING: BenchmarkJava (GPL-2.0) and BenchmarkPython (GPL-3.0) are evaluation data only: they stay in the gitignored
+# data/ directory and must never be copied into this repository or an offline bundle.
+
+[[target]]
+name = "benchmark-java"
+repo = "https://github.com/OWASP-Benchmark/BenchmarkJava.git"
+ref = "8b67a88d73b2594570fc21150705283de884620b"
+sha = "8b67a88d73b2594570fc21150705283de884620b"
+license = "GPL-2.0"
+language = "java"
+# Ground truth shipped with the project: one row per test case (real vulnerability or not).
+truth = "benchmark-csv"
+truth_file = "expectedresults-1.2.csv"
+scan_subdir = "src/main/java"
+description = "OWASP Benchmark v1.2: 2,740 Java test cases, half real vulnerabilities and half deliberate false-positive bait"
+
+[[target]]
+name = "benchmark-python"
+repo = "https://github.com/OWASP-Benchmark/BenchmarkPython.git"
+ref = "f1291485808b66e20ddb6b01b10dc71b3df8c8ba"
+sha = "f1291485808b66e20ddb6b01b10dc71b3df8c8ba"
+license = "GPL-3.0"
+language = "python"
+truth = "benchmark-csv"
+truth_file = "expectedresults-0.1.csv"
+scan_subdir = ""
+# The DEVELOPMENT set for model review: prompts and review logic may be tuned against it.
+# benchmark-java stays held out (scored once per change, never tuned against).
+description = "OWASP Benchmark for Python v0.1: 1,230 Python test cases, real vulnerabilities and deliberate false-positive bait (GPL-3.0, evaluation data only)"
+
+[[target]]
+name = "juice-shop"
+repo = "https://github.com/juice-shop/juice-shop.git"
+ref = "v20.2.0"
+sha = "5658473cf8814459bf89000ce373b20ed0b4eb37"  # commit of tag v20.2.0 (repo HEAD is newer)
+license = "MIT"
+language = "typescript"
+truth = "none"  # no line-level ground truth: used for scale, runtime and category statistics
+scan_subdir = ""
+description = "OWASP Juice Shop v20.2.0: a modern, deliberately insecure TypeScript/Node web application"
+
+[[target]]
+name = "nodegoat"
+repo = "https://github.com/OWASP/NodeGoat.git"
+ref = "c5cb68a7084e4ae7dcc60e6a98768720a81841e8"
+sha = "c5cb68a7084e4ae7dcc60e6a98768720a81841e8"
+license = "Apache-2.0"
+language = "javascript"
+truth = "none"
+scan_subdir = ""
+description = "OWASP NodeGoat: a deliberately insecure Node.js application mapped to the OWASP Top 10"

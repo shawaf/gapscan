@@ -1,0 +1,171 @@
+# GapScan Rules: Android manifest and network security configuration. Licensed Apache-2.0.
+# Every rule has a vulnerable and a safe case in tests/rules/kotlin/manifest.xml (run: make rules-test).
+# These read AndroidManifest.xml, network_security_config.xml and FileProvider path files as text.
+rules:
+  - id: gapscan.kotlin.manifest-allow-backup
+    languages: [generic]
+    paths: {include: ["*.xml"]}
+    severity: WARNING
+    message: >-
+      `android:allowBackup="true"` lets the user's data be copied out through `adb backup` and cloud backup, including
+      files with tokens or personal data. Set it to false, or exclude sensitive files in the backup rules.
+    metadata:
+      cwe: ["CWE-530: Exposure of Backup File to an Unauthorized Control Sphere", "CWE-921: Storage of Sensitive Data in a Mechanism without Access Control"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: 'android:allowBackup\s*=\s*"true"'
+
+  - id: gapscan.kotlin.manifest-cleartext-traffic
+    languages: [generic]
+    paths: {include: ["*.xml"]}
+    severity: ERROR
+    message: >-
+      The app is allowed to use plain HTTP, so traffic can be read and changed on the network. Remove the attribute and
+      use HTTPS everywhere.
+    metadata:
+      cwe: ["CWE-319: Cleartext Transmission of Sensitive Information"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: 'android:usesCleartextTraffic\s*=\s*"true"'
+
+  - id: gapscan.kotlin.manifest-debuggable
+    languages: [generic]
+    paths: {include: ["*.xml"]}
+    severity: ERROR
+    message: >-
+      The app is marked debuggable, so anyone can attach a debugger, read its memory and run code inside it. Never ship
+      with `android:debuggable="true"`.
+    metadata:
+      cwe: ["CWE-489: Active Debug Code"]
+      masvs: ["MASVS-RESILIENCE-4"]
+      category: security
+      confidence: HIGH
+    pattern-regex: 'android:debuggable\s*=\s*"true"'
+
+  - id: gapscan.kotlin.manifest-exported-component
+    languages: [generic]
+    paths: {include: ["*.xml"]}
+    severity: WARNING
+    message: >-
+      This component is exported (any app on the device can start it or send it data) and no permission protects it.
+      Set `android:exported="false"`, or require a signature-level permission with `android:permission`.
+    metadata:
+      cwe: ["CWE-926: Improper Export of Android Application Components"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '<(?:service|receiver|provider)\b(?=[^>]*android:exported\s*=\s*"true")(?![^>]*android:permission\s*=)[^>]*>'
+      - pattern-regex: '<activity(?:-alias)?\b(?=[^>]*android:exported\s*=\s*"true")(?![^>]*android:permission\s*=)[^>]*?(?:/>|>(?:(?!</activity|android\.intent\.category\.LAUNCHER)[\s\S])*?</activity(?:-alias)?>)'
+
+  - id: gapscan.kotlin.manifest-deeplink-not-verified
+    languages: [generic]
+    paths: {include: ["*.xml"]}
+    severity: WARNING
+    message: >-
+      A web link (http or https) opens this app, but the intent filter is not marked `android:autoVerify="true"`, so
+      the system does not check that you own the domain and another app can claim the same links. Add autoVerify and
+      publish a Digital Asset Links file.
+    metadata:
+      cwe: ["CWE-939: Improper Authorization in Handler for Custom URL Scheme"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '<intent-filter(?![^>]*autoVerify\s*=\s*"true")(?=(?:(?!</intent-filter>)[\s\S])*?android\.intent\.category\.BROWSABLE)(?=(?:(?!</intent-filter>)[\s\S])*?android:scheme\s*=\s*"https?")[^>]*>'
+
+  - id: gapscan.kotlin.nsc-user-certificates-trusted
+    languages: [generic]
+    paths: {include: ["*.xml"]}
+    severity: WARNING
+    message: >-
+      The network security configuration trusts certificates the user installed. A malicious or phishing certificate
+      installed that way lets someone read the app's HTTPS traffic. Trust only the system store (and pinned certificates).
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: '<certificates\s+src\s*=\s*"user"'
+
+  - id: gapscan.kotlin.nsc-cleartext-permitted
+    languages: [generic]
+    paths: {include: ["*.xml"]}
+    severity: ERROR
+    message: >-
+      The network security configuration allows plain HTTP, so traffic can be read and changed on the network. Set
+      `cleartextTrafficPermitted="false"`.
+    metadata:
+      cwe: ["CWE-319: Cleartext Transmission of Sensitive Information"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: 'cleartextTrafficPermitted\s*=\s*"true"'
+
+  - id: gapscan.kotlin.fileprovider-broad-path
+    languages: [generic]
+    paths: {include: ["*.xml"]}
+    severity: WARNING
+    message: >-
+      The FileProvider shares a very wide folder (everything under the root, or a whole storage area), so a granted URI
+      can expose far more than intended. List only the specific sub-folders that need sharing.
+    metadata:
+      cwe: ["CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '<root-path\b'
+      - pattern-regex: '<(?:files-path|cache-path|external-path|external-files-path|external-cache-path|external-media-path)\b[^>]*\bpath\s*=\s*"(?:\.|/|)"'
+
+  - id: gapscan.kotlin.manifest-task-hijacking
+    languages: [generic]
+    paths: {include: ["*.xml"]}
+    severity: WARNING
+    message: >-
+      This activity can be moved into, or launched in, a task that another app controls (`allowTaskReparenting`, or a
+      custom `taskAffinity` together with a `singleTask`/`singleInstance` launch mode). A malicious app can then place
+      its own look-alike screen on top of it and capture what the user types (task hijacking, "StrandHogg"). Remove
+      `allowTaskReparenting`, set `android:taskAffinity=""` on sensitive activities, and prefer the standard launch mode.
+    metadata:
+      cwe: ["CWE-1021: Improper Restriction of Rendered UI Layers or Frames"]
+      masvs: ["MASVS-PLATFORM-3"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '<(?:activity|application)\b[^>]*android:allowTaskReparenting\s*=\s*"true"[^>]*>'
+      - pattern-regex: '<activity\b(?=[^>]*android:taskAffinity\s*=\s*"[^"]+")(?=[^>]*android:launchMode\s*=\s*"single(?:Task|Instance)")[^>]*>'
+
+  - id: gapscan.kotlin.manifest-weak-custom-permission
+    languages: [generic]
+    paths: {include: ["*.xml"]}
+    severity: WARNING
+    message: >-
+      A custom permission is declared with `normal` or `dangerous` protection (or none, which means `normal`), so any
+      app can request it and be granted it, and the components it is meant to protect are open to them. Use
+      `android:protectionLevel="signature"` for permissions that guard your own components.
+    metadata:
+      cwe: ["CWE-284: Improper Access Control"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '<permission\b(?=[^>]*android:protectionLevel\s*=\s*"(?:normal|dangerous)")[^>]*>'
+      - pattern-regex: '<permission\b(?![^>]*android:protectionLevel)[^>]*>'
+
+  - id: gapscan.kotlin.manifest-sensitive-permission
+    languages: [generic]
+    paths: {include: ["*.xml"]}
+    severity: INFO
+    message: >-
+      The app asks for a permission that reaches far into the user's data or device (all files, the list of installed
+      apps, SMS, call logs, background location, drawing over other apps, installing packages). Google Play restricts
+      most of these, and each one widens what a compromise of the app exposes. Keep only what a core feature needs,
+      and prefer narrower APIs (the photo picker, `<queries>` entries, SMS Retriever, foreground location).
+    metadata:
+      cwe: ["CWE-250: Execution with Unnecessary Privileges"]
+      masvs: ["MASVS-PRIVACY-1"]
+      category: security
+      confidence: LOW
+    pattern-regex: '<uses-permission\b[^>]*android:name\s*=\s*"android\.permission\.(?:MANAGE_EXTERNAL_STORAGE|QUERY_ALL_PACKAGES|READ_SMS|RECEIVE_SMS|SEND_SMS|READ_CALL_LOG|WRITE_CALL_LOG|PROCESS_OUTGOING_CALLS|ACCESS_BACKGROUND_LOCATION|SYSTEM_ALERT_WINDOW|REQUEST_INSTALL_PACKAGES|READ_PHONE_NUMBERS|WRITE_SETTINGS)"'

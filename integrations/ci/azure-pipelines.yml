@@ -1,0 +1,30 @@
+# Azure DevOps Server. Add a secret variable GAPSCAN_SCM_TOKEN (a PAT that can comment on pull
+# requests). The agent needs `gapscan` installed. Pipeline values reach the script through `env:`,
+# never as $(macros) inside it: macros are pasted into the script text before the shell runs.
+trigger: none
+pr:
+  branches:
+    include: [main]
+pool:
+  name: gapscan
+steps:
+  - checkout: self
+    fetchDepth: 0
+  - script: |
+      gapscan ci run . --base "origin/$TARGET_BRANCH" --comment gapscan-comment.md --out gapscan-findings.json
+    displayName: GapScan (what this pull request introduces)
+    env:
+      TARGET_BRANCH: $(System.PullRequest.TargetBranchName)
+  - script: |
+      gapscan ci comment gapscan-comment.md --provider azure --url "$COLLECTION_URI" --repo "$PROJECT/$REPO_NAME" --pr "$PR_ID"
+    displayName: Comment on the pull request
+    condition: always()
+    env:
+      GAPSCAN_SCM_TOKEN: $(GAPSCAN_SCM_TOKEN)
+      COLLECTION_URI: $(System.CollectionUri)
+      PROJECT: $(System.TeamProject)
+      REPO_NAME: $(Build.Repository.Name)
+      PR_ID: $(System.PullRequest.PullRequestId)
+  - publish: gapscan-findings.json
+    artifact: gapscan-findings
+    condition: always()

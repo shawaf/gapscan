@@ -1,0 +1,170 @@
+# GapScan Rules: Swift / iOS. Licensed Apache-2.0 with the rest of GapScan.
+# Every rule has a vulnerable and a safe case in tests/rules/swift/ios.swift (run: make rules-test).
+rules:
+  - id: gapscan.swift.sqli-interpolated
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      An SQL statement is built with string interpolation. Bind values instead
+      (`sqlite3_bind_text`, or your wrapper's parameter arguments).
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: HIGH
+    pattern-regex: '(?:sqlite3_(?:exec|prepare_v2|prepare)\([^;\n]*|\.(?:execute|run|prepare|scalar|executeQuery|executeUpdate)\(\s*)"[^"\n]*\\\([^"\n]*"'
+
+  - id: gapscan.swift.tls-trust-all
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      The challenge handler trusts whatever certificate the server presents (the finding points at
+      the start of the handler), which disables TLS validation. Evaluate the trust
+      (`SecTrustEvaluateWithError`) or use the default handling and certificate pinning.
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: 'func\s+\w+\([^)]*didReceive[^{]*\{(?:(?!SecTrustEvaluate\w*\s*\()[\s\S])*?completionHandler\(\s*\.useCredential\s*,\s*URLCredential\(\s*trust:'
+
+  - id: gapscan.swift.userdefaults-sensitive-value
+    languages: [swift]
+    severity: WARNING
+    message: >-
+      A credential-like value goes into UserDefaults, which is an unencrypted plist readable from a
+      backup or a jailbroken device. Store secrets in the Keychain.
+    metadata:
+      cwe: ["CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: 'UserDefaults.standard.set($V, forKey: $K)'
+          - pattern: '$D.set($V, forKey: $K)'
+      - metavariable-regex:
+          metavariable: $K
+          regex: '(?i)^"[^"]*(password|passwd|pwd|secret|token|apikey|api_key|credential|pin)[^"]*"$'
+
+  - id: gapscan.swift.weak-crypto
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      MD5, SHA-1, DES, 3DES, RC4 and ECB mode are weak. Use CryptoKit (SHA256, AES.GCM) and a
+      password hash (PBKDF2, bcrypt, scrypt, Argon2) for passwords.
+    metadata:
+      cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm", "CWE-328: Use of Weak Hash"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: '\b(?:CC_MD5|CC_MD2|CC_MD4|CC_SHA1|kCCAlgorithmDES|kCCAlgorithm3DES|kCCAlgorithmRC4|kCCAlgorithmRC2|kCCOptionECBMode)\b|Insecure\.(?:MD5|SHA1)\b'
+
+  - id: gapscan.swift.command-string-built
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      A shell command is assembled from a string. Anything user-controlled in it runs as a command.
+      Launch the program directly with an argument array and avoid `/bin/sh -c`.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: HIGH
+    pattern-regex: 'arguments\s*=\s*\[\s*"-c"\s*,\s*[^\]\n]*(?:\\\(|\+)'
+
+  - id: gapscan.swift.hardcoded-secret
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      A credential or key is a literal in the source, so anyone with the app has it. Fetch it from
+      your server after sign-in, or keep it in the Keychain.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials"]
+      masvs: ["MASVS-STORAGE-1", "MASVS-CRYPTO-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?i)\b(?:let|var)\s+\w*(?:token|secret|apikey|api_key|password|passwd|privatekey|private_key)\w*\s*(?::\s*String)?\s*=\s*"(?=[^"\s\\]*\d)[^"\s\\]{12,}"'
+
+  - id: gapscan.swift.insecure-random-for-secret
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      rand(), random() and drand48() are predictable. For tokens, nonces and passwords use
+      SecRandomCopyBytes or SystemRandomNumberGenerator.
+    metadata:
+      cwe: ["CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?is)func\s+\w*(?:token|password|secret|session|otp|nonce|csrf|salt|pin)\w*\s*\([^)]*\)[^{]*\{[^}]*?\b(?:rand|random|drand48|srand)\s*\('
+
+  - id: gapscan.swift.webview-js-injection
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      JavaScript is assembled with string interpolation and evaluated in a web view. A value from
+      outside the app can break out of the string and run script. Pass data through a message
+      handler or encode it as JSON first.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: 'evaluateJavaScript\(\s*"[^"\n]*\\\('
+
+  - id: gapscan.swift.log-sensitive-value
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      A credential-like value is printed or logged. Logs end up in device diagnostics and crash
+      reports. Do not log secrets.
+    metadata:
+      cwe: ["CWE-532: Insertion of Sensitive Information into Log File"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: MEDIUM
+    # a secret-named value interpolated with \(x) or passed bare; the words in the message text are not values
+    pattern-either:
+      - pattern-regex: '(?i)\b(?:print|debugPrint|NSLog|os_log|logger\.\w+)\((?:[^\n]*?\\\(\s*|(?:[^\n"]*?,)?\s*)[\w.]*(?:password|passwd|pwd|token|secret|apikey|api_key|authorization|bearer)'
+      # a format string or label first, then the value as a later argument: NSLog("pw %@", password), print("pw:", pw)
+      - pattern-regex: '(?i)\b(?:print|debugPrint|NSLog|os_log)\(\s*"(?:[^"\\\n]|\\.)*"\s*,\s*(?:[^\n]*?,\s*)?[\w.]*(?:password|passwd|pwd|token|secret|apikey|api_key|authorization|bearer)\w*(?:\.text)?\s*!?\s*[,)]'
+
+  - id: gapscan.swift.cleartext-http-url
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      A request goes to an http:// URL, so it is unencrypted (and App Transport Security blocks it
+      unless the app opts out). Use https://.
+    metadata:
+      cwe: ["CWE-319: Cleartext Transmission of Sensitive Information"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '(?:NS)?URL(?:Components)?\(string:\s*"http://(?!localhost|127\.0\.0\.1)[^"\s]*"'
+      # a base URL kept in a constant and used elsewhere
+      - pattern-regex: '(?i)\b(?:let|var)\s+\w*(?:url|endpoint|host|server|api|base)\w*\s*(?::\s*String)?\s*=\s*"http://(?!localhost|127\.0\.0\.1|10\.|192\.168\.|0\.0\.0\.0)[^"\s]+"'
+
+  - id: gapscan.swift.keychain-accessible-always
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      `kSecAttrAccessibleAlways` (and the ThisDeviceOnly variant) keeps the item readable while the
+      device is locked and is deprecated. Use `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`.
+    metadata:
+      cwe: ["CWE-311: Missing Encryption of Sensitive Data"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: '\bkSecAttrAccessibleAlways(?:ThisDeviceOnly)?\b'

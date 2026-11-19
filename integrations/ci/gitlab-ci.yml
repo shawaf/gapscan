@@ -1,0 +1,17 @@
+# GitLab (self-managed). Add a masked CI/CD variable GAPSCAN_SCM_TOKEN with an access token that
+# can comment on merge requests. The runner needs `gapscan` installed.
+gapscan:
+  stage: test
+  tags: [gapscan]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - git fetch origin "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME"
+    - gapscan ci run . --base "origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" --comment gapscan-comment.md --out gapscan-findings.json || STATUS=$?
+    - gapscan ci comment gapscan-comment.md --provider gitlab --url "$CI_SERVER_URL" --repo "$CI_PROJECT_ID" --pr "$CI_MERGE_REQUEST_IID"
+    - exit ${STATUS:-0}
+  artifacts:
+    when: always
+    paths: [gapscan-findings.json]

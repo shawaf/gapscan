@@ -1,0 +1,13 @@
+# Use from another repository:
+#   repos:
+#     - repo: https://your-scm.example.internal/security/gapscan
+#       rev: v0.1.0
+#       hooks:
+#         - id: gapscan
+- id: gapscan
+  name: GapScan (offline security scan of staged files)
+  entry: gapscan ci run . --staged --fast
+  language: system
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]

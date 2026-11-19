@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Tooling caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# gapscan data: models, vuln DBs, KB index, bundles
+/data/
+eval/results/
+*.bundle.tar
+*.bundle.tar.gz
+
+# Local config overrides
+/gapscan.toml
+config/gapscan.local.toml
+
+# OS
+.DS_Store
+
+# dashboard frontend build artifacts (the built single-file template IS committed)
+dashboard/node_modules/
+dashboard/dist/
+docker/bundle/
+docker/requirements.lock
+dashboard/dist-manager/
+
+# private projects used for evaluation (paths and verdicts about someone's own code)
+eval/local/
+packaging/bundled/
+deploy/compose/.env
+integrations/vscode/node_modules/
+integrations/vscode/.vscode-test/
+integrations/vscode/*.vsix
+eval/fixtures/*/data/

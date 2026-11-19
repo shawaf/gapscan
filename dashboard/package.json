@@ -1,0 +1,25 @@
+{
+  "name": "gapscan-dashboard",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "description": "GapScan report dashboard: builds to ONE self-contained HTML file (no network, everything inlined).",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "echarts": "^6.1.0",
+    "highlight.js": "^11.12.0",
+    "preact": "^11.0.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^5.0.3"
+  }
+}

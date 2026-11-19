@@ -1,0 +1,260 @@
+# GapScan Rules: Kotlin / Android. Licensed Apache-2.0 with the rest of GapScan.
+# Every rule has a vulnerable and a safe case in tests/rules/kotlin/android.kt (run: make rules-test).
+rules:
+  - id: gapscan.kotlin.sqli-string-built
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      An SQL statement is built from a string with concatenation or a template. Pass values as
+      bound arguments (`rawQuery(sql, arrayOf(value))`, `query(table, cols, "id = ?", args)`).
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $DB.rawQuery($Q + ..., ...)
+      - pattern: $DB.execSQL($Q + ...)
+      - pattern: $DB.rawQuery("...${...}...", ...)
+      - pattern: $DB.rawQuery("...$...", ...)
+      - pattern: $DB.execSQL("...${...}...")
+      - pattern: $DB.execSQL("...$...")
+      - pattern: SimpleSQLiteQuery($Q + ..., ...)
+      - pattern: SimpleSQLiteQuery("...${...}...", ...)
+      - pattern: SimpleSQLiteQuery("...$...", ...)
+      - pattern: $DB.compileStatement($Q + ...)
+      - pattern: $DB.compileStatement("...${...}...")
+      - pattern: $DB.compileStatement("...$...")
+      - pattern: $DB.query("...${...}...")
+      - pattern: $DB.query("...$...")
+      - pattern: $DB.query("..." + ...)
+
+  - id: gapscan.kotlin.tls-trust-all
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      A TrustManager that accepts every certificate (or a HostnameVerifier that always returns
+      true) disables TLS validation: anyone on the network can read and change the traffic. Use the
+      platform defaults, or pin certificates with OkHttp's CertificatePinner.
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: |
+          fun checkServerTrusted(...) {}
+      - pattern: |
+          override fun checkServerTrusted(...) {}
+      - pattern-regex: 'HostnameVerifier\s*\{\s*[^}]*->\s*true\s*\}'
+      - pattern-regex: 'hostnameVerifier\s*\{\s*[^}]*->\s*true\s*\}'
+
+  - id: gapscan.kotlin.prefs-sensitive-value
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A credential-like value is written to SharedPreferences, which stores it unencrypted on the
+      device. Use EncryptedSharedPreferences (or encrypt the value with a Keystore key before storing it in
+      DataStore) or keep it in the Android Keystore.
+    metadata:
+      cwe: ["CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $E.putString($KEY, ...)
+          # Jetpack DataStore Preferences is an unencrypted file too
+          - pattern: stringPreferencesKey($KEY)
+      - metavariable-regex:
+          metavariable: $KEY
+          # a literal key with a secret word, or a key constant named after one (PREF_AUTH_TOKEN, KEY_PASSWORD)
+          regex: '^(?:(?i:"[^"]*(password|passwd|pwd|secret|token|apikey|api_key|credential|pin)[^"]*")|[\w.]*?(?i:password|passwd|secret|token|apikey|api_key|credential)\w*|[\w.]*?(?:^|_|\.)PIN(?:_\w*)?)$'
+      - pattern-not-inside: |
+          EncryptedSharedPreferences.create(...)
+          ...
+
+  - id: gapscan.kotlin.weak-hash
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      MD5 and SHA-1 are broken for security purposes. Use SHA-256 or stronger for integrity, and a
+      password hash (PBKDF2, bcrypt, scrypt, Argon2) for passwords.
+    metadata:
+      cwe: ["CWE-328: Use of Weak Hash", "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: 'MessageDigest\.getInstance\(\s*"(MD5|MD2|MD4|SHA-?1)"'
+
+  - id: gapscan.kotlin.weak-cipher
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      DES, 3DES, RC4 and AES in ECB mode (including the bare "AES", which defaults to ECB) are weak.
+      Use AES/GCM/NoPadding with a fresh random IV.
+    metadata:
+      cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: 'Cipher\.getInstance\(\s*"(DES|DESede|3DES|RC4|RC2|Blowfish|AES|AES/ECB/[A-Za-z0-9]+|DES/[A-Za-z0-9]+/[A-Za-z0-9]+|DESede/[A-Za-z0-9]+/[A-Za-z0-9]+)"'
+
+  - id: gapscan.kotlin.command-string-built
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      A shell command is built from a string. If any part comes from a user, a file or the network,
+      it can run arbitrary commands. Pass the program and its arguments as an array and never go
+      through `sh -c`.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: Runtime.getRuntime().exec($A + ...)
+      - pattern: Runtime.getRuntime().exec("...${...}...")
+      - pattern: Runtime.getRuntime().exec("...$...")
+      - pattern: ProcessBuilder("sh", "-c", ...)
+      - pattern: ProcessBuilder("/bin/sh", "-c", ...)
+      - pattern: ProcessBuilder("bash", "-c", ...)
+
+  - id: gapscan.kotlin.hardcoded-crypto-key
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      A cryptographic key is a literal in the source, so anyone with the app (or the repository) has
+      it. Generate keys at runtime and keep them in the Android Keystore.
+    metadata:
+      cwe: ["CWE-321: Use of Hard-coded Cryptographic Key", "CWE-798: Use of Hard-coded Credentials"]
+      masvs: ["MASVS-CRYPTO-2"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: SecretKeySpec("...".toByteArray(...), ...)
+      - pattern: SecretKeySpec("...".encodeToByteArray(...), ...)
+      - pattern: SecretKeySpec("...".toByteArray(), ...)
+      - pattern: IvParameterSpec("...".toByteArray(...))
+      - pattern: SecretKeySpec(byteArrayOf(...), ...)
+      - pattern: SecretKeySpec(Base64.decode("...", ...), ...)
+      - pattern: SecretKeySpec(Base64.getDecoder().decode("..."), ...)
+
+  - id: gapscan.kotlin.webview-unsafe-settings
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A WebView with file access enabled, universal access from file URLs, or a JavaScript bridge
+      lets a malicious page read local files or call app code. Keep these off and load only trusted
+      HTTPS content.
+    metadata:
+      cwe: ["CWE-749: Exposed Dangerous Method or Function", "CWE-200: Exposure of Sensitive Information"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: $S.allowUniversalAccessFromFileURLs = true
+      - pattern: $S.allowFileAccessFromFileURLs = true
+      - pattern: $S.setAllowUniversalAccessFromFileURLs(true)
+      - pattern: $W.addJavascriptInterface(...)
+
+  - id: gapscan.kotlin.webview-load-untrusted-url
+    languages: [kotlin]
+    mode: taint
+    severity: WARNING
+    message: >-
+      A WebView loads a URL (or HTML) taken from an intent, its extras or a deep link. Any app or web page can craft
+      that intent and make the WebView show an attacker's page with the app's JavaScript bridges, cookies and file
+      access. Validate the scheme and host against an allow-list (compare `Uri.host` exactly) before loading, and never
+      load HTML that came from an intent.
+    metadata:
+      cwe: ["CWE-939: Improper Authorization in Handler for Custom URL Scheme", "CWE-601: URL Redirection to Untrusted Site"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: $I.getStringExtra(...)
+          - pattern: $I.getCharSequenceExtra(...)
+          - pattern: $I.extras
+          - pattern: $I.getExtras()
+          - pattern: intent.data
+          - pattern: intent?.data
+          - pattern: $I.dataString
+          - pattern: $I.getData()
+          - pattern: $I.getDataString()
+          - pattern: $U.getQueryParameter(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $W.loadUrl($X, ...)
+              - pattern: $W.postUrl($X, ...)
+              - pattern: $W.loadData($X, ...)
+              - pattern: $W.loadDataWithBaseURL($B, $X, ...)
+              - pattern: $W.loadDataWithBaseURL($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.kotlin.insecure-random-for-secret
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      java.util.Random and kotlin.random.Random are predictable. For tokens, session ids, nonces or
+      passwords use java.security.SecureRandom.
+    metadata:
+      cwe: ["CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator", "CWE-330: Use of Insufficiently Random Values"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: java.util.Random(...)
+          - pattern: Random(...)
+          - pattern: Random.nextInt(...)
+          - pattern: Random.nextBytes(...)
+          - pattern: Random.nextLong(...)
+      - pattern-inside: |
+          fun $F(...) { ... }
+      - metavariable-pattern:
+          metavariable: $F
+          language: generic
+          pattern-regex: '(?i)(token|password|secret|session|otp|nonce|csrf|apikey|salt|pin|code)'
+
+  - id: gapscan.kotlin.log-sensitive-value
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A credential-like value is written to the Android log, which other apps with log access and
+      bug reports can read. Do not log secrets, even in debug builds.
+    metadata:
+      cwe: ["CWE-532: Insertion of Sensitive Information into Log File"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: Log.$LEVEL($TAG, $MSG)
+          - pattern: Timber.$LEVEL($MSG)
+          - pattern: println($MSG)
+      - metavariable-regex:
+          metavariable: $MSG
+          # a secret-named value: the whole argument, concatenated, or interpolated with $x / ${x};
+          # the same words in the message text are not a value
+          regex: '(?is)^(|.*?\+\s*|.*?\$\{?\s*)[\w.]*(password|passwd|pwd|token|secret|apikey|api_key|authorization|bearer)'
+
+  - id: gapscan.kotlin.cleartext-http-url
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A request goes to an http:// URL, so it travels unencrypted. Use https:// (Android blocks
+      cleartext by default unless the network security config allows it).
+    metadata:
+      cwe: ["CWE-319: Cleartext Transmission of Sensitive Information"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: Request.Builder().url("...")
+          - pattern: URL("...")
+          - pattern: $B.baseUrl("...")
+      - pattern-regex: '"http://(?!localhost|127\.0\.0\.1|10\.0\.2\.2)[^"]+"'

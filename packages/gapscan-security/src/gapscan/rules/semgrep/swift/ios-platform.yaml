@@ -1,0 +1,179 @@
+# GapScan Rules: Swift / iOS, third set (user interface, web view bridges, inter-app links, personal data). Licensed
+# Apache-2.0. Every rule has a vulnerable and a safe case in tests/rules/swift/ios-platform.swift or
+# tests/rules/swift/ui.storyboard (run: make rules-test). Text rules (the `generic` language), like the other sets.
+rules:
+  - id: gapscan.swift.keyboard-cache-enabled
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      Autocorrection is switched on for this text input, so what is typed can be learned by the keyboard and kept in its
+      cache, where it can later be suggested or read. For fields that take personal or secret data set
+      `autocorrectionType = .no` (and `spellCheckingType = .no`), or use `isSecureTextEntry` for secrets.
+    metadata:
+      cwe: ["CWE-524: Use of Cache Containing Sensitive Information"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: LOW
+    pattern-regex: '\bautocorrectionType\s*=\s*(?:UITextAutocorrectionType)?\.(?:yes|default)\b'
+
+  - id: gapscan.swift.secret-field-not-masked
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      Secure text entry is switched off on a field whose name says it takes a password, PIN or passcode. The value is
+      shown on screen (shoulder surfing, screenshots, screen recording) and goes through the keyboard cache. Keep
+      `isSecureTextEntry = true`; offer a "show" toggle the user controls instead.
+    metadata:
+      cwe: ["CWE-549: Missing Password Field Masking"]
+      masvs: ["MASVS-PLATFORM-3"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?i)\b\w*(?:password|passwd|passcode|pin|cvv|secret)\w*(?:field|textfield|input|tf)?\??\.isSecureTextEntry\s*=\s*false\b'
+
+  - id: gapscan.swift.storyboard-secret-field-not-masked
+    languages: [generic]
+    paths: {include: ["*.storyboard", "*.xib"]}
+    severity: WARNING
+    message: >-
+      A text field in this storyboard asks for a password, PIN or passcode (by its placeholder) but is not set to
+      secure text entry, so the value is shown on screen and goes through the keyboard cache. Tick "Secure Text Entry"
+      in Interface Builder (`secureTextEntry="YES"`). The finding points at the start of the field.
+    metadata:
+      cwe: ["CWE-549: Missing Password Field Masking"]
+      masvs: ["MASVS-PLATFORM-3"]
+      category: security
+      confidence: MEDIUM
+    # the field's own element only: stop at its closing tag, and accept it when secureTextEntry="YES" appears inside
+    pattern-either:
+      - pattern-regex: '<textField\b[^>]*\bplaceholder="[^"]*(?i:password|passcode|\bpin\b)[^"]*"[^>]*>(?!(?:(?!</textField>)[\s\S])*?secureTextEntry="YES")'
+      # the field's content type says password, but it is not masked
+      - pattern-regex: '<textInputTraits\b(?=[^>]*\btextContentType="(?:password|new-password|newPassword)")(?![^>]*secureTextEntry="YES")[^>]*/>'
+
+  - id: gapscan.swift.webview-message-handler-no-origin-check
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      This script message handler acts on messages from the web view without checking where they come from. Any page or
+      injected script in the web view can call the native code it exposes (and read what it sends back). Check
+      `message.frameInfo.isMainFrame` and `message.frameInfo.securityOrigin.host` against your own host before acting,
+      and expose as little as possible. The finding points at the start of the handler.
+    metadata:
+      cwe: ["CWE-749: Exposed Dangerous Method or Function", "CWE-346: Origin Validation Error"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: MEDIUM
+    # the handler header, when no origin check appears before the next function
+    pattern-regex: 'func\s+userContentController\s*\([^)]*didReceive\s+\w+\s*:\s*WKScriptMessage\b(?!(?:(?!\bfunc\b)[\s\S])*?(?:frameInfo|securityOrigin))'
+
+  - id: gapscan.swift.webview-js-injection-variable
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      JavaScript is assembled with string interpolation into a variable and then evaluated in a web view. A value with a
+      quote in it breaks out of the string and runs as script, and any data placed in the page is readable by every
+      script there. Pass data as JSON (`callAsyncJavaScript(_:arguments:)`) and do not hand secrets to page code.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation", "CWE-94: Improper Control of Generation of Code"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '\b(?:let|var)\s+(\w+)\s*(?::\s*String)?\s*=\s*"[^"\n]*\\\([^\n]*\n(?:[^\n]*\n){0,6}?[^\n]*\bevaluateJavaScript\(\s*\1\b'
+
+  - id: gapscan.swift.webview-password-field
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      The app shows a password field inside web content. What the user types there lives in the page, where every script
+      (including injected ones) can read it. Ask for credentials in a native secure text field, or use the system
+      sign-in sheet (`ASWebAuthenticationSession`).
+    metadata:
+      cwe: ["CWE-200: Exposure of Sensitive Information to an Unauthorized Actor", "CWE-522: Insufficiently Protected Credentials"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: LOW
+    pattern-regex: '<input\b[^>\n]*\btype\s*=\s*\\?["'']?password\b'
+
+  - id: gapscan.swift.custom-scheme-url-with-data
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      Data is sent to another app through a custom URL scheme. Any app can register the same scheme and receive it (URL
+      scheme hijacking), and the receiver cannot tell who sent it. Do not put personal data or secrets in such links;
+      use a Universal Link to a domain you own, or an app group / extension for apps you control.
+    metadata:
+      cwe: ["CWE-927: Use of Implicit Intent for Sensitive Communication", "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: LOW
+    # a string literal with a non-web scheme and an interpolated value; App Store, settings, phone and mail links excluded
+    pattern-regex: '"(?!(?i:https?|wss?|ftp|file|data|mailto|tel|telprompt|sms|facetime(?:-audio)?|maps|itms(?:-apps|-services|-appss)?|app-settings|prefs|about|blob)://)[A-Za-z][\w+.-]*://[^"\n]*\\\('
+
+  - id: gapscan.swift.userdefaults-personal-data
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      Personal data (health, identity or payment details, judging by the key) goes into UserDefaults, an unencrypted
+      property list that is copied into backups and readable on a jailbroken device. Store it encrypted (the Keychain,
+      or a file with complete data protection), or do not keep it on the device.
+    metadata:
+      cwe: ["CWE-312: Cleartext Storage of Sensitive Information", "CWE-359: Exposure of Private Personal Information to an Unauthorized Actor"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?m)^(?![^\n]*[Kk]eychain)[^\n]*\b(?:UserDefaults|[Dd]efaults|NSUserDefaults)\b[^\n]*\.(?:set|setValue)\([^\n]*forKey:\s*"[^"]*(?i:patient|medical|health|diagnos|disease|ssn|social_?security|credit_?card|card_?number|cvv|passport|birth_?date|date_?of_?birth|\bdob\b)[^"]*"'
+
+  - id: gapscan.swift.deeplink-to-sensitive-sink
+    languages: [swift]
+    mode: taint
+    severity: WARNING
+    message: >-
+      A value from an incoming link (custom URL scheme, Universal Link or SwiftUI `onOpenURL`) reaches a web view, a
+      script, an SQL statement or a file path without validation. Any app or web page can send such a link. Parse the
+      link, accept only expected parameters, check each against an allow-list (hosts, ids), and never run script or SQL
+      built from it.
+    metadata:
+      cwe: ["CWE-939: Improper Authorization in Handler for Custom URL Scheme", "CWE-20: Improper Input Validation", "CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      masvs: ["MASVS-PLATFORM-1", "MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - patterns:
+          - pattern-inside: |
+              func application(_ $APP: UIApplication, open $URL: URL, options $O: $T) -> Bool { ... }
+          - pattern: $URL
+      - patterns:
+          - pattern-inside: |
+              func application(_ $APP: UIApplication, continue $UA: NSUserActivity, restorationHandler $R: $T) -> Bool { ... }
+          - pattern: $UA.webpageURL
+      - patterns:
+          - pattern-inside: |
+              func scene(_ $S: UIScene, openURLContexts $C: Set<UIOpenURLContext>) { ... }
+          - pattern: $C
+      - patterns:
+          - pattern-inside: |
+              func scene(_ $S: UIScene, continue $UA: NSUserActivity) { ... }
+          - pattern: $UA.webpageURL
+      - patterns:
+          - pattern-inside: |
+              $X.onOpenURL { $URL in ... }
+          - pattern: $URL
+    pattern-sanitizers:
+      - pattern: Int($X)
+      - pattern: 'UUID(uuidString: $X)'
+    pattern-sinks:
+      - pattern: '$W.load(URLRequest(url: $X, ...), ...)'
+      - pattern: '$W.load(URLRequest(url: $X, ...))'
+      - pattern: '$W.loadRequest(URLRequest(url: $X, ...))'
+      - pattern: $W.evaluateJavaScript($X, ...)
+      - pattern: $W.loadHTMLString($X, ...)
+      - pattern: sqlite3_exec($DB, $X, ...)
+      - pattern: sqlite3_prepare_v2($DB, $X, ...)
+      - pattern: 'FileManager.default.removeItem(atPath: $X)'
+      - pattern: 'FileManager.default.contents(atPath: $X)'

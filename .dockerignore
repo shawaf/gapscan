@@ -1,0 +1,15 @@
+.git
+.venv
+**/__pycache__
+.mypy_cache
+.pytest_cache
+.ruff_cache
+dashboard/node_modules
+dashboard/dist
+data
+build
+eval
+tests
+docs
+docker/bundle/*
+!docker/bundle/gapscan-bundle.tar.gz

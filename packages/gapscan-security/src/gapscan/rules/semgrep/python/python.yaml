@@ -1,0 +1,2763 @@
+# GapScan Rules: Python (web backends, scripts). Licensed Apache-2.0 with the rest of GapScan.
+# Every rule has a vulnerable and a safe case in tests/rules/python/python.py (run: make rules-test).
+# Taint rules follow request data within one function; they say "untrusted request data" in their message.
+rules:
+  - id: gapscan.python.sqli-string-built
+    languages: [python]
+    severity: ERROR
+    message: >-
+      An SQL statement is built from a string with concatenation, `%`, `.format()` or an f-string. Pass the
+      values as bound parameters instead (`cursor.execute("... WHERE id = %s", (value,))`).
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $C.execute($Q % ..., ...)
+          - pattern: $C.execute($Q + ..., ...)
+          - pattern: $C.execute($Q.format(...), ...)
+          - pattern: $C.execute(f"...{...}...", ...)
+          - pattern: $C.executemany($Q % ..., ...)
+          - pattern: $C.executemany(f"...{...}...", ...)
+          - pattern: $M.objects.raw(f"...{...}...")
+          - pattern: $M.objects.raw($Q % ...)
+          - pattern: $M.objects.raw($Q + ...)
+          - pattern: $M.objects.raw($Q.format(...), ...)
+          - pattern: $QS.extra(..., where=[..., f"...{...}...", ...], ...)
+          - pattern: $QS.extra(..., where=[..., $Q % ..., ...], ...)
+          - pattern: $QS.extra(..., where=[..., $Q + ..., ...], ...)
+          - pattern: $QS.extra(..., where=[..., $Q.format(...), ...], ...)
+          - pattern: RawSQL(f"...{...}...", ...)
+          - pattern: RawSQL($Q % ..., ...)
+          - pattern: RawSQL($Q + ..., ...)
+          - pattern: sqlalchemy.text($Q % ...)
+          - pattern: sqlalchemy.text($Q.format(...))
+          - pattern: text($Q % ...)
+          - pattern: text($Q.format(...))
+          - pattern: $E.exec_driver_sql(f"...{...}...", ...)
+          - pattern: $E.exec_driver_sql($Q % ..., ...)
+          - pattern: $E.exec_driver_sql($Q + ..., ...)
+          - pattern: $E.exec_driver_sql($Q.format(...), ...)
+          - pattern: $C.executescript(f"...{...}...")
+          - pattern: $C.executescript($Q % ...)
+          - pattern: $C.executescript($Q + ...)
+          - pattern: $C.executescript($Q.format(...))
+          - pattern: sqlalchemy.text(f"...{...}...")
+          - pattern: text(f"...{...}...")
+          - pattern: text($Q + ...)
+          # the statement is built into a variable first, then run
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      $SQL = f"...{...}..."
+                      ...
+                  - pattern-inside: |
+                      $SQL = "..." % ...
+                      ...
+                  - pattern-inside: |
+                      $SQL = "...".format(...)
+                      ...
+                  - pattern-inside: |
+                      $SQL = "..." + $X + ...
+                      ...
+                  - pattern-inside: |
+                      $SQL = "..." + $X
+                      ...
+              - pattern-either:
+                  - pattern: $C.execute($SQL, ...)
+                  - pattern: $C.executemany($SQL, ...)
+                  - pattern: $C.executescript($SQL)
+                  - pattern: $M.objects.raw($SQL, ...)
+                  - pattern: text($SQL)
+                  - pattern: sqlalchemy.text($SQL)
+                  - pattern: $C.exec_driver_sql($SQL, ...)
+              - pattern-not-inside: |
+                  $SQL = "..." + "..."
+                  ...
+      - pattern-not: $C.execute("..." + "...", ...)
+      # the only value comes from a constant allow-list table (SORTABLE.get(user_value, "name"))
+      - pattern-not-inside:
+          patterns:
+            - pattern-inside: |
+                $COL = $TABLE.get(...)
+                ...
+            - pattern: $C.execute(<... $COL ...>, ...)
+            - metavariable-regex:
+                metavariable: $TABLE
+                regex: ^[A-Z][A-Z0-9_]*$
+      - pattern-not: $C.execute($F(...) + "...", ...)
+      # the interpolated part is only a list of bind placeholders: "IN ({','.join('?' * len(ids))})"
+      - pattern-not: $C.execute(f"...{$SEP.join(<... "?" ...>)}...", ...)
+      - pattern-not: $C.execute(f"...{$SEP.join(<... "%s" ...>)}...", ...)
+      - pattern-not-inside: |
+          $MARKS = $SEP.join(<... "?" ...>)
+          ...
+      - pattern-not-inside: |
+          $MARKS = $SEP.join(<... "%s" ...>)
+          ...
+
+  - id: gapscan.python.command-injection
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A shell command is built at run time. If any part comes from a user, they can run their own commands. Pass
+      the program and its arguments as a list without `shell=True` (`subprocess.run(["ls", path])`).
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: os.system($CMD)
+          - pattern: os.popen($CMD, ...)
+          - pattern: subprocess.$F($CMD, ..., shell=True, ...)
+          - pattern: commands.getoutput($CMD)
+          - pattern: subprocess.getoutput($CMD)
+          - pattern: subprocess.getstatusoutput($CMD)
+          - pattern: asyncio.create_subprocess_shell($CMD, ...)
+      - pattern-not: os.system("...")
+      - pattern-not: subprocess.getoutput("...")
+      - pattern-not: subprocess.getstatusoutput("...")
+      - pattern-not: asyncio.create_subprocess_shell("...", ...)
+      - pattern-not: os.popen("...", ...)
+      - pattern-not: subprocess.$F("...", ..., shell=True, ...)
+
+  - id: gapscan.python.shell-c-dynamic-command
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A shell is started with `-c` (or `cmd.exe /c`) and a command string built at run time. Passing an argument list
+      does not help here: the shell parses that string, so a user value in it can run its own commands. Run the
+      program directly with a list of arguments (`subprocess.run(["echo", value])`), or quote the value with
+      `shlex.quote`.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.$F([$SH, "-c", $CMD, ...], ...)
+          - pattern: subprocess.$F([$SH, "/c", $CMD, ...], ...)
+          - pattern: os.$EXEC($P, [$SH, "-c", $CMD, ...], ...)
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      $L.append("-c")
+                      ...
+                      $L.append($CMD)
+                      ...
+                  - pattern-inside: |
+                      if $COND:
+                          ...
+                      else:
+                          ...
+                          $L.append("-c")
+                      ...
+                      $L.append($CMD)
+                      ...
+                  - pattern-inside: |
+                      $L.append("/c")
+                      ...
+                      $L.append($CMD)
+                      ...
+                  - pattern-inside: |
+                      $L = [$SH, "-c"]
+                      ...
+                      $L.append($CMD)
+                      ...
+              - pattern: subprocess.$F($L, ...)
+      - metavariable-pattern:
+          metavariable: $CMD
+          patterns:
+            - pattern: $ANY
+            - pattern-not: '"..."'
+      - pattern-not: subprocess.$F([$SH, "-c", shlex.quote(...), ...], ...)
+      - pattern-not: subprocess.$F([$SH, "-c", shlex.join(...), ...], ...)
+
+  - id: gapscan.python.eval-exec
+    languages: [python]
+    severity: ERROR
+    message: >-
+      `eval` and `exec` run text as code. If the text can be influenced by a user this is remote code execution.
+      Use `ast.literal_eval` for data, or an explicit lookup table for choices.
+    metadata:
+      cwe: ["CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: eval($X, ...)
+          - pattern: exec($X, ...)
+      - pattern-not: eval("...", ...)
+      - pattern-not: exec("...", ...)
+
+  - id: gapscan.python.unsafe-deserialization
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Unpickling (or `marshal`, `dill`, `jsonpickle`, or YAML without a safe loader) can execute code chosen by whoever
+      wrote the data. Use JSON for data from outside, or `yaml.safe_load`.
+    metadata:
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: pickle.load(...)
+          - pattern: pickle.loads(...)
+          - pattern: cPickle.load(...)
+          - pattern: cPickle.loads(...)
+          - pattern: marshal.loads(...)
+          - pattern: dill.loads(...)
+          - pattern: jsonpickle.decode(...)
+          - pattern: yaml.load($X)
+          - pattern: yaml.load($X, Loader=yaml.Loader)
+          - pattern: yaml.load($X, Loader=yaml.UnsafeLoader)
+          - pattern: yaml.load($X, Loader=yaml.FullLoader)
+          - pattern: yaml.unsafe_load(...)
+          - pattern: yaml.unsafe_load_all(...)
+          - pattern: yaml.full_load(...)
+          - pattern: yaml.full_load_all(...)
+          - pattern: yaml.load($X, Loader=yaml.CLoader)
+          - pattern: yaml.load($X, Loader=yaml.CUnsafeLoader)
+          - pattern: yaml.load($X, Loader=yaml.CFullLoader)
+          - pattern: yaml.load_all($X)
+          - pattern: yaml.load_all($X, Loader=yaml.Loader)
+          - pattern: yaml.load_all($X, Loader=yaml.UnsafeLoader)
+          - pattern: yaml.load_all($X, Loader=yaml.FullLoader)
+          - pattern: marshal.load(...)
+
+  - id: gapscan.python.weak-hash
+    languages: [python]
+    severity: WARNING
+    message: >-
+      MD5 and SHA-1 are broken for security use. Fine for a cache key or file checksum, not for passwords, signatures
+      or tokens: use `hashlib.sha256` (or `hashlib.scrypt`/`argon2` for passwords).
+    metadata:
+      cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: hashlib.md5(...)
+          - pattern: hashlib.sha1(...)
+          - pattern: hashlib.new("md5", ...)
+          - pattern: hashlib.new("sha1", ...)
+          - pattern: Crypto.Hash.MD5.new(...)
+          - pattern: MD5.new(...)
+      # explicitly not for security (Python 3.9+), or a cache validator / checksum
+      - pattern-not: hashlib.md5(..., usedforsecurity=False, ...)
+      - pattern-not: hashlib.sha1(..., usedforsecurity=False, ...)
+      - pattern-not: hashlib.new($N, ..., usedforsecurity=False, ...)
+      - pattern-not-inside:
+          patterns:
+            - pattern-inside: |
+                def $FN(...):
+                    ...
+            - metavariable-regex:
+                metavariable: $FN
+                regex: (?i).*(etag|checksum|cache_?key|fingerprint)
+
+  - id: gapscan.python.weak-cipher
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A broken cipher (DES, RC4, Blowfish) or ECB mode is used; ECB leaks patterns and DES/RC4 can be broken. Use
+      AES-GCM or ChaCha20-Poly1305 (`cryptography` library).
+    metadata:
+      cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $M.new(..., $MODE.MODE_ECB, ...)
+      - pattern: DES.new(...)
+      - pattern: DES3.new(...)
+      - pattern: ARC4.new(...)
+      - pattern: Blowfish.new(...)
+      - pattern: algorithms.TripleDES(...)
+      - pattern: algorithms.ARC4(...)
+      - pattern: algorithms.Blowfish(...)
+      - pattern: modes.ECB()
+
+  - id: gapscan.python.tls-verification-disabled
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Certificate verification is switched off, so anyone on the network path can read and change the traffic. Remove
+      `verify=False` / unverified contexts and fix the certificate (or point `verify` at the right CA file).
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: requests.$F(..., verify=False, ...)
+      - pattern: $S.$F(..., verify=False, ...)
+      - pattern: httpx.$F(..., verify=False, ...)
+      - pattern: httpx.Client(..., verify=False, ...)
+      - pattern: ssl._create_unverified_context(...)
+      - pattern: ssl._create_default_https_context = ssl._create_unverified_context
+      - pattern: $CTX.check_hostname = False
+      - pattern: $CTX.verify_mode = ssl.CERT_NONE
+      - pattern: ssl.wrap_socket(...)
+      - pattern: urllib3.disable_warnings(...)
+
+  - id: gapscan.python.hardcoded-secret
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A password, key or token is written into the source. Anyone with the code has it, and it stays in the git
+      history. Read it from the environment or a secret store, and rotate the value.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $N = "..."
+          - pattern: $N = b"..."
+          - pattern: '{..., "$N": "...", ...}'
+          - pattern: $F(..., $N="...", ...)
+      - metavariable-regex:
+          metavariable: $N
+          regex: (?i)^(.*[_-])?(password|passwd|pwd|secret|api_?key|apikey|access_?key|secret_?key|private_?key|auth_?token|token|client_secret)([_-].*)?$
+      - pattern-not: $N = ""
+      - pattern-not: $N = "..." + "..."
+      - pattern-not-regex: (?i)=\s*b?["'](changeme|change-me|your[_-].*|<.*>|\*+|x+|example|placeholder|test|none|null|todo|password|secret|token|key|api_?key)["']
+      - pattern-not-regex: (?i)(token|password|secret)_?(url|file|path|endpoint|header|field|name|type|length|prefix|expiry|ttl)\s*=
+
+  - id: gapscan.python.debug-enabled
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Debug mode shows stack traces and, in Flask, an interactive console that runs code. Never enable it in a
+      deployed app: read the setting from the environment and keep it off by default.
+    metadata:
+      cwe: ["CWE-489: Active Debug Code"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $APP.run(..., debug=True, ...)
+      - pattern: DEBUG = True
+      - pattern: app.debug = True
+
+  - id: gapscan.python.jwt-verification-off
+    languages: [python]
+    severity: ERROR
+    message: >-
+      The JWT is accepted without checking its signature (or with the `none` algorithm), so anyone can forge a token
+      for any user. Always verify with a fixed list of expected algorithms.
+    metadata:
+      cwe: ["CWE-347: Improper Verification of Cryptographic Signature"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: jwt.decode(..., verify=False, ...)
+      - pattern: 'jwt.decode(..., options={..., "verify_signature": False, ...}, ...)'
+      - pattern: jwt.decode(..., algorithms=[..., "none", ...], ...)
+      - pattern: jwt.encode(..., algorithm="none", ...)
+
+  - id: gapscan.python.insecure-random-token
+    languages: [python]
+    severity: WARNING
+    message: >-
+      `random` is predictable, so a token, password, key or code made with it can be guessed. Use the `secrets`
+      module (`secrets.token_urlsafe()`, `secrets.choice()`).
+    metadata:
+      cwe: ["CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $N = random.$F(...)
+          - pattern: $N = "".join(random.$F(...) for $_ in ...)
+          - pattern: $N = "".join([random.$F(...) for $_ in ...])
+          - pattern: $N = str(random.$F(...))
+      - metavariable-regex:
+          metavariable: $N
+          regex: (?i).*(token|password|passwd|secret|otp|nonce|session|api_?key|reset|csrf|salt|code|pin).*
+
+  - id: gapscan.python.xxe-enabled
+    languages: [python]
+    severity: ERROR
+    message: >-
+      The XML parser resolves external entities, so a crafted document can read local files or reach internal
+      servers. Keep `resolve_entities=False` (and `no_network=True`), or parse with `defusedxml`.
+    metadata:
+      cwe: ["CWE-611: Improper Restriction of XML External Entity Reference"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: etree.XMLParser(..., resolve_entities=True, ...)
+      - pattern: lxml.etree.XMLParser(..., resolve_entities=True, ...)
+      - pattern: $P.setFeature(xml.sax.handler.feature_external_ges, True)
+
+  - id: gapscan.python.insecure-temp-file
+    languages: [python]
+    severity: WARNING
+    message: >-
+      `tempfile.mktemp` returns a name that another process can claim before you create the file (a race that lets
+      an attacker redirect your writes). Use `tempfile.mkstemp()` or `NamedTemporaryFile()`.
+    metadata:
+      cwe: ["CWE-377: Insecure Temporary File"]
+      category: security
+      confidence: HIGH
+    pattern: tempfile.mktemp(...)
+
+  - id: gapscan.python.unsafe-html-marking
+    languages: [python]
+    severity: WARNING
+    message: >-
+      The value is marked as safe HTML (or Jinja auto-escaping is turned off), so any markup in it runs in the user's
+      browser. Escape the value, or only mark text you wrote yourself as safe.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: mark_safe($X)
+          - pattern: django.utils.safestring.mark_safe($X)
+          - pattern: Markup($X)
+          - pattern: markupsafe.Markup($X)
+          - pattern: jinja2.Environment(..., autoescape=False, ...)
+          - pattern: Environment(..., autoescape=False, ...)
+      - pattern-not: mark_safe("...")
+      - pattern-not: Markup("...")
+
+  - id: gapscan.python.cookie-flags-off
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A session or auth cookie is sent without `Secure` or `HttpOnly`, so it travels over plain HTTP or can be read by
+      page scripts. Turn both on (and set `SameSite`).
+    metadata:
+      cwe: ["CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $R.set_cookie(..., secure=False, ...)
+      - pattern: $R.set_cookie(..., httponly=False, ...)
+      - pattern: SESSION_COOKIE_SECURE = False
+      - pattern: SESSION_COOKIE_HTTPONLY = False
+      - pattern: CSRF_COOKIE_SECURE = False
+
+  - id: gapscan.python.csrf-protection-off
+    languages: [python]
+    severity: WARNING
+    message: >-
+      CSRF protection is turned off for this view or app, so another site can make a logged-in user's browser submit
+      requests. Keep the protection on and send the CSRF token from the form, or use token headers that a browser
+      does not add by itself.
+    metadata:
+      cwe: ["CWE-352: Cross-Site Request Forgery (CSRF)"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: |
+          @csrf_exempt
+          def $F(...): ...
+      - pattern: |
+          @csrf_exempt
+          class $C: ...
+      - pattern: WTF_CSRF_ENABLED = False
+      - pattern: $APP.config["WTF_CSRF_ENABLED"] = False
+
+  - id: gapscan.python.cors-allow-all
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Every website is allowed to call this API from a browser. Allow only the origins that need it, and never
+      combine a wildcard with credentials.
+    metadata:
+      cwe: ["CWE-942: Permissive Cross-domain Policy with Untrusted Domains"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: CORS($APP, ..., origins="*", ...)
+      - pattern: 'CORS($APP, ..., resources={..., "...": {..., "origins": "*", ...}, ...}, ...)'
+      - pattern: CORS_ALLOW_ALL_ORIGINS = True
+      - pattern: CORS_ORIGIN_ALLOW_ALL = True
+      - pattern: $R.headers["Access-Control-Allow-Origin"] = "*"
+      - pattern: $APP.add_middleware(CORSMiddleware, ..., allow_origins=["*"], ..., allow_credentials=True, ...)
+
+  - id: gapscan.python.ssh-host-key-not-checked
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Unknown SSH servers are trusted automatically, which allows a man-in-the-middle to read credentials and data.
+      Load known host keys and reject unknown ones (`RejectPolicy`).
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $C.set_missing_host_key_policy(paramiko.AutoAddPolicy(...))
+      - pattern: $C.set_missing_host_key_policy(AutoAddPolicy(...))
+      - pattern: $C.set_missing_host_key_policy(paramiko.WarningPolicy(...))
+
+  - id: gapscan.python.weak-random-generator
+    languages: [python]
+    severity: INFO
+    message: >-
+      The `random` module is predictable. That is fine for a shuffle or a simulation, but anything an attacker must
+      not guess (a token, key, password, id or code) needs the `secrets` module. Check what this value is used for.
+    metadata:
+      cwe: ["CWE-330: Use of Insufficiently Random Values", "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator"]
+      category: security
+      confidence: LOW
+    patterns:
+      - pattern: random.$F(...)
+      - metavariable-regex:
+          metavariable: $F
+          regex: ^(random|randint|randrange|choice|choices|sample|getrandbits|uniform|triangular|betavariate|expovariate|gammavariate|gauss|lognormvariate|normalvariate|vonmisesvariate|paretovariate|weibullvariate|randbytes)$
+
+  - id: gapscan.python.ldap-filter-string-built
+    languages: [python]
+    severity: ERROR
+    message: >-
+      An LDAP search filter is built from a string, so a user value such as `*)(uid=*` changes what the query matches
+      (LDAP injection). Escape the value (`ldap3.utils.conv.escape_filter_chars`) before putting it in a filter.
+    metadata:
+      cwe: ["CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $C.search($B, f"...{...}...", ...)
+      - pattern: $C.search($B, $F + ..., ...)
+      - pattern: $C.search($B, $F % ..., ...)
+      - pattern: $C.search($B, $F.format(...), ...)
+      - pattern: $C.search_s($B, $SCOPE, f"...{...}...", ...)
+      - pattern: $C.search_s($B, $SCOPE, $F + ..., ...)
+
+  - id: gapscan.python.xpath-string-built
+    languages: [python]
+    severity: ERROR
+    message: >-
+      An XPath expression is built from a string, so a user value can change what it selects (XPath injection). Pass
+      values as variables (`tree.xpath("//u[@id=$id]", id=value)`) instead of formatting them into the expression.
+    metadata:
+      cwe: ["CWE-643: Improper Neutralization of Data within XPath Expressions ('XPath Injection')"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $T.xpath(f"...{...}...", ...)
+          - pattern: $T.xpath($Q + ..., ...)
+          - pattern: $T.xpath($Q % ..., ...)
+          - pattern: $T.xpath($Q.format(...), ...)
+          - pattern: elementpath.select($R, f"...{...}...", ...)
+          - pattern: elementpath.select($R, $Q + ..., ...)
+          - pattern: elementpath.select($R, $Q % ..., ...)
+          - pattern: elementpath.select($R, $Q.format(...), ...)
+          - pattern: etree.XPath(f"...{...}...")
+          - pattern: etree.XPath($Q + ...)
+      # the only interpolated value has its delimiting quote escaped
+      - pattern-not: $T.xpath(f"...{$V.replace("'", $E)}...", ...)
+      - pattern-not: elementpath.select($R, f"...{$V.replace("'", $E)}...", ...)
+      - pattern-not: etree.XPath(f"...{$V.replace("'", $E)}...")
+      # a value containing a quote was rejected earlier
+      - pattern-not-inside: |
+          if "'" in $V:
+              ...
+          ...
+
+  # --- taint rules: untrusted request data reaching a dangerous call inside one function -----------------
+  - id: gapscan.python.taint-sqli
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data reaches an SQL statement built from a string. Use bound parameters.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-propagators:
+      - pattern: $C.append($V)
+        from: $V
+        to: $C
+      - pattern: $C.extend($V)
+        from: $V
+        to: $C
+      - pattern: $C.insert($I, $V)
+        from: $V
+        to: $C
+      - pattern: $C.set($S, $K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.update($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.write($V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      # the value is rejected unless it fully matches a validation pattern
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  if not $RX.fullmatch($V):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if not re.fullmatch($P, $V, ...):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if $RX.fullmatch($V) is None:
+                      ...
+                  ...
+          - pattern: $V
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: uuid.UUID(...)
+          - pattern: re.escape(...)
+          - pattern: bool(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $C.execute($Q, ...)
+              - pattern: $C.executemany($Q, ...)
+              - pattern: $C.executescript($Q)
+              - pattern: $M.objects.raw($Q, ...)
+              - pattern: text($Q)
+              - pattern: $E.exec_driver_sql($Q, ...)
+          - focus-metavariable: $Q
+
+  - id: gapscan.python.taint-command-injection
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data reaches a command that is run. Pass a fixed program with a list of arguments (no shell), and validate the value.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-propagators:
+      - pattern: $C.append($V)
+        from: $V
+        to: $C
+      - pattern: $C.extend($V)
+        from: $V
+        to: $C
+      - pattern: $C.insert($I, $V)
+        from: $V
+        to: $C
+      - pattern: $C.set($S, $K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.update($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.write($V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      # the value is rejected unless it fully matches a validation pattern
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  if not $RX.fullmatch($V):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if not re.fullmatch($P, $V, ...):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if $RX.fullmatch($V) is None:
+                      ...
+                  ...
+          - pattern: $V
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: uuid.UUID(...)
+          - pattern: re.escape(...)
+          - pattern: bool(...)
+          - pattern: shlex.quote(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: os.system($X)
+              - pattern: os.popen($X, ...)
+              - pattern: subprocess.$F($X, ..., shell=True, ...)
+              - pattern: subprocess.getoutput($X)
+              - pattern: subprocess.getstatusoutput($X)
+              - pattern: asyncio.create_subprocess_shell($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.python.taint-argument-injection
+    languages: [python]
+    mode: taint
+    severity: WARNING
+    message: >-
+      Untrusted request data becomes an argument (or an element of the argument list) of a program that is run. Without a
+      shell this is not command injection, but the value can still add options (`--output=...`) or, when the program
+      is a shell (`sh -c`), run commands. Validate the value against an allow-list and put `--` before it.
+    metadata:
+      cwe: ["CWE-88: Improper Neutralization of Argument Delimiters in a Command ('Argument Injection')", "CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      category: security
+      confidence: LOW
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-propagators:
+      - pattern: $C.append($V)
+        from: $V
+        to: $C
+      - pattern: $C.extend($V)
+        from: $V
+        to: $C
+      - pattern: $C.insert($I, $V)
+        from: $V
+        to: $C
+      - pattern: $C.set($S, $K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.update($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.write($V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      # the value is rejected unless it fully matches a validation pattern
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  if not $RX.fullmatch($V):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if not re.fullmatch($P, $V, ...):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if $RX.fullmatch($V) is None:
+                      ...
+                  ...
+          - pattern: $V
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: uuid.UUID(...)
+          - pattern: re.escape(...)
+          - pattern: bool(...)
+          - pattern: shlex.quote(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: subprocess.$F($X, ...)
+              - pattern: os.$EXEC($P, $X, ...)
+          - pattern-not: subprocess.$F($Y, ..., shell=True, ...)
+          - pattern-not: subprocess.getoutput(...)
+          - pattern-not: subprocess.getstatusoutput(...)
+          - focus-metavariable: $X
+
+
+  - id: gapscan.python.taint-path-traversal
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data is used as a file path, so `../` can reach files outside the intended folder. Join it to a base folder, resolve it, and check that the result is still inside that folder (or use `send_from_directory`).
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-propagators:
+      - pattern: $C.append($V)
+        from: $V
+        to: $C
+      - pattern: $C.extend($V)
+        from: $V
+        to: $C
+      - pattern: $C.insert($I, $V)
+        from: $V
+        to: $C
+      - pattern: $C.set($S, $K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.update($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.write($V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      # the value is rejected unless it fully matches a validation pattern
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  if not $RX.fullmatch($V):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if not re.fullmatch($P, $V, ...):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if $RX.fullmatch($V) is None:
+                      ...
+                  ...
+          - pattern: $V
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: uuid.UUID(...)
+          - pattern: re.escape(...)
+          - pattern: bool(...)
+          - pattern: os.path.basename(...)
+          - pattern: werkzeug.utils.secure_filename(...)
+          - pattern: secure_filename(...)
+      # a value containing ".." is rejected before it becomes a path
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  if ".." in $V:
+                      ...
+                  ...
+              - pattern-inside: |
+                  if "../" in $V:
+                      ...
+                  ...
+          - pattern: $V
+      # the path is resolved and then checked to stay inside the base folder
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  $V = $E.resolve(...)
+                  ...
+              - pattern-inside: |
+                  $V = os.path.realpath(...)
+                  ...
+              - pattern-inside: |
+                  $V = os.path.abspath(...)
+                  ...
+          - pattern-either:
+              - pattern-inside: |
+                  if not str($V).startswith(...):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if not $V.startswith(...):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if not $V.is_relative_to(...):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if os.path.commonpath(...) != $B:
+                      ...
+                  ...
+          - pattern: $V
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $P.read_text(...)
+              - pattern: $P.read_bytes(...)
+              - pattern: $P.write_text(...)
+              - pattern: $P.write_bytes(...)
+              - pattern: $P.exists(...)
+              - pattern: $P.is_file(...)
+              - pattern: $P.unlink(...)
+              - pattern: $P.mkdir(...)
+          - focus-metavariable: $P
+      - patterns:
+          - pattern-either:
+              - pattern: os.path.exists($X)
+              - pattern: os.path.isfile($X)
+              - pattern: os.path.isdir($X)
+              - pattern: os.path.getsize($X)
+              - pattern: os.stat($X, ...)
+              - pattern: open($X, ...)
+              - pattern: codecs.open($X, ...)
+              - pattern: io.open($X, ...)
+              - pattern: flask.send_file($X, ...)
+              - pattern: send_file($X, ...)
+              - pattern: os.remove($X)
+              - pattern: os.unlink($X)
+              - pattern: os.rename($X, ...)
+              - pattern: os.listdir($X)
+              - pattern: os.mkdir($X, ...)
+              - pattern: os.makedirs($X, ...)
+              - pattern: os.rmdir($X)
+              - pattern: shutil.copy($X, ...)
+              - pattern: shutil.copyfile($X, ...)
+              - pattern: shutil.move($X, ...)
+              - pattern: shutil.rmtree($X, ...)
+              - pattern: pathlib.Path($X)
+              - pattern: Path($X)
+          - focus-metavariable: $X
+
+  - id: gapscan.python.taint-ssrf
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data chooses the address the server connects to (server-side request forgery): an attacker can reach internal services and cloud metadata. Allow only known hosts and block private address ranges.
+    metadata:
+      cwe: ["CWE-918: Server-Side Request Forgery (SSRF)"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-propagators:
+      - pattern: $C.append($V)
+        from: $V
+        to: $C
+      - pattern: $C.extend($V)
+        from: $V
+        to: $C
+      - pattern: $C.insert($I, $V)
+        from: $V
+        to: $C
+      - pattern: $C.set($S, $K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.update($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.write($V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: uuid.UUID(...)
+          - pattern: re.escape(...)
+          - pattern: bool(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: requests.$F($X, ...)
+              - pattern: httpx.$F($X, ...)
+              - pattern: urllib.request.urlopen($X, ...)
+              - pattern: urlopen($X, ...)
+              - pattern: urllib.request.Request($X, ...)
+              - pattern: aiohttp.ClientSession(...).get($X, ...)
+              - pattern: requests.request($M, $X, ...)
+              - pattern: httpx.request($M, $X, ...)
+              - pattern: urllib3.PoolManager(...).request($M, $X, ...)
+              - patterns:
+                  - pattern-either:
+                      - pattern-inside: |
+                          $S = requests.Session(...)
+                          ...
+                      - pattern-inside: |
+                          with requests.Session(...) as $S:
+                              ...
+                      - pattern-inside: |
+                          $S = httpx.Client(...)
+                          ...
+                      - pattern-inside: |
+                          with httpx.Client(...) as $S:
+                              ...
+                      - pattern-inside: |
+                          async with httpx.AsyncClient(...) as $S:
+                              ...
+                      - pattern-inside: |
+                          async with aiohttp.ClientSession(...) as $S:
+                              ...
+                      - pattern-inside: |
+                          $S = urllib3.PoolManager(...)
+                          ...
+                  - pattern-either:
+                      - pattern: $S.$VERB($X, ...)
+                      - pattern: $S.request($M, $X, ...)
+                  - metavariable-regex:
+                      metavariable: $VERB
+                      regex: ^(get|post|put|patch|delete|head|options|stream)$
+          - focus-metavariable: $X
+
+  - id: gapscan.python.taint-template-injection
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data is compiled as a template (server-side template injection), which lets an attacker run code and also injects markup into the page (cross-site scripting). Pass user data to the template as variables, never as the template text.
+    metadata:
+      cwe: ["CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine", "CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-propagators:
+      - pattern: $C.append($V)
+        from: $V
+        to: $C
+      - pattern: $C.extend($V)
+        from: $V
+        to: $C
+      - pattern: $C.insert($I, $V)
+        from: $V
+        to: $C
+      - pattern: $C.set($S, $K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.update($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.write($V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: uuid.UUID(...)
+          - pattern: re.escape(...)
+          - pattern: bool(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: render_template_string($X, ...)
+              - pattern: flask.render_template_string($X, ...)
+              - pattern: jinja2.Template($X)
+              - pattern: Template($X)
+              - pattern: $ENV.from_string($X)
+          - focus-metavariable: $X
+
+  - id: gapscan.python.taint-open-redirect
+    languages: [python]
+    mode: taint
+    severity: WARNING
+    message: >-
+      The redirect target comes from the request, so a link on your site can send users to an attacker's page. Only redirect to relative paths or to an allow-list of hosts.
+    metadata:
+      cwe: ["CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-propagators:
+      - pattern: $C.append($V)
+        from: $V
+        to: $C
+      - pattern: $C.extend($V)
+        from: $V
+        to: $C
+      - pattern: $C.insert($I, $V)
+        from: $V
+        to: $C
+      - pattern: $C.set($S, $K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.update($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.write($V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: uuid.UUID(...)
+          - pattern: re.escape(...)
+          - pattern: bool(...)
+          - pattern: url_for(...)
+          - pattern: reverse(...)
+          - pattern: url_has_allowed_host_and_scheme(...)
+          - pattern: is_safe_url(...)
+      # the URL is parsed and its host or scheme checked before the redirect
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  $U = urllib.parse.urlparse($V, ...)
+                  ...
+                  if <... $U.$PART ...>:
+                      ...
+                  ...
+              - pattern-inside: |
+                  $U = urlparse($V, ...)
+                  ...
+                  if <... $U.$PART ...>:
+                      ...
+                  ...
+              - pattern-inside: |
+                  $U = urllib.parse.urlsplit($V, ...)
+                  ...
+                  if <... $U.$PART ...>:
+                      ...
+                  ...
+              - pattern-inside: |
+                  $U = urlsplit($V, ...)
+                  ...
+                  if <... $U.$PART ...>:
+                      ...
+                  ...
+          - metavariable-regex:
+              metavariable: $PART
+              regex: ^(netloc|hostname|scheme)$
+          - pattern: $V
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: redirect($X, ...)
+              - pattern: flask.redirect($X, ...)
+              - pattern: HttpResponseRedirect($X)
+              - pattern: RedirectResponse($X, ...)
+              - pattern: HttpResponsePermanentRedirect($X)
+              - pattern: $R.headers["Location"] = $X
+              - pattern: '$RESP(..., headers={..., "Location": $X, ...}, ...)'
+          - focus-metavariable: $X
+
+  - id: gapscan.python.taint-code-injection
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data is run as code. Remove `eval`/`exec`, and use an explicit lookup for the choices you support.
+    metadata:
+      cwe: ["CWE-94: Improper Control of Generation of Code ('Code Injection')", "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-propagators:
+      - pattern: $C.append($V)
+        from: $V
+        to: $C
+      - pattern: $C.extend($V)
+        from: $V
+        to: $C
+      - pattern: $C.insert($I, $V)
+        from: $V
+        to: $C
+      - pattern: $C.set($S, $K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.update($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.write($V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      # the value is rejected unless it fully matches a validation pattern
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  if not $RX.fullmatch($V):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if not re.fullmatch($P, $V, ...):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if $RX.fullmatch($V) is None:
+                      ...
+                  ...
+          - pattern: $V
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: uuid.UUID(...)
+          - pattern: re.escape(...)
+          - pattern: bool(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: eval($X, ...)
+              - pattern: exec($X, ...)
+              - pattern: compile($X, ...)
+              - pattern: __import__($X)
+              - pattern: importlib.import_module($X)
+              - pattern: builtins.eval($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.python.taint-xss
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data is returned in the HTML response without escaping, so a crafted link runs script in the visitor's browser. Escape the value (`markupsafe.escape`, `html.escape`) or return it through a template that escapes by default.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-propagators:
+      - pattern: $C.append($V)
+        from: $V
+        to: $C
+      - pattern: $C.extend($V)
+        from: $V
+        to: $C
+      - pattern: $C.insert($I, $V)
+        from: $V
+        to: $C
+      - pattern: $C.set($S, $K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.update($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.write($V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      # the value is rejected unless it fully matches a validation pattern
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  if not $RX.fullmatch($V):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if not re.fullmatch($P, $V, ...):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if $RX.fullmatch($V) is None:
+                      ...
+                  ...
+          - pattern: $V
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: uuid.UUID(...)
+          - pattern: bool(...)
+          - pattern: html.escape(...)
+          - pattern: flask.escape(...)
+          - pattern: markupsafe.escape(...)
+          - pattern: bleach.clean(...)
+          - pattern: jinja2.escape(...)
+          - pattern: django.utils.html.escape(...)
+          - pattern: django.utils.html.format_html(...)
+          - pattern: format_html(...)
+          - pattern: jsonify(...)
+          - pattern: json.dumps(...)
+          - pattern: render_template(...)
+          - pattern: url_for(...)
+          - pattern: redirect(...)
+          - pattern: flask.redirect(...)
+          - pattern: send_file(...)
+          - pattern: flask.send_file(...)
+          - pattern: send_from_directory(...)
+          - pattern: abort(...)
+          # a template given as a literal is auto-escaped; file contents are not the request value
+          - pattern: render_template_string("...", ...)
+          - pattern: flask.render_template_string("...", ...)
+          - pattern: open(...)
+          - pattern: $P.read_text(...)
+          - pattern: $P.read_bytes(...)
+      # an HTML-escaping helper of the application or a library (escape, html_escape, escape_html, xhtml_escape, ...);
+      # re.escape is for regular expressions and does not escape markup
+      - patterns:
+          - pattern-either:
+              - pattern: $FN(...)
+              - pattern: $MOD.$FN(...)
+          - metavariable-regex:
+              metavariable: $FN
+              regex: (?i)^(?!.*unescape)(.*_)?(x?html_?)?escape(_.*)?$
+          - pattern-not: re.escape(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: return $X
+              - pattern: flask.make_response($X, ...)
+              - pattern: make_response($X, ...)
+              - pattern: HttpResponse($X, ...)
+              - pattern: flask.Response($X, ...)
+              - pattern: Response($X, ...)
+              - pattern: HTMLResponse($X, ...)
+          - pattern-inside: |
+              @$APP.$METHOD(...)
+              def $F(...):
+                  ...
+          - pattern-not: return {...}
+          - pattern-not: return [...]
+          - focus-metavariable: $X
+
+  - id: gapscan.python.taint-xpath-injection
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data reaches an XPath expression, so a user value can change what it selects (XPath injection). Pass values as XPath variables instead of formatting them into the expression.
+    metadata:
+      cwe: ["CWE-643: Improper Neutralization of Data within XPath Expressions ('XPath Injection')"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-propagators:
+      - pattern: $C.append($V)
+        from: $V
+        to: $C
+      - pattern: $C.extend($V)
+        from: $V
+        to: $C
+      - pattern: $C.insert($I, $V)
+        from: $V
+        to: $C
+      - pattern: $C.set($S, $K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.update($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.write($V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      # the value is rejected unless it fully matches a validation pattern
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  if not $RX.fullmatch($V):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if not re.fullmatch($P, $V, ...):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if $RX.fullmatch($V) is None:
+                      ...
+                  ...
+          - pattern: $V
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: uuid.UUID(...)
+          - pattern: re.escape(...)
+          - pattern: bool(...)
+          # the quote that delimits the XPath literal is escaped or removed
+          - pattern: $V.replace("'", ...)
+          - pattern: $V.replace('"', ...)
+      # a value containing a quote is rejected before the expression is built
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  if "'" in $V:
+                      ...
+                  ...
+              - pattern-inside: |
+                  if '"' in $V:
+                      ...
+                  ...
+          - pattern: $V
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: elementpath.select($R, $X, ...)
+              - pattern: elementpath.iter_select($R, $X, ...)
+              - pattern: $T.xpath($X, ...)
+              - pattern: etree.XPath($X)
+              - pattern: lxml.etree.XPath($X)
+              - pattern: $T.find($X)
+              - pattern: $T.findall($X)
+              - pattern: $T.iterfind($X)
+          - focus-metavariable: $X
+
+  - id: gapscan.python.taint-ldap-injection
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data reaches an LDAP query, so a value such as `*)(uid=*` changes what it matches (LDAP injection). Escape the value (`ldap3.utils.conv.escape_filter_chars`) before using it in a filter.
+    metadata:
+      cwe: ["CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-propagators:
+      - pattern: $C.append($V)
+        from: $V
+        to: $C
+      - pattern: $C.extend($V)
+        from: $V
+        to: $C
+      - pattern: $C.insert($I, $V)
+        from: $V
+        to: $C
+      - pattern: $C.set($S, $K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.update($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.write($V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      # the value is rejected unless it fully matches a validation pattern
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  if not $RX.fullmatch($V):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if not re.fullmatch($P, $V, ...):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if $RX.fullmatch($V) is None:
+                      ...
+                  ...
+          - pattern: $V
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: uuid.UUID(...)
+          - pattern: re.escape(...)
+          - pattern: bool(...)
+          - pattern: escape_filter_chars(...)
+          - pattern: ldap3.utils.conv.escape_filter_chars(...)
+          - pattern: ldap.filter.escape_filter_chars(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $C.search($B, $X, ...)
+              - pattern: $C.search_s($B, $S, $X, ...)
+              - pattern: $C.search_ext_s($B, $S, $X, ...)
+              - pattern: $C.search_st($B, $S, $X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.python.taint-trust-boundary
+    languages: [python]
+    mode: taint
+    severity: WARNING
+    message: >-
+      Untrusted request data is stored in the user's session as a key or value. Later code trusts anything in the session, so this lets a user plant data that looks verified (trust boundary violation). Validate the value first, and never use request data as the session key.
+    metadata:
+      cwe: ["CWE-501: Trust Boundary Violation"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-propagators:
+      - pattern: $C.append($V)
+        from: $V
+        to: $C
+      - pattern: $C.extend($V)
+        from: $V
+        to: $C
+      - pattern: $C.insert($I, $V)
+        from: $V
+        to: $C
+      - pattern: $C.set($S, $K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.update($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.write($V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      # the value is rejected unless it fully matches a validation pattern
+      - by-side-effect: true
+        patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  if not $RX.fullmatch($V):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if not re.fullmatch($P, $V, ...):
+                      ...
+                  ...
+              - pattern-inside: |
+                  if $RX.fullmatch($V) is None:
+                      ...
+                  ...
+          - pattern: $V
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: uuid.UUID(...)
+          - pattern: re.escape(...)
+          - pattern: bool(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: flask.session[$X] = $V
+              - pattern: flask.session[$K] = $X
+              - pattern: session[$X] = $V
+              - pattern: session[$K] = $X
+              - pattern: $R.session[$X] = $V
+              - pattern: $R.session[$K] = $X
+              - pattern: flask.session.update($X)
+              - pattern: flask.session.setdefault($X, ...)
+          - focus-metavariable: $X
+
+  # --- round 2: model and data loading, archives, comparisons, settings ----------------------------------
+  - id: gapscan.python.unsafe-model-load
+    languages: [python]
+    severity: ERROR
+    message: >-
+      This loader unpickles its input, so a model, array or cache file from outside can run code when it is
+      loaded (a downloaded checkpoint is enough). Load weights with `torch.load(..., weights_only=True)` or
+      `safetensors`, keep `allow_pickle=False` for NumPy, and only open `joblib`/`dill`/`shelve`/`read_pickle`
+      files that your own code wrote to storage nobody else can change.
+    metadata:
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: torch.load(...)
+          - pattern: numpy.load(..., allow_pickle=True, ...)
+          - pattern: np.load(..., allow_pickle=True, ...)
+          - pattern: joblib.load(...)
+          - pattern: dill.load(...)
+          - pattern: shelve.open(...)
+          - pattern: pandas.read_pickle(...)
+          - pattern: pd.read_pickle(...)
+          - pattern: cloudpickle.load(...)
+          - pattern: cloudpickle.loads(...)
+          - pattern: jsonpickle.loads(...)
+      - pattern-not: torch.load(..., weights_only=True, ...)
+
+  - id: gapscan.python.tar-extract-unfiltered
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A tar archive is extracted without a filter. Member names such as `../../etc/cron.d/x`, absolute paths and links
+      are written as given, so an archive from outside can overwrite any file the process can write (tar slip).
+      Pass `filter="data"` to `extractall`/`extract` (Python 3.12, backported to earlier security releases), or
+      check that every member resolves inside the destination and is not a link before extracting it.
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $T.extractall(...)
+          - pattern: $T.extract(...)
+      - pattern-either:
+          - pattern-inside: |
+              with tarfile.open(...) as $T:
+                  ...
+          - pattern-inside: |
+              $T = tarfile.open(...)
+              ...
+          - pattern-inside: |
+              with tarfile.TarFile(...) as $T:
+                  ...
+          - pattern-inside: |
+              $T = tarfile.TarFile(...)
+              ...
+      - pattern-not: $T.extractall(..., filter="data", ...)
+      - pattern-not: $T.extractall(..., filter="tar", ...)
+      - pattern-not: $T.extractall(..., filter=tarfile.data_filter, ...)
+      - pattern-not: $T.extractall(..., filter=tarfile.tar_filter, ...)
+      - pattern-not: $T.extract(..., filter="data", ...)
+      - pattern-not: $T.extract(..., filter="tar", ...)
+      - pattern-not: $T.extract(..., filter=tarfile.data_filter, ...)
+
+  - id: gapscan.python.zip-extract-unchecked
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A whole zip archive is extracted without looking at its members. Python's `zipfile` drops `..` and absolute
+      parts from names, but an archive from outside can still overwrite files already in the destination and expand
+      into gigabytes (zip bomb), and code that later copies or re-packs the files may not be as careful. Check that
+      each member's resolved path stays inside the destination, and limit the member count and total uncompressed
+      size before extracting.
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')", "CWE-409: Improper Handling of Highly Compressed Data (Data Amplification)"]
+      category: security
+      confidence: LOW
+    patterns:
+      - pattern: $Z.extractall(...)
+      - pattern-either:
+          - pattern-inside: |
+              with zipfile.ZipFile(...) as $Z:
+                  ...
+          - pattern-inside: |
+              $Z = zipfile.ZipFile(...)
+              ...
+      - pattern-not-inside: |
+          for $M in $Z.$LIST(...):
+              ...
+          ...
+
+  - id: gapscan.python.archive-member-path-joined
+    languages: [python]
+    severity: ERROR
+    message: >-
+      An archive member's own name is joined to the destination folder and written, so a member called
+      `../../app/settings.py` lands outside it (zip slip). Resolve the joined path and check it is still inside the
+      destination before writing, or let `zipfile.extract`/`tarfile.extract(filter="data")` do the extraction.
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: open(os.path.join($D, $M.$NAME), ...)
+          - patterns:
+              - pattern-inside: |
+                  $P = os.path.join($D, $M.$NAME)
+                  ...
+              - pattern: open($P, ...)
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: ^(filename|name)$
+      - pattern-either:
+          - pattern-inside: |
+              for $M in $A.infolist():
+                  ...
+          - pattern-inside: |
+              for $M in $A.getmembers():
+                  ...
+      - pattern-not-inside: |
+          if not <... $X.startswith(...) ...>:
+              ...
+          ...
+      - pattern-not-inside: |
+          if <... os.path.commonpath(...) ...>:
+              ...
+          ...
+
+  - id: gapscan.python.timing-unsafe-secret-compare
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A signature, token or other secret is compared with `==`/`!=`, which stops at the first differing byte; the
+      time it takes lets an attacker guess the expected value byte by byte. Compare secrets with
+      `hmac.compare_digest(a, b)` (or `secrets.compare_digest`).
+    metadata:
+      cwe: ["CWE-208: Observable Timing Discrepancy"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - patterns:
+              - pattern-either:
+                  - pattern: $A == $B
+                  - pattern: $A != $B
+              - metavariable-regex:
+                  metavariable: $A
+                  regex: (?i).*(signature|hmac|api_?key|secret|csrf_?token|auth_?token|access_?token|webhook_?token|otp_?code)
+          - patterns:
+              - pattern-either:
+                  - pattern: $A == $B
+                  - pattern: $A != $B
+              - metavariable-regex:
+                  metavariable: $B
+                  regex: (?i).*(signature|hmac|api_?key|secret|csrf_?token|auth_?token|access_?token|webhook_?token|otp_?code)
+      # comparisons with literals, None, lengths and enum members (Category.SECRET) are not secret checks
+      - metavariable-regex:
+          metavariable: $A
+          regex: ^(?!None$|True$|False$|-?\d+$|len\(|type\(|["']|([\w.]*\.)?[A-Z][a-z]\w*\.[A-Z][A-Z0-9_]+$)
+      - metavariable-regex:
+          metavariable: $B
+          regex: ^(?!None$|True$|False$|-?\d+$|len\(|type\(|["']|([\w.]*\.)?[A-Z][a-z]\w*\.[A-Z][A-Z0-9_]+$)
+      - pattern-not-inside: hmac.compare_digest(...)
+
+  - id: gapscan.python.assert-used-for-authorization
+    languages: [python]
+    severity: WARNING
+    message: >-
+      An access check is written as `assert`. Python drops every `assert` when it runs with `-O`, so the check
+      silently disappears and anyone gets through. Use an explicit `if not ...:` that raises a permission error or
+      returns 403.
+    metadata:
+      cwe: ["CWE-285: Improper Authorization", "CWE-617: Reachable Assertion"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: assert $COND, ...
+          - pattern: assert $COND
+      - metavariable-regex:
+          metavariable: $COND
+          regex: (?i).*\b(is_authenticated|is_admin|is_staff|is_superuser|is_owner|has_perms?|has_permission|has_role|check_permission|can_(access|edit|view|delete|manage)|is_allowed|is_authorized|user_can|owner_id)\b
+
+  - id: gapscan.python.allowed-hosts-wildcard
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Django accepts any Host header, so password-reset links and absolute URLs can be built with an attacker's host
+      (host header poisoning). List only your own domains in `ALLOWED_HOSTS` (read them from the environment per
+      deployment).
+    metadata:
+      cwe: ["CWE-183: Permissive List of Allowed Inputs"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: ALLOWED_HOSTS = [..., "*", ...]
+      - pattern: ALLOWED_HOSTS = (..., "*", ...)
+
+  - id: gapscan.python.hardcoded-app-secret-key
+    languages: [python]
+    severity: ERROR
+    message: >-
+      The web framework's signing key is written into the code. Whoever reads the code can sign session cookies,
+      password-reset tokens and CSRF tokens, so they can log in as any user. Read the key from the environment or a
+      secret store and rotate the one in the code.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials", "CWE-321: Use of Hard-coded Cryptographic Key"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $APP.secret_key = "..."
+          - pattern: $APP.config["SECRET_KEY"] = "..."
+          - pattern: $APP.config["JWT_SECRET_KEY"] = "..."
+          - pattern: $APP.config.update(..., SECRET_KEY="...", ...)
+      - pattern-not: $APP.secret_key = ""
+      - pattern-not: $APP.config["SECRET_KEY"] = ""
+
+  - id: gapscan.python.xmlrpc-dotted-names
+    languages: [python]
+    severity: ERROR
+    message: >-
+      An XML-RPC server publishes an object with `allow_dotted_names=True`, which lets any client walk attributes to
+      the object's module globals and call them (remote code execution). Remove the flag and register only the
+      functions clients need with `register_function`.
+    metadata:
+      cwe: ["CWE-749: Exposed Dangerous Method or Function"]
+      category: security
+      confidence: HIGH
+    pattern: $S.register_instance(..., allow_dotted_names=True, ...)
+
+  - id: gapscan.python.taint-regex-injection
+    languages: [python]
+    mode: taint
+    severity: WARNING
+    message: >-
+      Untrusted request data is compiled as a regular expression. A pattern such as `(a+)+$` takes exponential time
+      on a crafted input and blocks the worker (ReDoS), and the user can change what the expression matches. Escape
+      the value with `re.escape` when you mean a literal, or use a regex engine with linear-time matching (`re2`).
+    metadata:
+      cwe: ["CWE-1333: Inefficient Regular Expression Complexity", "CWE-400: Uncontrolled Resource Consumption"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-sanitizers:
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: re.escape(...)
+          - pattern: bool(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: re.compile($X, ...)
+              - pattern: re.match($X, ...)
+              - pattern: re.fullmatch($X, ...)
+              - pattern: re.search($X, ...)
+              - pattern: re.findall($X, ...)
+              - pattern: re.finditer($X, ...)
+              - pattern: re.sub($X, ...)
+              - pattern: re.subn($X, ...)
+              - pattern: re.split($X, ...)
+          - focus-metavariable: $X
+
+  # --- LLM applications (OWASP GenAI Top 10 2026: LLM10 Improper Output Handling, LLM05 Excessive Agency) ---------
+  # Model output is untrusted: a prompt injection in any document, web page or user message the model reads
+  # decides what it writes back.
+  - id: gapscan.python.llm-output-code-execution
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Text generated by a language model is run as Python code. Anyone who can put words in front of the model
+      (a user message, a retrieved document, a web page) can make it write code that runs with your server's
+      rights (OWASP GenAI LLM10 Improper Output Handling). Never `eval`/`exec` model output: have the model return
+      structured data validated against a schema, map it to functions you wrote, or run generated code only in an
+      isolated sandbox without secrets or network.
+    metadata:
+      cwe: ["CWE-94: Improper Control of Generation of Code ('Code Injection')", "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"]
+      category: security
+      confidence: HIGH
+    pattern-sources: &llm-sources
+      - pattern-either:
+          - pattern: $C.chat.completions.create(...)
+          - pattern: $C.chat.completions.parse(...)
+          - pattern: $C.completions.create(...)
+          - pattern: $C.responses.create(...)
+          - pattern: $C.messages.create(...)
+          - pattern: $C.chat.complete(...)
+          - pattern: $M.generate_content(...)
+          - pattern: $C.models.generate_content(...)
+          - pattern: ollama.chat(...)
+          - pattern: ollama.generate(...)
+          - pattern: litellm.completion(...)
+          - pattern: completion(..., messages=$MSG, ...)
+          - pattern: $LLM.invoke(...)
+          - pattern: await $LLM.ainvoke(...)
+          - pattern: await $C.chat.completions.create(...)
+          - pattern: await $C.messages.create(...)
+          - pattern: await $C.responses.create(...)
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: bool(...)
+          - pattern: ast.literal_eval(...)
+          - pattern: json.loads(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: eval($X, ...)
+              - pattern: exec($X, ...)
+              - pattern: compile($X, ...)
+              - pattern: builtins.eval($X, ...)
+              - pattern: builtins.exec($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.python.llm-output-shell-command
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Text generated by a language model is run as a shell command. A prompt injection in anything the model reads
+      can make it emit `; curl ... | sh` and take over the host (OWASP GenAI LLM10 Improper Output Handling, LLM05
+      Excessive Agency). Let the model choose from a fixed list of commands you wrote, pass arguments as a list
+      without a shell, validate them, and ask a person to confirm anything destructive.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command", "CWE-77: Improper Neutralization of Special Elements used in a Command ('Command Injection')"]
+      category: security
+      confidence: HIGH
+    pattern-sources: *llm-sources
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: shlex.quote(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: os.system($X)
+              - pattern: os.popen($X, ...)
+              - pattern: subprocess.$F($X, ..., shell=True, ...)
+              - pattern: subprocess.$F(["sh", "-c", $X, ...], ...)
+              - pattern: subprocess.$F(["bash", "-c", $X, ...], ...)
+              - pattern: subprocess.$F(shlex.split($X), ...)
+              - pattern: asyncio.create_subprocess_shell($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.python.llm-output-sql
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: >-
+      SQL written by a language model is run against the database. A prompt injection can make the model write
+      `DROP TABLE` or read other users' rows (OWASP GenAI LLM10 Improper Output Handling). Run generated SQL only
+      on a read-only connection limited to the tables it needs, check it against an allow-list of statement types,
+      or have the model fill parameters of queries you wrote.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources: *llm-sources
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $C.execute($X, ...)
+              - pattern: $C.executemany($X, ...)
+              - pattern: $C.executescript($X)
+              - pattern: $M.objects.raw($X, ...)
+              - pattern: text($X)
+              - pattern: sqlalchemy.text($X)
+              - pattern: $E.exec_driver_sql($X, ...)
+              - pattern: pandas.read_sql($X, ...)
+              - pattern: pd.read_sql($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.python.llm-agent-dangerous-tool
+    languages: [python]
+    severity: ERROR
+    message: >-
+      An LLM agent is given a tool that runs code or shell commands, or a framework safety switch is turned off
+      (`allow_dangerous_code=True`). A prompt injection in anything the agent reads can then run commands on this
+      machine (OWASP GenAI LLM05 Excessive Agency). Give the agent narrow tools that do one checked thing, or run
+      the code tool in an isolated sandbox without secrets or network, and require a person to approve risky steps.
+    metadata:
+      cwe: ["CWE-94: Improper Control of Generation of Code ('Code Injection')", "CWE-250: Execution with Unnecessary Privileges"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $F(..., allow_dangerous_code=True, ...)
+      - pattern: PythonREPLTool(...)
+      - pattern: PythonAstREPLTool(...)
+      - pattern: PythonREPL(...)
+      - pattern: ShellTool(...)
+      - pattern: BashProcess(...)
+      - pattern: load_tools([..., "terminal", ...], ...)
+      - pattern: load_tools([..., "python_repl", ...], ...)
+      - pattern: create_python_agent(...)
+
+  - id: gapscan.python.llm-agent-unrestricted-requests
+    languages: [python]
+    severity: WARNING
+    message: >-
+      An LLM agent may send HTTP requests to any address it chooses (`allow_dangerous_requests=True`). A prompt
+      injection can make it call internal services, cloud metadata endpoints or send your data to an attacker
+      (server-side request forgery; OWASP GenAI LLM05 Excessive Agency). Restrict the tool to an allow-list of hosts
+      and methods, and keep it away from internal networks.
+    metadata:
+      cwe: ["CWE-918: Server-Side Request Forgery (SSRF)"]
+      category: security
+      confidence: HIGH
+    pattern: $F(..., allow_dangerous_requests=True, ...)
+
+  - id: gapscan.python.llm-unsafe-index-deserialization
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A vector store or chain is loaded with `allow_dangerous_deserialization=True`, which unpickles the files. Whoever
+      can replace those files (a shared bucket, a downloaded index) runs code in your process. Load only indexes
+      your own code wrote to storage nobody else can change, or rebuild the index from the source documents.
+    metadata:
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      category: security
+      confidence: MEDIUM
+    pattern: $F(..., allow_dangerous_deserialization=True, ...)
+
+  - id: gapscan.python.llm-provider-key-hardcoded
+    languages: [python]
+    severity: ERROR
+    message: >-
+      An API key for a model provider (OpenAI, Anthropic, Google, Hugging Face, Groq, Replicate) is written into the
+      code. Anyone with the code can spend on your account and read what the key can reach. Read the key from the
+      environment or a secret store, and revoke this one in the provider's console.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-regex: (?<![A-Za-z0-9_\-])(sk-ant-[a-z0-9]{2,8}-[A-Za-z0-9_\-]{20,}|sk-(proj-|svcacct-|admin-)?[A-Za-z0-9_\-]{32,}|AIza[0-9A-Za-z_\-]{35}|hf_[A-Za-z0-9]{30,}|gsk_[A-Za-z0-9]{40,}|r8_[A-Za-z0-9]{30,})(?![A-Za-z0-9_\-])
+      - pattern-not-regex: (sk-|hf_|gsk_|r8_|AIza)(proj-)?([xX*.]{8,}|(your|my|test|fake|dummy|example)[-_])
+
+  # --- round 3: NoSQL, logs, permissions, cleartext, prompts ---------------------------------------------------------
+  - id: gapscan.python.taint-nosql-injection
+    languages: [python]
+    mode: taint
+    severity: ERROR
+    message: >-
+      A JSON request body (or a value taken from it) is used as a MongoDB query. JSON can carry objects, so a user can
+      send `{"$ne": null}` or `{"$where": "..."}` instead of a string and match every document or run JavaScript on
+      the server (NoSQL injection). Read each field, check it is a plain string or number (`str(...)`), and build the
+      query from those values; never pass `$where` text built from input.
+    metadata:
+      cwe: ["CWE-943: Improper Neutralization of Special Elements in Data Query Logic"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: request.get_json(...)
+          - pattern: request.json
+          - pattern: flask.request.get_json(...)
+          - pattern: flask.request.json
+          - pattern: json.loads(request.$A, ...)
+          - pattern: json.loads(request.$A.decode(...), ...)
+          - pattern: await request.json()
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: str(...)
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: bool(...)
+          - pattern: bson.ObjectId(...)
+          - pattern: ObjectId(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $COL.find($X, ...)
+              - pattern: $COL.find_one($X, ...)
+              - pattern: $COL.find_one_and_update($X, ...)
+              - pattern: $COL.find_one_and_delete($X, ...)
+              - pattern: $COL.find_one_and_replace($X, ...)
+              - pattern: $COL.count_documents($X, ...)
+              - pattern: $COL.delete_one($X, ...)
+              - pattern: $COL.delete_many($X, ...)
+              - pattern: $COL.update_one($X, ...)
+              - pattern: $COL.update_many($X, ...)
+              - pattern: $COL.aggregate($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.python.mongo-where-string-built
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A MongoDB `$where` clause is built from a string, so a value in it runs as JavaScript on the database server.
+      Replace `$where` with normal query operators (`$eq`, `$gt`, `$regex` with an escaped value).
+    metadata:
+      cwe: ["CWE-943: Improper Neutralization of Special Elements in Data Query Logic"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: '{..., "$where": f"...{...}...", ...}'
+      - pattern: '{..., "$where": $S + ..., ...}'
+      - pattern: '{..., "$where": $S % ..., ...}'
+      - pattern: '{..., "$where": $S.format(...), ...}'
+
+  - id: gapscan.python.secret-in-log
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A password, token or key is written to the log. Logs are kept for a long time, copied to other systems and read
+      by many people, so the secret leaks. Log that the value was present (or its last 4 characters), never the
+      value itself.
+    metadata:
+      cwe: ["CWE-532: Insertion of Sensitive Information into Log File"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $LOG.$LVL(f"...{$X}...", ...)
+          - pattern: $LOG.$LVL($MSG, ..., $X, ...)
+          - pattern: $LOG.$LVL($MSG % $X, ...)
+          - pattern: $LOG.$LVL($MSG.format(..., $X, ...), ...)
+          - pattern: $LOG.$LVL($MSG + $X, ...)
+      - metavariable-regex:
+          metavariable: $LVL
+          regex: ^(debug|info|warning|warn|error|critical|exception|log)$
+      - metavariable-regex:
+          metavariable: $LOG
+          regex: (?i)^(.*\.)?(log|logger|logging|_log|_logger|log_?\w*|\w*_?logger)$
+      - metavariable-regex:
+          metavariable: $X
+          regex: (?i)^(\w+\.)*(password|passwd|pwd|secret|client_secret|api_?key|access_?token|refresh_?token|auth_?token|id_?token|bearer_?token|private_?key|secret_?key|session_?token|token)$
+
+  - id: gapscan.python.world-writable-permissions
+    languages: [python]
+    severity: WARNING
+    message: >-
+      A file or folder is made writable by every user on the machine (and often executable), so another local
+      account or process can replace its contents. Give the owner the rights it needs (`0o600` for secrets,
+      `0o644`/`0o755` for shared files).
+    metadata:
+      cwe: ["CWE-732: Incorrect Permission Assignment for Critical Resource"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: os.chmod($P, $M)
+          - pattern: os.makedirs($P, $M, ...)
+          - pattern: os.makedirs($P, ..., mode=$M, ...)
+          - pattern: os.mkdir($P, $M, ...)
+          - pattern: os.open($P, $F, $M, ...)
+          - pattern: $PATH.chmod($M)
+          - pattern: $PATH.mkdir($M, ...)
+          - pattern: $PATH.mkdir(..., mode=$M, ...)
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^0o?[0-7]?[0-7][0-7][2367]$
+
+  - id: gapscan.python.cleartext-protocol
+    languages: [python]
+    severity: WARNING
+    message: >-
+      FTP and Telnet send passwords and data unencrypted, so anyone on the network path can read or change them.
+      Use SFTP/SSH (`paramiko`), FTPS (`ftplib.FTP_TLS` with `prot_p()`), or HTTPS.
+    metadata:
+      cwe: ["CWE-319: Cleartext Transmission of Sensitive Information"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: ftplib.FTP(...)
+      - pattern: FTP(...)
+      - pattern: telnetlib.Telnet(...)
+      - pattern: Telnet(...)
+
+  - id: gapscan.python.taint-llm-prompt-injection
+    languages: [python]
+    mode: taint
+    severity: WARNING
+    message: >-
+      Untrusted request data is written into the system prompt (or the instructions) of a language model. Text there
+      is read as the developer's own instructions, so a user can override them (prompt injection, OWASP GenAI LLM01).
+      Keep the system prompt fixed, pass user text only as a user message, and treat everything the model returns
+      as untrusted.
+    metadata:
+      cwe: ["CWE-1427: Improper Neutralization of Input Used for LLM Prompting"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: flask.request.$A
+          - pattern: request.$A
+          - pattern: request.$A.get(...)
+          - pattern: request.$A.getlist(...)
+          - pattern: request.$A[...]
+          - pattern: request.get_json(...)
+          - pattern: request.get_data(...)
+          - pattern: request.args.get(...)
+          - pattern: request.form.get(...)
+          - pattern: request.GET.get(...)
+          - pattern: request.POST.get(...)
+          - pattern: request.COOKIES.get(...)
+          - pattern: request.META.get(...)
+          - pattern: self.request.$A
+          - patterns:
+              - pattern-inside: |
+                  @$APP.$METHOD(...)
+                  def $F(..., $X, ...):
+                      ...
+              - pattern: $X
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: ^(get|post|put|delete|patch|route|api_route)$
+    pattern-sanitizers:
+      # a lookup in a constant allow-list table (SORTABLE.get(value, "name"), ALLOWED[value]) yields our own value
+      - patterns:
+          - pattern-either:
+              - pattern: $TABLE.get(...)
+              - pattern: $TABLE[...]
+          - metavariable-regex:
+              metavariable: $TABLE
+              regex: ^[A-Z][A-Z0-9_]*$
+      - pattern-either:
+          - pattern: int(...)
+          - pattern: float(...)
+          - pattern: bool(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: '{"role": "system", "content": $X}'
+              - pattern: '{"role": "developer", "content": $X}'
+              - pattern: $C.messages.create(..., system=$X, ...)
+              - pattern: $C.responses.create(..., instructions=$X, ...)
+              - pattern: SystemMessage(content=$X, ...)
+              - pattern: SystemMessage($X, ...)
+              - pattern: ("system", $X)
+          - focus-metavariable: $X
+
+  # --- round 5: key sizes, IVs, password hashing, mass assignment, template escaping --------------------------------
+  - id: gapscan.python.weak-key-size
+    languages: [python]
+    severity: ERROR
+    message: >-
+      An RSA or DSA key shorter than 2048 bits is generated. Such keys can be factored with affordable computing
+      power, so signatures can be forged and traffic decrypted. Generate RSA keys of at least 3072 bits (2048 as a
+      minimum), or use an elliptic-curve key (`ec.generate_private_key(ec.SECP256R1())`, Ed25519).
+    metadata:
+      cwe: ["CWE-326: Inadequate Encryption Strength"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: rsa.generate_private_key(..., key_size=$N, ...)
+          - pattern: dsa.generate_private_key(key_size=$N, ...)
+          - pattern: dsa.generate_private_key($N, ...)
+          - pattern: RSA.generate($N, ...)
+          - pattern: DSA.generate($N, ...)
+          - pattern: Crypto.PublicKey.RSA.generate($N, ...)
+          - pattern: rsa.newkeys($N, ...)
+      - metavariable-comparison:
+          metavariable: $N
+          comparison: $N < 2048
+
+  - id: gapscan.python.static-iv
+    languages: [python]
+    severity: ERROR
+    message: >-
+      The cipher's IV or nonce is a constant written in the code. With a fixed IV the same plaintext encrypts to the
+      same ciphertext (CBC), and with a fixed nonce CTR and GCM leak the XOR of messages and let an attacker forge
+      them. Generate a fresh random IV or nonce for every message (`os.urandom(16)`, `secrets.token_bytes(12)`)
+      and store it next to the ciphertext.
+    metadata:
+      cwe: ["CWE-1204: Generation of Weak Initialization Vector (IV)", "CWE-329: Generation of Predictable IV with CBC Mode"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: $AES.new($K, $C.$MODE, b"...", ...)
+              - pattern: $AES.new($K, $C.$MODE, "...", ...)
+              - pattern: $AES.new($K, $C.$MODE, iv=b"...", ...)
+              - pattern: $AES.new($K, $C.$MODE, nonce=b"...", ...)
+              - pattern: $AES.new($K, $C.$MODE, b"..." * $N, ...)
+          - metavariable-regex:
+              metavariable: $MODE
+              regex: ^MODE_
+      - pattern: modes.CBC(b"...")
+      - pattern: modes.CTR(b"...")
+      - pattern: modes.GCM(b"...", ...)
+      - pattern: modes.CBC(b"..." * $N)
+      - pattern: modes.GCM(b"..." * $N, ...)
+      - pattern: AESGCM($K).encrypt(b"...", $D, $AAD)
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  $AEAD = AESGCM(...)
+                  ...
+              - pattern-inside: |
+                  $AEAD = ChaCha20Poly1305(...)
+                  ...
+          - pattern: $AEAD.encrypt(b"...", $D, $AAD)
+
+  - id: gapscan.python.weak-password-hash
+    languages: [python]
+    severity: ERROR
+    message: >-
+      A password is hashed with a fast general-purpose hash (or with too few PBKDF2 iterations). Attackers who get the
+      hashes can try billions of guesses per second on a GPU. Use a password hashing function: `argon2-cffi`,
+      `bcrypt`, `hashlib.scrypt`, or PBKDF2-HMAC-SHA256 with at least 600,000 iterations.
+    metadata:
+      cwe: ["CWE-916: Use of Password Hash With Insufficient Computational Effort"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: hashlib.$H($PW, ...)
+              - pattern: hashlib.$H($PW.encode(...), ...)
+              - pattern: hashlib.$H(($SALT + $PW).encode(...), ...)
+              - pattern: hashlib.$H(($PW + $SALT).encode(...), ...)
+              - pattern: hashlib.$H($SALT + $PW.encode(...), ...)
+              - pattern: hashlib.$H($PW.encode(...) + $SALT, ...)
+          - metavariable-regex:
+              metavariable: $H
+              regex: ^(sha1|sha224|sha256|sha384|sha512|sha3_256|sha3_512|blake2b|blake2s)$
+          - metavariable-regex:
+              metavariable: $PW
+              regex: (?i)^(\w+\.)*(password|passwd|pwd|passphrase|new_password|raw_password|plain_password)$
+      - patterns:
+          - pattern-either:
+              - pattern: hashlib.pbkdf2_hmac($ALG, $P, $S, $N, ...)
+              - pattern: hashlib.pbkdf2_hmac($ALG, $P, $S, iterations=$N, ...)
+              - pattern: PBKDF2HMAC(..., iterations=$N, ...)
+          - metavariable-comparison:
+              metavariable: $N
+              comparison: $N < 100000
+      - patterns:
+          - pattern: bcrypt.gensalt(rounds=$N, ...)
+          - metavariable-comparison:
+              metavariable: $N
+              comparison: $N < 10
+
+  - id: gapscan.python.mass-assignment
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Every field of the request is passed as keyword arguments to a model, so a user can set fields the form never
+      offered (`is_admin`, `owner_id`, `balance`). Copy only the allowed fields, or validate the body with a schema
+      (a Django form, a pydantic model) that lists them.
+    metadata:
+      cwe: ["CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: $F(..., **request.$A, ...)
+              - pattern: $F(..., **request.$A.dict(), ...)
+              - pattern: $F(..., **request.$A.to_dict(), ...)
+              - pattern: $F(..., **request.get_json(...), ...)
+              - pattern: $F(..., **flask.request.get_json(...), ...)
+              - patterns:
+                  - pattern-inside: |
+                      $DATA = request.get_json(...)
+                      ...
+                  - pattern: $F(..., **$DATA, ...)
+              - patterns:
+                  - pattern-inside: |
+                      $DATA = request.$A
+                      ...
+                  - pattern: $F(..., **$DATA, ...)
+          - pattern-not: $F(..., **request.headers, ...)
+          # model constructors and create/update calls
+          - metavariable-regex:
+              metavariable: $F
+              regex: ^([A-Z]\w*|.*\.objects\.(create|update|get_or_create|update_or_create)|.*\.(update|create)|.*\.[A-Z]\w*)$
+      - pattern: $OBJ.__dict__.update(request.$A)
+      - pattern: $OBJ.__dict__.update(request.get_json(...))
+      - patterns:
+          - pattern-either:
+              - pattern-inside: |
+                  for $K, $V in request.$A.items():
+                      ...
+              - pattern-inside: |
+                  for $K, $V in request.get_json(...).items():
+                      ...
+          - pattern: setattr($OBJ, $K, $V)
+
+  - id: gapscan.python.jinja2-autoescape-default-off
+    languages: [python]
+    severity: INFO
+    message: >-
+      A Jinja2 environment is created without `autoescape`, and Jinja2's default is off, so any value rendered into an
+      HTML template is not escaped (cross-site scripting). Pass `autoescape=select_autoescape(["html", "xml"])` (or
+      `autoescape=True`); leave it off only for templates that never produce HTML.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      category: security
+      confidence: LOW
+    patterns:
+      - pattern-either:
+          - pattern: jinja2.Environment(...)
+          - pattern: Environment(...)
+      - pattern-not: jinja2.Environment(..., autoescape=$A, ...)
+      - pattern-not: Environment(..., autoescape=$A, ...)

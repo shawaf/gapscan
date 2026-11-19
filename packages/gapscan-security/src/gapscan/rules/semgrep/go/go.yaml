@@ -1,0 +1,730 @@
+# GapScan Rules: Go (net/http, Gin, Echo, database/sql, GORM). Licensed Apache-2.0 with the rest of GapScan.
+# Every rule has a vulnerable and a safe case in tests/rules/go/go.go (run: make rules-test).
+# Taint rules follow request data within one function.
+rules:
+  - id: gapscan.go.sqli-string-built
+    languages: [go]
+    severity: ERROR
+    message: >-
+      An SQL statement is built by concatenation or `fmt.Sprintf`, so a value can change the statement (SQL injection).
+      Use placeholders (`?`, `$1`) and pass the values as arguments.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - patterns:
+              - pattern-either:
+                  - pattern: $DB.$M($Q + ..., ...)
+                  - pattern: $DB.$M(fmt.Sprintf(...), ...)
+              - metavariable-regex:
+                  metavariable: $M
+                  regex: ^(Query|QueryRow|Exec|Prepare|Raw|Where|Having|Order|Group|Joins)$
+          - patterns:
+              - pattern-either:
+                  - pattern: $DB.$M($CTX, $Q + ..., ...)
+                  - pattern: $DB.$M($CTX, fmt.Sprintf(...), ...)
+              - metavariable-regex:
+                  metavariable: $M
+                  regex: ^(QueryContext|QueryRowContext|ExecContext|PrepareContext)$
+      - pattern-not: $DB.$M("..." + "...", ...)
+
+  - id: gapscan.go.command-via-shell
+    languages: [go]
+    severity: ERROR
+    message: >-
+      A command is run through a shell (`sh -c`) with a value that is not a fixed string, so a user value can add its own
+      commands. Run the program directly with the value as one argument (`exec.Command("prog", value)`) and validate it.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: exec.Command($SH, $FLAG, $X, ...)
+          - pattern: exec.CommandContext($CTX, $SH, $FLAG, $X, ...)
+      - metavariable-regex:
+          metavariable: $SH
+          regex: ^"(?:/bin/)?(?:sh|bash|zsh|dash|cmd|cmd\.exe|powershell)"$
+      - metavariable-regex:
+          metavariable: $FLAG
+          regex: ^"(?:-c|/c|-Command)"$
+      - pattern-not: exec.Command($SH, $FLAG, "...")
+      - pattern-not: exec.CommandContext($CTX, $SH, $FLAG, "...")
+
+  - id: gapscan.go.weak-hash
+    languages: [go]
+    severity: WARNING
+    message: >-
+      MD5 and SHA-1 are broken for security use. Fine for a cache key or file checksum, not for passwords, signatures or
+      tokens: use SHA-256 (or bcrypt/scrypt/Argon2 for passwords).
+    metadata:
+      cwe: ["CWE-328: Use of Weak Hash", "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: md5.New()
+      - pattern: md5.Sum(...)
+      - pattern: sha1.New()
+      - pattern: sha1.Sum(...)
+
+  - id: gapscan.go.weak-cipher
+    languages: [go]
+    severity: ERROR
+    message: >-
+      DES, 3DES and RC4 are broken or obsolete. Use AES-GCM (`cipher.NewGCM`) or ChaCha20-Poly1305.
+    metadata:
+      cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: des.NewCipher(...)
+      - pattern: des.NewTripleDESCipher(...)
+      - pattern: rc4.NewCipher(...)
+
+  - id: gapscan.go.tls-verification-disabled
+    languages: [go]
+    severity: ERROR
+    message: >-
+      TLS certificate verification is switched off, or an obsolete TLS version is allowed. Anyone on the network path can
+      read and change the traffic. Remove `InsecureSkipVerify` and keep `MinVersion` at TLS 1.2 or higher.
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation", "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: 'tls.Config{..., InsecureSkipVerify: true, ...}'
+      - pattern: $C.InsecureSkipVerify = true
+      - pattern: 'tls.Config{..., MinVersion: tls.VersionTLS10, ...}'
+      - pattern: 'tls.Config{..., MinVersion: tls.VersionTLS11, ...}'
+      - pattern: 'tls.Config{..., MinVersion: tls.VersionSSL30, ...}'
+
+  - id: gapscan.go.hardcoded-secret
+    languages: [go]
+    severity: WARNING
+    message: >-
+      A password, key or token is written into the source. Anyone with the code has it, and it stays in the version
+      history. Read it from the environment or a secret store, and rotate the value.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $N := "..."
+          - pattern: $N = "..."
+          - pattern: const $N = "..."
+          - pattern: var $N = "..."
+          - pattern: var $N string = "..."
+          - pattern: 'Config{..., $N: "...", ...}'
+          - pattern: '{..., $N: "...", ...}'
+      - metavariable-regex:
+          metavariable: $N
+          regex: (?i)^(.*[_-])?(password|passwd|pwd|secret|apikey|api_?key|accesskey|secretkey|privatekey|authtoken|token|clientsecret)([_-].*)?$
+      - pattern-not: $N := ""
+      - pattern-not-regex: (?i)["'`](changeme|change-me|your[_-].*|<.*>|\*+|x+|example|placeholder|test|none|null|todo|password|secret|token)["'`]
+      - pattern-not-regex: (?i)(token|password|secret)_?(url|file|path|endpoint|header|field|name|type|length|prefix|expiry|ttl|key)\s*(?::=|=|:)
+
+  - id: gapscan.go.insecure-random-token
+    languages: [go]
+    severity: WARNING
+    message: >-
+      `math/rand` is predictable, so a token, password, key or code made with it can be guessed. Use `crypto/rand`.
+    metadata:
+      cwe: ["CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator", "CWE-330: Use of Insufficiently Random Values"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $N := rand.$F(...)
+          - pattern: $N = rand.$F(...)
+          - pattern: $N := fmt.Sprintf(..., rand.$F(...), ...)
+      - metavariable-regex:
+          metavariable: $N
+          regex: (?i).*(token|password|passwd|secret|otp|nonce|session|apikey|reset|csrf|salt|code|pin).*
+
+  - id: gapscan.go.weak-random-generator
+    languages: [go]
+    severity: INFO
+    message: >-
+      `math/rand` is predictable. That is fine for a shuffle or a simulation, but anything an attacker must not guess (a
+      token, key, password, id or code) needs `crypto/rand`. Check what this value is used for.
+    metadata:
+      cwe: ["CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator", "CWE-330: Use of Insufficiently Random Values"]
+      category: security
+      confidence: LOW
+    patterns:
+      - pattern-inside: |
+          import "math/rand"
+          ...
+      - pattern: rand.$F(...)
+      - metavariable-regex:
+          metavariable: $F
+          regex: ^(Int|Intn|Int31|Int31n|Int63|Int63n|Uint32|Uint64|Float32|Float64|Read|Seed|New|NewSource|Perm|Shuffle)$
+
+  - id: gapscan.go.cleartext-http-url
+    languages: [go]
+    severity: WARNING
+    message: >-
+      A web address starting with `http://` is used, so data to and from it can be read and changed on the network. Use
+      `https://`.
+    metadata:
+      cwe: ["CWE-319: Cleartext Transmission of Sensitive Information"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '"http://(?!localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|schemas\.|www\.w3\.org)[^"\s]+"'
+
+  - id: gapscan.go.template-unescaped
+    languages: [go]
+    severity: ERROR
+    message: >-
+      A value is marked as already-safe HTML, JavaScript or URL, so `html/template` does not escape it and any markup in
+      it runs in the browser (cross-site scripting). Only mark text you wrote yourself.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: template.HTML($X)
+          - pattern: template.JS($X)
+          - pattern: template.URL($X)
+          - pattern: template.HTMLAttr($X)
+          - pattern: template.CSS($X)
+      - pattern-not: template.HTML("...")
+      - pattern-not: template.JS("...")
+      - pattern-not: template.URL("...")
+      - pattern-not: template.HTMLAttr("...")
+      - pattern-not: template.CSS("...")
+
+  - id: gapscan.go.cookie-flags-off
+    languages: [go]
+    severity: WARNING
+    message: >-
+      A session or auth cookie is sent without `Secure` or `HttpOnly`, so it travels over plain HTTP or can be read by page
+      scripts. Turn both on (and set `SameSite`).
+    metadata:
+      cwe: ["CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute", "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: 'http.Cookie{..., Secure: false, ...}'
+      - pattern: 'http.Cookie{..., HttpOnly: false, ...}'
+      - pattern: $C.Secure = false
+      - pattern: $C.HttpOnly = false
+
+  - id: gapscan.go.cors-allow-all
+    languages: [go]
+    severity: WARNING
+    message: >-
+      Every website is allowed to call this API from a browser. Allow only the origins that need it, and never combine a
+      wildcard with credentials.
+    metadata:
+      cwe: ["CWE-942: Permissive Cross-domain Policy with Untrusted Domains"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: $W.Header().Set("Access-Control-Allow-Origin", "*")
+      - pattern: $W.Header().Add("Access-Control-Allow-Origin", "*")
+      - pattern: cors.AllowAll()
+      - pattern: 'cors.Options{..., AllowedOrigins: []string{"*"}, ...}'
+      - pattern: 'cors.Config{..., AllowAllOrigins: true, ...}'
+
+  - id: gapscan.go.jwt-unsafe
+    languages: [go]
+    severity: ERROR
+    message: >-
+      The JWT is signed with the `none` algorithm or with a secret written in the source, so tokens can be forged. Use a
+      real algorithm and read the key from the environment.
+    metadata:
+      cwe: ["CWE-347: Improper Verification of Cryptographic Signature", "CWE-798: Use of Hard-coded Credentials"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: jwt.SigningMethodNone
+      - pattern: jwt.UnsafeAllowNoneSignatureType
+      - pattern: $T.SignedString([]byte("..."))
+
+  - id: gapscan.go.file-permissions-too-open
+    languages: [go]
+    severity: WARNING
+    message: >-
+      The file or folder is created readable or writable by everyone. Use 0600 for files and 0700 for folders unless other
+      accounts really need access.
+    metadata:
+      cwe: ["CWE-732: Incorrect Permission Assignment for Critical Resource"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: os.Chmod($P, 0777)
+      - pattern: os.Chmod($P, 0666)
+      - pattern: os.MkdirAll($P, 0777)
+      - pattern: os.Mkdir($P, 0777)
+      - pattern: ioutil.WriteFile($P, $D, 0777)
+      - pattern: ioutil.WriteFile($P, $D, 0666)
+      - pattern: os.WriteFile($P, $D, 0777)
+      - pattern: os.WriteFile($P, $D, 0666)
+      - pattern: os.OpenFile($P, $F, 0777)
+      - pattern: os.OpenFile($P, $F, 0666)
+
+  - id: gapscan.go.zip-slip
+    languages: [go]
+    severity: ERROR
+    message: >-
+      A file is created from an archive entry's name without checking where it ends up, so an entry named `../../x` writes
+      outside the target folder (zip slip). Clean the path and check that it still starts with the target folder.
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern: filepath.Join($D, $F.Name)
+      - pattern-inside: |
+          for _, $F := range $Z.File { ... }
+      - pattern-not-inside: |
+          for _, $F := range $Z.File {
+            ...
+            if <... strings.HasPrefix(...) ...> { ... }
+            ...
+          }
+
+  # --- taint rules: untrusted request data reaching a dangerous call inside one function -------------------
+  - id: gapscan.go.taint-sqli
+    languages: [go]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data reaches an SQL statement built from a string. Use placeholders (`?`, `$1`) and pass the values as arguments.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.URL.Query().Get(...)
+          - pattern: $R.URL.Query()
+          - pattern: $R.FormValue(...)
+          - pattern: $R.PostFormValue(...)
+          - pattern: $R.Form
+          - pattern: $R.PostForm
+          - pattern: $R.Header.Get(...)
+          - pattern: $R.Cookie(...)
+          - pattern: $R.URL.Path
+          - pattern: $R.URL.RawQuery
+          - pattern: $R.Referer()
+          - pattern: $R.UserAgent()
+          - pattern: '($C : *gin.Context).Param(...)'
+          - pattern: '($C : *gin.Context).Query(...)'
+          - pattern: '($C : *gin.Context).DefaultQuery(...)'
+          - pattern: '($C : *gin.Context).PostForm(...)'
+          - pattern: '($C : *gin.Context).GetHeader(...)'
+          - pattern: '($C : echo.Context).QueryParam(...)'
+          - pattern: '($C : echo.Context).FormValue(...)'
+          - pattern: '($C : *gin.Context).Cookie(...)'
+          - pattern: os.Args
+          - pattern: $SC.Text()
+          - pattern: ioutil.ReadAll($R.Body)
+          - pattern: io.ReadAll($R.Body)
+    pattern-propagators:
+      - pattern: $S = append($S, $V)
+        from: $V
+        to: $S
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: strconv.Atoi(...)
+          - pattern: strconv.ParseInt(...)
+          - pattern: strconv.ParseFloat(...)
+          - pattern: strconv.ParseBool(...)
+          - pattern: uuid.Parse(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.Query($X, ...)
+              - pattern: $DB.QueryRow($X, ...)
+              - pattern: $DB.Exec($X, ...)
+              - pattern: $DB.QueryContext($CTX, $X, ...)
+              - pattern: $DB.QueryRowContext($CTX, $X, ...)
+              - pattern: $DB.ExecContext($CTX, $X, ...)
+              - pattern: $DB.Raw($X, ...)
+              - pattern: $DB.Where($X, ...)
+              - pattern: $DB.Prepare($X)
+          - focus-metavariable: $X
+        exact: true
+
+  - id: gapscan.go.taint-command-injection
+    languages: [go]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data reaches a shell command. Run a fixed program with the value as one argument (no `sh -c`), and validate it.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.URL.Query().Get(...)
+          - pattern: $R.URL.Query()
+          - pattern: $R.FormValue(...)
+          - pattern: $R.PostFormValue(...)
+          - pattern: $R.Form
+          - pattern: $R.PostForm
+          - pattern: $R.Header.Get(...)
+          - pattern: $R.Cookie(...)
+          - pattern: $R.URL.Path
+          - pattern: $R.URL.RawQuery
+          - pattern: $R.Referer()
+          - pattern: $R.UserAgent()
+          - pattern: '($C : *gin.Context).Param(...)'
+          - pattern: '($C : *gin.Context).Query(...)'
+          - pattern: '($C : *gin.Context).DefaultQuery(...)'
+          - pattern: '($C : *gin.Context).PostForm(...)'
+          - pattern: '($C : *gin.Context).GetHeader(...)'
+          - pattern: '($C : echo.Context).QueryParam(...)'
+          - pattern: '($C : echo.Context).FormValue(...)'
+          - pattern: '($C : *gin.Context).Cookie(...)'
+          - pattern: os.Args
+          - pattern: $SC.Text()
+          - pattern: ioutil.ReadAll($R.Body)
+          - pattern: io.ReadAll($R.Body)
+    pattern-propagators:
+      - pattern: $S = append($S, $V)
+        from: $V
+        to: $S
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: strconv.Atoi(...)
+          - pattern: strconv.ParseInt(...)
+          - pattern: strconv.ParseFloat(...)
+          - pattern: strconv.ParseBool(...)
+          - pattern: uuid.Parse(...)
+          - pattern: shellescape.Quote(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: exec.Command("sh", "-c", $X)
+              - pattern: exec.Command("bash", "-c", $X)
+              - pattern: exec.Command("/bin/sh", "-c", $X)
+              - pattern: exec.Command("/bin/bash", "-c", $X)
+              - pattern: exec.Command("cmd", "/c", $X)
+              - pattern: exec.CommandContext($CTX, "sh", "-c", $X)
+              - pattern: exec.CommandContext($CTX, "bash", "-c", $X)
+              - pattern: exec.Command($X)
+              - pattern: exec.Command($X, ...)
+          - focus-metavariable: $X
+        exact: true
+
+  - id: gapscan.go.taint-path-traversal
+    languages: [go]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data is used as a file path, so `../` can reach files outside the intended folder. Take only the file name (`filepath.Base`) or check that the cleaned path is still inside the base folder.
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.URL.Query().Get(...)
+          - pattern: $R.URL.Query()
+          - pattern: $R.FormValue(...)
+          - pattern: $R.PostFormValue(...)
+          - pattern: $R.Form
+          - pattern: $R.PostForm
+          - pattern: $R.Header.Get(...)
+          - pattern: $R.Cookie(...)
+          - pattern: $R.URL.Path
+          - pattern: $R.URL.RawQuery
+          - pattern: $R.Referer()
+          - pattern: $R.UserAgent()
+          - pattern: '($C : *gin.Context).Param(...)'
+          - pattern: '($C : *gin.Context).Query(...)'
+          - pattern: '($C : *gin.Context).DefaultQuery(...)'
+          - pattern: '($C : *gin.Context).PostForm(...)'
+          - pattern: '($C : *gin.Context).GetHeader(...)'
+          - pattern: '($C : echo.Context).QueryParam(...)'
+          - pattern: '($C : echo.Context).FormValue(...)'
+          - pattern: '($C : *gin.Context).Cookie(...)'
+          - pattern: os.Args
+          - pattern: $SC.Text()
+          - pattern: ioutil.ReadAll($R.Body)
+          - pattern: io.ReadAll($R.Body)
+    pattern-propagators:
+      - pattern: $S = append($S, $V)
+        from: $V
+        to: $S
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: strconv.Atoi(...)
+          - pattern: strconv.ParseInt(...)
+          - pattern: strconv.ParseFloat(...)
+          - pattern: strconv.ParseBool(...)
+          - pattern: uuid.Parse(...)
+          - pattern: filepath.Base(...)
+          - pattern: path.Base(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: os.Open($X)
+              - pattern: os.OpenFile($X, ...)
+              - pattern: os.ReadFile($X)
+              - pattern: os.WriteFile($X, ...)
+              - pattern: os.Create($X)
+              - pattern: os.Remove($X)
+              - pattern: os.RemoveAll($X)
+              - pattern: os.Stat($X)
+              - pattern: os.ReadDir($X)
+              - pattern: ioutil.ReadFile($X)
+              - pattern: ioutil.WriteFile($X, ...)
+              - pattern: ioutil.ReadDir($X)
+              - pattern: http.ServeFile($W, $R, $X)
+              - pattern: $C.File($X)
+              - pattern: $C.FileAttachment($X, ...)
+          - focus-metavariable: $X
+        exact: true
+
+  - id: gapscan.go.taint-ssrf
+    languages: [go]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data chooses the address the server connects to (server-side request forgery): an attacker can reach internal services and cloud metadata. Allow only known hosts and block private address ranges.
+    metadata:
+      cwe: ["CWE-918: Server-Side Request Forgery (SSRF)"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.URL.Query().Get(...)
+          - pattern: $R.URL.Query()
+          - pattern: $R.FormValue(...)
+          - pattern: $R.PostFormValue(...)
+          - pattern: $R.Form
+          - pattern: $R.PostForm
+          - pattern: $R.Header.Get(...)
+          - pattern: $R.Cookie(...)
+          - pattern: $R.URL.Path
+          - pattern: $R.URL.RawQuery
+          - pattern: $R.Referer()
+          - pattern: $R.UserAgent()
+          - pattern: '($C : *gin.Context).Param(...)'
+          - pattern: '($C : *gin.Context).Query(...)'
+          - pattern: '($C : *gin.Context).DefaultQuery(...)'
+          - pattern: '($C : *gin.Context).PostForm(...)'
+          - pattern: '($C : *gin.Context).GetHeader(...)'
+          - pattern: '($C : echo.Context).QueryParam(...)'
+          - pattern: '($C : echo.Context).FormValue(...)'
+          - pattern: '($C : *gin.Context).Cookie(...)'
+          - pattern: os.Args
+          - pattern: $SC.Text()
+          - pattern: ioutil.ReadAll($R.Body)
+          - pattern: io.ReadAll($R.Body)
+    pattern-propagators:
+      - pattern: $S = append($S, $V)
+        from: $V
+        to: $S
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: strconv.Atoi(...)
+          - pattern: strconv.ParseInt(...)
+          - pattern: strconv.ParseFloat(...)
+          - pattern: strconv.ParseBool(...)
+          - pattern: uuid.Parse(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: http.Get($X)
+              - pattern: http.Head($X)
+              - pattern: http.Post($X, ...)
+              - pattern: http.PostForm($X, ...)
+              - pattern: http.NewRequest($M, $X, ...)
+              - pattern: http.NewRequestWithContext($CTX, $M, $X, ...)
+              - pattern: '($CL : *http.Client).Get($X)'
+              - pattern: '($CL : *http.Client).Post($X, ...)'
+              - pattern: '($CL : *http.Client).Head($X)'
+          - focus-metavariable: $X
+        exact: true
+
+  - id: gapscan.go.taint-xss
+    languages: [go]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data is written into the HTTP response as HTML without escaping, so a crafted link runs script in the visitor's browser. Escape it (`html.EscapeString`) or render it through `html/template`.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.URL.Query().Get(...)
+          - pattern: $R.URL.Query()
+          - pattern: $R.FormValue(...)
+          - pattern: $R.PostFormValue(...)
+          - pattern: $R.Form
+          - pattern: $R.PostForm
+          - pattern: $R.Header.Get(...)
+          - pattern: $R.Cookie(...)
+          - pattern: $R.URL.Path
+          - pattern: $R.URL.RawQuery
+          - pattern: $R.Referer()
+          - pattern: $R.UserAgent()
+          - pattern: '($C : *gin.Context).Param(...)'
+          - pattern: '($C : *gin.Context).Query(...)'
+          - pattern: '($C : *gin.Context).DefaultQuery(...)'
+          - pattern: '($C : *gin.Context).PostForm(...)'
+          - pattern: '($C : *gin.Context).GetHeader(...)'
+          - pattern: '($C : echo.Context).QueryParam(...)'
+          - pattern: '($C : echo.Context).FormValue(...)'
+          - pattern: '($C : *gin.Context).Cookie(...)'
+          - pattern: os.Args
+          - pattern: $SC.Text()
+          - pattern: ioutil.ReadAll($R.Body)
+          - pattern: io.ReadAll($R.Body)
+    pattern-propagators:
+      - pattern: $S = append($S, $V)
+        from: $V
+        to: $S
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: strconv.Atoi(...)
+          - pattern: strconv.ParseInt(...)
+          - pattern: strconv.ParseFloat(...)
+          - pattern: strconv.ParseBool(...)
+          - pattern: uuid.Parse(...)
+          - pattern: html.EscapeString(...)
+          - pattern: os.ReadFile(...)
+          - pattern: ioutil.ReadFile(...)
+          - pattern: os.ReadDir(...)
+          - pattern: template.HTMLEscapeString(...)
+          - pattern: url.QueryEscape(...)
+          - pattern: template.JSEscapeString(...)
+          - pattern: json.Marshal(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $W.Write($X)
+              - pattern: fmt.Fprintf($W, $X, ...)
+              - pattern: fmt.Fprintf($W, $F, ..., $X, ...)
+              - pattern: fmt.Fprint($W, $X)
+              - pattern: fmt.Fprintln($W, $X)
+              - pattern: io.WriteString($W, $X)
+              - pattern: $C.String($CODE, $X, ...)
+              - pattern: $C.Data($CODE, $T, $X)
+              - pattern: $C.HTML($CODE, $X, ...)
+          - focus-metavariable: $X
+        exact: true
+
+  - id: gapscan.go.taint-open-redirect
+    languages: [go]
+    mode: taint
+    severity: WARNING
+    message: >-
+      The redirect target comes from the request, so a link on your site can send users to an attacker's page. Redirect only to relative paths or an allow-list of hosts.
+    metadata:
+      cwe: ["CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.URL.Query().Get(...)
+          - pattern: $R.URL.Query()
+          - pattern: $R.FormValue(...)
+          - pattern: $R.PostFormValue(...)
+          - pattern: $R.Form
+          - pattern: $R.PostForm
+          - pattern: $R.Header.Get(...)
+          - pattern: $R.Cookie(...)
+          - pattern: $R.URL.Path
+          - pattern: $R.URL.RawQuery
+          - pattern: $R.Referer()
+          - pattern: $R.UserAgent()
+          - pattern: '($C : *gin.Context).Param(...)'
+          - pattern: '($C : *gin.Context).Query(...)'
+          - pattern: '($C : *gin.Context).DefaultQuery(...)'
+          - pattern: '($C : *gin.Context).PostForm(...)'
+          - pattern: '($C : *gin.Context).GetHeader(...)'
+          - pattern: '($C : echo.Context).QueryParam(...)'
+          - pattern: '($C : echo.Context).FormValue(...)'
+          - pattern: '($C : *gin.Context).Cookie(...)'
+          - pattern: os.Args
+          - pattern: $SC.Text()
+          - pattern: ioutil.ReadAll($R.Body)
+          - pattern: io.ReadAll($R.Body)
+    pattern-propagators:
+      - pattern: $S = append($S, $V)
+        from: $V
+        to: $S
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: strconv.Atoi(...)
+          - pattern: strconv.ParseInt(...)
+          - pattern: strconv.ParseFloat(...)
+          - pattern: strconv.ParseBool(...)
+          - pattern: uuid.Parse(...)
+          - pattern: url.QueryEscape(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: http.Redirect($W, $R, $X, ...)
+              - pattern: $C.Redirect($CODE, $X)
+          - focus-metavariable: $X
+        exact: true
+
+  - id: gapscan.go.taint-template-injection
+    languages: [go]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted data is parsed as a template (server-side template injection), which lets an attacker run template actions and read data. Pass user data as template variables, never as the template text.
+    metadata:
+      cwe: ["CWE-1336: Improper Neutralization of Special Elements Used in a Template Engine"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.URL.Query().Get(...)
+          - pattern: $R.URL.Query()
+          - pattern: $R.FormValue(...)
+          - pattern: $R.PostFormValue(...)
+          - pattern: $R.Form
+          - pattern: $R.PostForm
+          - pattern: $R.Header.Get(...)
+          - pattern: $R.Cookie(...)
+          - pattern: $R.URL.Path
+          - pattern: $R.URL.RawQuery
+          - pattern: $R.Referer()
+          - pattern: $R.UserAgent()
+          - pattern: '($C : *gin.Context).Param(...)'
+          - pattern: '($C : *gin.Context).Query(...)'
+          - pattern: '($C : *gin.Context).DefaultQuery(...)'
+          - pattern: '($C : *gin.Context).PostForm(...)'
+          - pattern: '($C : *gin.Context).GetHeader(...)'
+          - pattern: '($C : echo.Context).QueryParam(...)'
+          - pattern: '($C : echo.Context).FormValue(...)'
+          - pattern: '($C : *gin.Context).Cookie(...)'
+          - pattern: os.Args
+          - pattern: $SC.Text()
+          - pattern: ioutil.ReadAll($R.Body)
+          - pattern: io.ReadAll($R.Body)
+    pattern-propagators:
+      - pattern: $S = append($S, $V)
+        from: $V
+        to: $S
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: strconv.Atoi(...)
+          - pattern: strconv.ParseInt(...)
+          - pattern: strconv.ParseFloat(...)
+          - pattern: strconv.ParseBool(...)
+          - pattern: uuid.Parse(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: template.New(...).Parse($X)
+              - pattern: $T.Parse($X)
+              - pattern: texttemplate.New(...).Parse($X)
+          - focus-metavariable: $X
+        exact: true

@@ -1,0 +1,35 @@
+name = "python-flask"
+languages = ["python"]
+requires = 'flask|quart'
+
+[[source]]
+kind = "http_param"
+pattern = '(?:\w+\.)?request\.(args|form|values|json|data|files|cookies|headers|view_args|get_json|get_data|stream|environ|full_path|path|url|query_string)\b'
+
+[[handler]]
+# decorated route functions: URL variables are attacker controlled
+header = '@\w+\.(route|get|post|put|delete|patch)\('
+
+[[return_sink]]
+# a Flask view's return value is the response body, served as text/html by default
+kind = "xss"
+cwe = "CWE-79"
+severity = "medium"
+title = "Cross-site scripting"
+safe_calls = '^(flask\.)?(jsonify|redirect|render_template|send_file|send_from_directory|abort|url_for|Response|make_response)\b|^json\.dumps\b'
+
+[[assign_sink]]
+kind = "trust_boundary"
+cwe = "CWE-501"
+severity = "low"
+title = "Trust boundary violation"
+target = '(^|\.)session\['
+key = true
+
+[[deny]]
+# response objects: their body was already checked where it was built (make_response, Response)
+callee = '(^|\.)(make_response|Response|jsonify|redirect|send_file|send_from_directory)$'
+
+[[template_sink]]
+callee = '(^|\.)render_template$'
+template_arg = 0

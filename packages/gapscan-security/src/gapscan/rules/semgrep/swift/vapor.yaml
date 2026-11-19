@@ -1,0 +1,217 @@
+# GapScan Rules: server-side Swift (Vapor, SQLKit/Fluent, JWTKit). Licensed Apache-2.0.
+# Every rule has a vulnerable and a safe case in tests/rules/swift/vapor.swift (run: make rules-test).
+# The taint rules follow request data (`req.query`, `req.parameters`, `req.content`, `req.headers`, `req.body`) inside
+# one route handler; data passed to another function or stored in a model first is not followed.
+# MASVS is a mobile standard, but the test suite asks every rule in this folder for a control: injection rules carry
+# MASVS-CODE-4 ("validates and sanitizes all untrusted inputs"), the closest honest match.
+rules:
+  - id: gapscan.swift.vapor-taint-command
+    languages: [swift]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Request data reaches the program or arguments of a process. With `/bin/sh -c` the value runs as a shell command;
+      even without a shell it can add options to the program. Do not run commands from request data; if you must, map
+      the input to a fixed list of allowed values and pass each one as its own argument, never through a shell.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: HIGH
+    pattern-sources: &vapor-sources
+      - patterns:
+          - pattern-either:
+              - pattern: $REQ.query[...]
+              - pattern: $REQ.query.get(...)
+              - pattern: $REQ.query.decode(...)
+              - pattern: $REQ.parameters.get(...)
+              - pattern: $REQ.content.decode(...)
+              - pattern: $REQ.content.get(...)
+              - pattern: $REQ.content[...]
+              - pattern: $REQ.headers[...]
+              - pattern: '$REQ.headers.first(name: $N)'
+              - pattern: $REQ.body.string
+              - pattern: $REQ.cookies[...]
+          - metavariable-regex:
+              metavariable: $REQ
+              regex: '^(?:req|request)$'
+    pattern-sanitizers: &vapor-sanitizers
+      - pattern: Int($X)
+      - pattern: Double($X)
+      - pattern: 'UUID(uuidString: $X)'
+    pattern-sinks:
+      - pattern: $P.arguments = $X
+      - pattern: $P.launchPath = $X
+      - pattern: '$P.executableURL = URL(fileURLWithPath: $X)'
+      - pattern: 'Process.launchedProcess(launchPath: $X, arguments: $Y)'
+      - pattern: 'Process.launchedProcess(launchPath: $Y, arguments: $X)'
+      - pattern: 'system($X)'
+
+  - id: gapscan.swift.vapor-taint-path-traversal
+    languages: [swift]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Request data is used as a file path. `../` in it reaches files outside the intended folder (configuration, keys,
+      other users' files). Use only the last path component (`URL(fileURLWithPath:).lastPathComponent`) or an id you
+      look up, and check that the resolved path stays inside the base folder.
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources: *vapor-sources
+    pattern-sanitizers:
+      - pattern: Int($X)
+      - pattern: 'UUID(uuidString: $X)'
+      - pattern: $X.lastPathComponent
+    pattern-sinks:
+      - pattern: 'FileManager.default.contents(atPath: $X)'
+      - pattern: 'FileManager.default.createFile(atPath: $X, ...)'
+      - pattern: 'FileManager.default.removeItem(atPath: $X)'
+      - pattern: 'FileManager.default.fileExists(atPath: $X, ...)'
+      - pattern: 'URL(fileURLWithPath: $X, ...)'
+      - pattern: 'String(contentsOfFile: $X, ...)'
+      - pattern: 'Data(contentsOf: $X, ...)'
+      - pattern: '$REQ.fileio.streamFile(at: $X, ...)'
+      - pattern: '$REQ.fileio.readFile(at: $X, ...)'
+      - pattern: '$REQ.fileio.collectFile(at: $X, ...)'
+      - pattern: '$REQ.fileio.writeFile($B, at: $X, ...)'
+
+  - id: gapscan.swift.vapor-taint-ssrf
+    languages: [swift]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Request data decides where the server sends an outbound request. An attacker can point it at internal services
+      or cloud metadata endpoints (server-side request forgery). Allow only known hosts (compare the parsed host
+      against an allow-list) and block private and link-local addresses.
+    metadata:
+      cwe: ["CWE-918: Server-Side Request Forgery (SSRF)"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources: *vapor-sources
+    pattern-sanitizers: *vapor-sanitizers
+    pattern-sinks:
+      - pattern: '$C.client.get($X, ...)'
+      - pattern: '$C.client.post($X, ...)'
+      - pattern: '$C.client.put($X, ...)'
+      - pattern: '$C.client.delete($X, ...)'
+      - pattern: '$C.client.patch($X, ...)'
+      - pattern: '$C.get(URI(string: $X), ...)'
+      - pattern: '$C.post(URI(string: $X), ...)'
+      - pattern: 'URI(string: $X)'
+      - pattern: '$S.data(from: $X, ...)'
+      - pattern: 'URLRequest(url: $X, ...)'
+      - pattern: 'HTTPClient.Request(url: $X, ...)'
+
+  - id: gapscan.swift.vapor-taint-open-redirect
+    languages: [swift]
+    mode: taint
+    severity: WARNING
+    message: >-
+      Request data decides where the user is redirected. A link to your site can then send users to a phishing page
+      (open redirect). Redirect only to relative paths you recognise, or to hosts on an allow-list.
+    metadata:
+      cwe: ["CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources: *vapor-sources
+    pattern-sanitizers: *vapor-sanitizers
+    pattern-sinks:
+      - pattern: '$REQ.redirect(to: $X, ...)'
+      - pattern: '$H.replaceOrAdd(name: .location, value: $X)'
+      - pattern: '$H.add(name: .location, value: $X)'
+
+  - id: gapscan.swift.vapor-taint-sql
+    languages: [swift]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Request data becomes part of a raw SQL statement. A quote in it changes the statement (SQL injection). Use
+      Fluent's query builder, or SQLKit interpolation with `\(bind: value)`, which sends the value as a parameter.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: HIGH
+    pattern-sources: *vapor-sources
+    pattern-sanitizers: *vapor-sanitizers
+    pattern-sinks:
+      - pattern: SQLRaw($X)
+      - pattern: SQLQueryString($X)
+      - pattern: '.sql(raw: $X)'
+      - pattern: '$DB.raw(SQLQueryString($X))'
+      - pattern: '$DB.raw(SQLQueryString(stringLiteral: $X))'
+      - patterns:  # PostgresNIO / MySQLNIO raw query strings (not `req.query`, which is the request's query string)
+          - pattern-either:
+              - pattern: '$DB.query($X, ...)'
+              - pattern: '$DB.simpleQuery($X, ...)'
+          - focus-metavariable: $X
+          - metavariable-regex:
+              metavariable: $DB
+              regex: '(?i)^(?!req$|request$)\w*(?:db|database|conn|connection|client|postgres|mysql|sql)\w*$'
+
+  - id: gapscan.swift.sqlkit-raw-interpolation
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      A value is interpolated into SQL with `\(raw: ...)` (or into `SQLRaw` / `.sql(raw:)`), which pastes it into the
+      statement unescaped. If the value comes from a request it can change the statement (SQL injection). Use
+      `\(bind: value)` for values and `\(ident: name)` for column or table names.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '\\\(\s*raw:\s*(?!")[^)\n]+\)'
+      - pattern-regex: '\b(?:SQLRaw\(|\.sql\(\s*raw:)\s*"[^"\n]*\\\('
+
+  - id: gapscan.swift.jwt-verification-disabled
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      The JWT is read without checking its signature (`unverified`, or the `none` algorithm), so anyone can forge the
+      claims, including the user id and roles. Verify every token with `req.jwt.verify(as:)` / `signers.verify`, and
+      only ever read claims unverified on a client that merely shows its own token's expiry.
+    metadata:
+      cwe: ["CWE-347: Improper Verification of Cryptographic Signature"]
+      masvs: ["MASVS-AUTH-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '\.unverified\(\s*[\w.]+\s*,\s*as:'
+      - pattern-regex: '\b(?:JWTSigner\.)?unsecuredNone\b'
+
+  - id: gapscan.swift.jwt-hardcoded-key
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      The JWT signing key is a literal in the source. Anyone who reads the code (or the repository) can sign tokens
+      that the server accepts. Load the key from the environment or a secret store (`Environment.get("JWT_SECRET")`).
+    metadata:
+      cwe: ["CWE-321: Use of Hard-coded Cryptographic Key", "CWE-798: Use of Hard-coded Credentials"]
+      masvs: ["MASVS-CRYPTO-2"]
+      category: security
+      confidence: HIGH
+    pattern-regex: '\.hs(?:256|384|512)\(\s*key:\s*"[^"\n]+"'
+
+  - id: gapscan.swift.vapor-plaintext-passwords
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      Vapor is told to store passwords as plain text (`.plaintext` hasher), so a database leak reveals every password.
+      Use `app.passwords.use(.bcrypt)` (the default) and keep the plain-text hasher for tests only.
+    metadata:
+      cwe: ["CWE-256: Plaintext Storage of a Password", "CWE-916: Use of Password Hash With Insufficient Computational Effort"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: '\.passwords\.use\(\s*\.plaintext\s*\)'

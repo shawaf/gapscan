@@ -1,0 +1,8 @@
+// Build settings for the release configuration
+PRODUCT_BUNDLE_IDENTIFIER = com.example.app
+// ruleid: gapscan.swift.xcconfig-hardcoded-secret
+MAPS_API_KEY = AIzaSyD3x4mpl3K3y0123456789abcdef
+// ok: gapscan.swift.xcconfig-hardcoded-secret
+ANALYTICS_TOKEN = $(ANALYTICS_TOKEN_FROM_CI)
+// ok: gapscan.swift.xcconfig-hardcoded-secret
+TOKEN_REFRESH_MODE = automatic

@@ -1,0 +1,24 @@
+[project]
+name = "gapscan-local"
+version = "1.0.0"
+description = "Local mode and apps: the CLI, desktop app and manager, offline bundle, setup wizard, CI mode."
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "gapscan-engine",
+    "gapscan-security",
+    "typer>=0.27.2",
+    "rich>=15.0.0",
+    "httpx>=0.28.1",
+]
+
+[project.scripts]
+gapscan = "gapscan.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gapscan"]
+

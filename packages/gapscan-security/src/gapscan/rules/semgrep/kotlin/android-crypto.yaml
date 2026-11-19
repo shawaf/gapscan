@@ -1,0 +1,170 @@
+# GapScan Rules: Kotlin / Android, fifth set (cryptography details and local authentication). Licensed Apache-2.0.
+# Every rule has a vulnerable and a safe case in tests/rules/kotlin/android-crypto.kt (run: make rules-test).
+rules:
+  - id: gapscan.kotlin.biometric-without-crypto-object
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      The biometric prompt is shown without a `CryptoObject`, so success is only a callback: on a rooted device or with a
+      hooking tool the callback can be called without a real fingerprint or face. Bind the prompt to a Keystore key
+      (`authenticate(info, BiometricPrompt.CryptoObject(cipher))`, with the key created with
+      `setUserAuthenticationRequired(true)`) and use that cipher to unlock the secret.
+    metadata:
+      cwe: ["CWE-287: Improper Authentication"]
+      masvs: ["MASVS-AUTH-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - patterns:
+          - pattern: $P.authenticate($INFO)
+          - metavariable-regex:
+              metavariable: $P
+              regex: (?i)^.*(biometric|prompt).*$
+      - pattern: BiometricPrompt(...).authenticate($INFO)
+      - pattern: $FM.authenticate(null, ...)
+
+  - id: gapscan.kotlin.keystore-key-auth-weakened
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      The Keystore key is created so that it stays usable without the user: user authentication is switched off, or the
+      key survives a new fingerprint being enrolled. Someone who adds their own fingerprint, or who has the unlocked
+      device, can then use it. For keys that protect secrets, call `setUserAuthenticationRequired(true)` and keep
+      `setInvalidatedByBiometricEnrollment(true)` (the default).
+    metadata:
+      cwe: ["CWE-287: Improper Authentication", "CWE-308: Use of Single-factor Authentication"]
+      masvs: ["MASVS-AUTH-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '\.(?:setUserAuthenticationRequired|setInvalidatedByBiometricEnrollment|setUnlockedDeviceRequired)\(\s*false\s*\)'
+
+  - id: gapscan.kotlin.static-iv
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      The IV or nonce is a fixed value (literal bytes, or a zero-filled array) instead of fresh random bytes. With a
+      fixed IV, equal plaintexts encrypt to equal ciphertexts, and in GCM or CTR mode reusing a nonce with the same key
+      reveals the plaintext and lets an attacker forge messages. Generate a new IV for each encryption with
+      `SecureRandom().nextBytes(iv)` (or let the cipher choose it and read `cipher.iv`), and store it with the ciphertext.
+    metadata:
+      cwe: ["CWE-329: Generation of Predictable IV with CBC Mode", "CWE-1204: Generation of Weak Initialization Vector (IV)"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: IvParameterSpec(byteArrayOf(...))
+      - pattern: IvParameterSpec(ByteArray($N))
+      - pattern: IvParameterSpec(ByteArray($N), ...)
+      - pattern: GCMParameterSpec($T, byteArrayOf(...))
+      - pattern: GCMParameterSpec($T, ByteArray($N))
+      - pattern: GCMParameterSpec($T, "...".toByteArray(...))
+      - patterns:
+          - pattern-either:
+              - pattern: IvParameterSpec($IV)
+              - pattern: IvParameterSpec($IV, ...)
+              - pattern: GCMParameterSpec($T, $IV)
+          - pattern-either:
+              - pattern-inside: |
+                  val $IV = byteArrayOf(...)
+                  ...
+              - pattern-inside: |
+                  val $IV = ByteArray($N)
+                  ...
+              - pattern-inside: |
+                  val $IV: ByteArray = byteArrayOf(...)
+                  ...
+              - pattern-inside: |
+                  val $IV = "...".toByteArray(...)
+                  ...
+          - pattern-not-inside: |
+              $R.nextBytes($IV)
+              ...
+          - pattern-not-inside: |
+              $S.read($IV, ...)
+              ...
+          - pattern-not-inside: |
+              $S.read($IV)
+              ...
+          - pattern-not-inside: |
+              $W.get($IV)
+              ...
+          - pattern-not-inside: |
+              System.arraycopy($A, $B, $IV, ...)
+              ...
+
+  - id: gapscan.kotlin.securerandom-fixed-seed
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      SecureRandom is seeded with a fixed value (a literal, a string's bytes, or the clock). On some providers a seed
+      given before the first use replaces the system entropy, so every install produces the same "random" keys, IVs and
+      tokens. Use `SecureRandom()` without a seed and never call `setSeed` with predictable data.
+    metadata:
+      cwe: ["CWE-337: Predictable Seed in Pseudo-Random Number Generator (PRNG)", "CWE-330: Use of Insufficiently Random Values"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: SecureRandom($S)
+          - pattern: $R.setSeed($S)
+      - metavariable-pattern:
+          metavariable: $S
+          pattern-either:
+            - pattern: '"..."'
+            - pattern: '"...".toByteArray(...)'
+            - pattern: '"...".encodeToByteArray()'
+            - pattern: byteArrayOf(...)
+            - pattern: System.currentTimeMillis()
+            - pattern: System.nanoTime()
+            - pattern: Date().time
+            - patterns:
+                - pattern-regex: ^-?[\d_]+L?$
+
+  - id: gapscan.kotlin.rsa-without-oaep
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      RSA is used without OAEP padding (bare "RSA" means PKCS#1 v1.5 on Android, and "NoPadding" is textbook RSA). PKCS#1
+      v1.5 encryption is open to padding-oracle attacks and textbook RSA leaks structure. Use
+      "RSA/ECB/OAEPWithSHA-256AndMGF1Padding", or prefer an EC key agreement with AES-GCM.
+    metadata:
+      cwe: ["CWE-780: Use of RSA Algorithm without OAEP", "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: 'Cipher\.getInstance\(\s*"RSA(?:/(?:ECB|NONE)/(?:PKCS1Padding|NoPadding))?"'
+
+  - id: gapscan.kotlin.pbkdf-low-iterations
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A password-based key is derived with a small iteration count, so a stolen hash or encrypted blob can be
+      brute-forced quickly. Use at least 310,000 iterations for PBKDF2-HMAC-SHA256 (OWASP guidance), or a memory-hard
+      function such as Argon2 or scrypt.
+    metadata:
+      cwe: ["CWE-916: Use of Password Hash With Insufficient Computational Effort"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: PBEKeySpec($P, $S, $N, ...)
+          - pattern: PBEParameterSpec($S, $N, ...)
+      - metavariable-regex:
+          metavariable: $N
+          regex: ^(\d{1,5}|\d{1,2}_\d{3})$
+
+  - id: gapscan.kotlin.keystore-randomized-encryption-off
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      The Keystore key accepts IVs chosen by the caller (`setRandomizedEncryptionRequired(false)`), which allows the
+      same IV to be used twice and makes equal plaintexts encrypt the same way. Leave randomized encryption on and let
+      the Keystore generate each IV.
+    metadata:
+      cwe: ["CWE-329: Generation of Predictable IV with CBC Mode"]
+      masvs: ["MASVS-CRYPTO-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '\.setRandomizedEncryptionRequired\(\s*false\s*\)'

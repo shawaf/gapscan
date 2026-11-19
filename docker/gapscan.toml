@@ -1,0 +1,22 @@
+# GapScan configuration inside the offline image (docker/Dockerfile). Every data path is absolute so
+# the container works from any working directory; `gapscan update` installs the bundle here.
+[data]
+dir = "/opt/gapscan/data"
+kb_dir = "/opt/gapscan/data/kb"
+enrichment_dir = "/opt/gapscan/data/enrichment"
+eval_dir = "/opt/gapscan/data/eval-targets"
+
+[llm]
+# The model is not in the image. Point this at Ollama or llama.cpp on the host or an internal host
+# (never a public URL), e.g. with GAPSCAN_LLM__ENDPOINT=http://host.docker.internal:11434.
+backend = "ollama"
+endpoint = "http://localhost:11434"
+
+[scanners.semgrep]
+rules_path = "/opt/gapscan/data/semgrep-rules"
+
+[scanners.osv]
+db_dir = "/opt/gapscan/data/osv-db"
+
+[scanners.trivy]
+cache_dir = "/opt/gapscan/data/trivy-cache"

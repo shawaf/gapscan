@@ -1,0 +1,188 @@
+# GapScan Rules: Kotlin / Android, third set (idioms of real Kotlin apps). Licensed Apache-2.0.
+# Every rule has a vulnerable and a safe case in tests/rules/kotlin/android-apps.kt (run: make rules-test).
+rules:
+  - id: gapscan.kotlin.command-from-variable
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      A command is run from a value that is not a fixed string. If any part comes from a user (an intent extra, a deep
+      link, a network response), they can run their own commands. Pass a fixed program and validate every argument.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: Runtime.getRuntime().exec($X)
+          - pattern: Runtime.getRuntime().exec($X, ...)
+          - pattern: $R.exec($X)
+          - pattern: ProcessBuilder($X)
+          - pattern: $PB.command($X)
+      - pattern-not: Runtime.getRuntime().exec("...")
+      - pattern-not: $R.exec("...")
+      - pattern-not: ProcessBuilder("...")
+      - pattern-not: $PB.command("...")
+
+  - id: gapscan.kotlin.dynamic-code-loading
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      A class, library or file is loaded by a name that is not a fixed string. If the name can be influenced by a user or
+      by data from outside, an attacker can make the app load and run code of their choosing. Load only fixed names from
+      an allow-list.
+    metadata:
+      cwe: ["CWE-94: Improper Control of Generation of Code ('Code Injection')", "CWE-470: Use of Externally-Controlled Input to Select Classes or Code ('Unsafe Reflection')"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: Class.forName($X)
+          - pattern: System.load($X)
+          - pattern: System.loadLibrary($X)
+          - pattern: Runtime.getRuntime().load($X)
+          - pattern: Runtime.getRuntime().loadLibrary($X)
+          - pattern: $L.loadClass($X)
+          - pattern: $C.getMethod($X, ...)
+          - pattern: $C.getDeclaredMethod($X, ...)
+          - pattern: DexClassLoader($X, ...)
+      - pattern-not: Class.forName("...")
+      - pattern-not: System.load("...")
+      - pattern-not: System.loadLibrary("...")
+      - pattern-not: $L.loadClass("...")
+      - pattern-not: $C.getMethod("...", ...)
+      - pattern-not: $C.getDeclaredMethod("...", ...)
+
+  - id: gapscan.kotlin.hostname-verifier-accepts-all
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      A hostname verifier approves every host, so a connection to the wrong server (an attacker's) is accepted. Use the
+      platform default or compare the host to the expected name.
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: |
+          override fun verify($H: String?, $S: SSLSession?): Boolean { return true }
+      - pattern: |
+          override fun verify($H: String, $S: SSLSession): Boolean { return true }
+      - pattern: $B.hostnameVerifier { $H, $S -> true }
+      - pattern: $B.hostnameVerifier({ $H, $S -> true })
+      - pattern: $X.setDefaultHostnameVerifier { $H, $S -> true }
+      - pattern: $X.setHostnameVerifier { $H, $S -> true }
+      - pattern: AllowAllHostnameVerifier()
+      - pattern: NoopHostnameVerifier()
+      - pattern: NoopHostnameVerifier.INSTANCE
+      - pattern: SSLSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER
+
+  - id: gapscan.kotlin.http-redirects-followed
+    languages: [kotlin]
+    severity: INFO
+    message: >-
+      The HTTP client is set to follow redirects (including from HTTPS to HTTP). A redirect chosen by a server or an
+      attacker can send the app, with its headers and tokens, to another address. Keep redirects off for requests that carry
+      credentials, or validate the target.
+    metadata:
+      cwe: ["CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: LOW
+    pattern-either:
+      - pattern: $B.followRedirects(true)
+      - pattern: $B.followSslRedirects(true)
+
+  - id: gapscan.kotlin.log-secret-variable
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A value named like a secret (password, token, key, PIN, card number) is passed to a logger. Logs can be read by other
+      tools on the device and are sent with crash reports. Log a fixed message, or a masked value.
+    metadata:
+      cwe: ["CWE-532: Insertion of Sensitive Information into Log File"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $L.$M(..., $V, ...)
+          - pattern: $L.$M(<... $V ...>)
+      - metavariable-regex:
+          metavariable: $L
+          regex: (?i)^(Log|Logger|Timber|android\.util\.Log|.*(logger|crashlytics|log)|Fabric\.getLogger\(\))$
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^(d|e|i|v|w|wtf|info|warning|severe|fine|finer|debug|error|log|recordException|setCustomKey)$
+      - metavariable-regex:
+          metavariable: $V
+          # an identifier or property path, never a string literal (its words are just text); "pin" and
+          # "ssn" only as whole words, so stopping/spinner/pinned/lessons do not count
+          regex: ^(?!["'])[\w.]*?((?i:password|passwd|pwd|secret|token|apikey|creditcard|cardnumber|cvv|authorization)|(^|[._])(pin|ssn)(code)?$|[a-z0-9](Pin|Ssn)(Code)?$)
+
+  - id: gapscan.kotlin.embedded-intent-started
+    languages: [kotlin]
+    mode: taint
+    severity: ERROR
+    message: >-
+      An intent that came from outside (an extra or bundle of the incoming intent, or a URI parsed with
+      `Intent.parseUri`) is started, sent or returned as it is (intent redirection). Any app can craft it and make this
+      app open its own non-exported components, or grant itself access to this app's files and content providers.
+      Build a new intent with an explicit component you chose, or check `resolveActivity()`/`component` against an
+      allow-list and clear `selector`, `component` and URI-grant flags before starting it.
+    metadata:
+      cwe: ["CWE-940: Improper Verification of Source of a Communication Channel", "CWE-926: Improper Export of Android Application Components", "CWE-927: Use of Implicit Intent for Sensitive Communication"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: $I.getParcelableExtra(...)
+          - pattern: $I.getParcelableExtra<$T>(...)
+          - pattern: $B.getParcelable(...)
+          - pattern: $B.getParcelable<$T>(...)
+          - pattern: IntentCompat.getParcelableExtra(...)
+          - pattern: BundleCompat.getParcelable(...)
+          - pattern: Intent.parseUri(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: startActivity($X, ...)
+              - pattern: $C.startActivity($X, ...)
+              - pattern: startActivityForResult($X, ...)
+              - pattern: $C.startActivityForResult($X, ...)
+              - pattern: $L.launch($X, ...)
+              - pattern: startService($X)
+              - pattern: $C.startService($X)
+              - pattern: startForegroundService($X)
+              - pattern: $C.startForegroundService($X)
+              - pattern: bindService($X, ...)
+              - pattern: $C.bindService($X, ...)
+              - pattern: sendBroadcast($X, ...)
+              - pattern: $C.sendBroadcast($X, ...)
+              - pattern: sendOrderedBroadcast($X, ...)
+              - pattern: $C.sendOrderedBroadcast($X, ...)
+              - pattern: setResult($CODE, $X)
+              - pattern: $A.setResult($CODE, $X)
+          - focus-metavariable: $X
+
+  - id: gapscan.kotlin.dynamic-receiver-exported
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A broadcast receiver is registered at run time without saying whether other apps may send to it, so it is exported by
+      default and any app can trigger it with crafted data. Pass `Context.RECEIVER_NOT_EXPORTED` (or protect the receiver
+      with a signature permission).
+    metadata:
+      cwe: ["CWE-926: Improper Export of Android Application Components", "CWE-925: Improper Verification of Intent by Broadcast Receiver"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: registerReceiver($R, $F)
+          - pattern: $C.registerReceiver($R, $F)
+      - pattern-not: registerReceiver($R, $F, $FLAGS)
+      - pattern-not: $C.registerReceiver($R, $F, $FLAGS)

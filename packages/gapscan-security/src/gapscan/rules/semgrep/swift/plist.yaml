@@ -1,0 +1,96 @@
+# GapScan Rules: iOS Info.plist (App Transport Security). Licensed Apache-2.0.
+# Every rule has a vulnerable and a safe case in tests/rules/swift/plist.plist (run: make rules-test).
+rules:
+  - id: gapscan.swift.plist-ats-disabled
+    languages: [generic]
+    paths: {include: ["*.plist"]}
+    severity: ERROR
+    message: >-
+      App Transport Security is switched off (arbitrary or insecure HTTP loads are allowed), so the app can send data in
+      plain text. Remove the exception and use HTTPS; if one domain truly needs it, scope the exception to that domain.
+    metadata:
+      cwe: ["CWE-319: Cleartext Transmission of Sensitive Information"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern-regex: '<key>NSAllowsArbitraryLoads(?:InWebContent|ForMedia)?</key>\s*<true\s*/>'
+      - pattern-regex: '<key>NS(?:Temporary)?ExceptionAllowsInsecureHTTPLoads</key>\s*<true\s*/>'
+
+  - id: gapscan.swift.plist-ats-weak-tls
+    languages: [generic]
+    paths: {include: ["*.plist"]}
+    severity: WARNING
+    message: >-
+      An App Transport Security exception allows an old TLS version or turns off forward secrecy for a domain, which
+      makes captured traffic easier to break later. Fix the server and remove the exception.
+    metadata:
+      cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm", "CWE-319: Cleartext Transmission of Sensitive Information"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern-regex: '<key>NS(?:Temporary)?ExceptionMinimumTLSVersion</key>\s*<string>TLSv1\.[01]</string>'
+      - pattern-regex: '<key>NS(?:Temporary)?ExceptionRequiresForwardSecrecy</key>\s*<false\s*/>'
+
+  - id: gapscan.swift.plist-hardcoded-secret
+    languages: [generic]
+    paths:
+      include: ["*.plist"]
+      exclude: ["GoogleService-Info.plist"]  # Firebase API keys are public project identifiers, not secrets
+    severity: WARNING
+    message: >-
+      A key, token or password is stored as a value in a property list that ships inside the app, where anyone with
+      the app bundle can read it. Fetch secrets from your server after sign-in; if a build needs a value, inject a
+      non-secret identifier from build settings (`$(VAR)`), not a credential.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials"]
+      masvs: ["MASVS-STORAGE-1", "MASVS-CRYPTO-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '<key>[^<]*(?i:api_?key|apikey|secret|token|password|passwd|private_?key)[^<]*</key>\s*<string>(?!\$\()(?=[^<]*\d)[^<\s]{12,}</string>'
+
+  - id: gapscan.swift.plist-file-sharing-enabled
+    languages: [generic]
+    paths: {include: ["*.plist"]}
+    severity: INFO
+    message: >-
+      File sharing is on, so everything in the app's Documents folder is visible in the Files app and to a connected
+      computer. Keep databases, caches and anything sensitive in Library/Application Support (not Documents), or turn
+      file sharing off.
+    metadata:
+      cwe: ["CWE-200: Exposure of Sensitive Information to an Unauthorized Actor", "CWE-552: Files or Directories Accessible to External Parties"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: LOW
+    pattern-regex: '<key>(?:UIFileSharingEnabled|LSSupportsOpeningDocumentsInPlace)</key>\s*<true\s*/>'
+
+  - id: gapscan.swift.entitlements-get-task-allow
+    languages: [generic]
+    paths: {include: ["*.entitlements", "*.plist"]}
+    severity: WARNING
+    message: >-
+      `get-task-allow` is true, which lets a debugger attach to the app. Xcode sets it for development builds only; a
+      release build signed with it can be inspected and changed at run time. Remove it from the entitlements of release
+      builds (distribution signing does this).
+    metadata:
+      cwe: ["CWE-489: Active Debug Code"]
+      masvs: ["MASVS-RESILIENCE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '<key>get-task-allow</key>\s*<true\s*/>'
+
+  - id: gapscan.swift.xcconfig-hardcoded-secret
+    languages: [generic]
+    paths: {include: ["*.xcconfig"]}
+    severity: WARNING
+    message: >-
+      A key, token or password is set as a build setting. Build settings are usually committed to the repository and,
+      when copied into Info.plist, ship inside the app. Keep secrets out of the repository (an untracked, git-ignored
+      config or the CI secret store), and never ship credentials in the app.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials"]
+      masvs: ["MASVS-STORAGE-1", "MASVS-CRYPTO-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?m)^[ \t]*\w*(?i:api_?key|apikey|secret|token|password|passwd|private_?key)\w*(?:\[[^\]\n]*\])?[ \t]*=[ \t]*(?!\$\()(?=\S*\d)[^\s$]{12,}[ \t]*$'

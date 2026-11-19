@@ -1,0 +1,67 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GapScan detection results</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14171c;--sub:#5b6472;--line:#e3e6eb;--c:#9aa3b2;--g:#2347c9}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#171a20;--ink:#eef0f4;--sub:#9aa3b2;--line:#262b33;--c:#5b6472;--g:#7b96ff}}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}
+main{max-width:960px;margin:0 auto;padding:32px 16px}
+h1{font-size:30px;margin:0 0 6px}p.lead{color:var(--sub);margin:0 0 24px;font-size:17px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}.kpi b{display:block;font-size:30px}.kpi span{color:var(--sub);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 16px 16px;margin-bottom:20px}
+table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:12px;color:var(--sub);text-transform:uppercase;letter-spacing:.04em}.sub{display:block;color:var(--sub);font-size:12px;font-weight:400}td.sub{display:table-cell}
+.bar{height:10px;border-radius:5px;background:var(--line);overflow:hidden;width:150px;display:inline-block;vertical-align:middle}.bar i{display:block;height:100%}.bar.c i{background:var(--c)}.bar.g i{background:var(--g)}
+.num{display:inline-block;width:52px;margin-left:8px;font-variant-numeric:tabular-nums}
+.legend{font-size:13px;color:var(--sub);margin:8px 0}.legend span{display:inline-block;width:10px;height:10px;border-radius:3px;margin:0 4px 0 12px}
+h2{font-size:18px;margin:24px 0 8px}li{margin:4px 0;color:var(--sub)}footer{color:var(--sub);font-size:12px;margin-top:24px}
+@media(max-width:640px){.bar{width:90px}td.sub{display:none}th:last-child{display:none}}
+</style></head><body><main>
+<h1>GapScan detection results</h1>
+<p class="lead">An offline security scanner with its own rule library: 215 Apache-2.0 rules across 7 languages, measured against public benchmarks.</p>
+<div class="kpis">
+<div class="kpi"><b>97.1%</b><span>recall on 128 labeled code sites (was 47.1%), at 65.6% precision</span></div>
+<div class="kpi"><b>215</b><span>own rules; no community rules shipped, no cloud, no data leaves the machine</span></div>
+<div class="kpi"><b>+47 vs +48</b><span>Java, OWASP Benchmark, held-out half: level with the free Semgrep rules</span></div>
+</div>
+<div class="card"><h2>Held-out results by language</h2>
+<div class="legend"><span style="background:var(--c)"></span>Community Semgrep rules<span style="background:var(--g)"></span>GapScan rules. Bars show the benchmark score (catch rate minus false-alarm rate), or the catch rate where a set has no safe cases.</div>
+<table><thead><tr><th>Language / benchmark</th><th>Community</th><th>GapScan</th><th>Evidence</th></tr></thead><tbody>
+<tr><td><b>Java</b><span class="sub">OWASP Benchmark v1.2 (2,740 cases)</span></td>
+<td><div class="bar c"><i style="width:47.5%"></i></div><span class="num">+48</span></td>
+<td><div class="bar g"><i style="width:46.9%"></i></div><span class="num"><b>+47</b></span></td>
+<td class="sub">standard benchmark; score</td></tr><tr><td><b>Python</b><span class="sub">OWASP Benchmark for Python v0.1 (1,230 cases)</span></td>
+<td><div class="bar c"><i style="width:20.4%"></i></div><span class="num">+20</span></td>
+<td><div class="bar g"><i style="width:50.7%"></i></div><span class="num"><b>+51</b></span></td>
+<td class="sub">standard benchmark; score</td></tr><tr><td><b>JavaScript / TypeScript</b><span class="sub">Node.js synthetic set, Juice Shop, NodeGoat, Juice Shop code fixes (82 cases)</span></td>
+<td><div class="bar c"><i style="width:41.9%"></i></div><span class="num">+42</span></td>
+<td><div class="bar g"><i style="width:60.9%"></i></div><span class="num"><b>+61</b></span></td>
+<td class="sub">small mixed set; score</td></tr><tr><td><b>Go</b><span class="sub">Go synthetic set and Vulnerability-goapp (42 labeled cases, with safe files)</span></td>
+<td><div class="bar c"><i style="width:16.1%"></i></div><span class="num">+16</span></td>
+<td><div class="bar g"><i style="width:85.7%"></i></div><span class="num"><b>+86</b></span></td>
+<td class="sub">small mixed set; score</td></tr><tr><td><b>Kotlin / Android</b><span class="sub">OWASP MASTG demo apps (44 cases)</span></td>
+<td><div class="bar c"><i style="width:0%"></i></div><span class="num">0%</span></td>
+<td><div class="bar g"><i style="width:65.0%"></i></div><span class="num"><b>65%</b></span></td>
+<td class="sub">demo samples; caught</td></tr><tr><td><b>Swift / iOS</b><span class="sub">OWASP MASTG demo apps (34 cases)</span></td>
+<td><div class="bar c"><i style="width:6.2%"></i></div><span class="num">6%</span></td>
+<td><div class="bar g"><i style="width:68.8%"></i></div><span class="num"><b>69%</b></span></td>
+<td class="sub">demo samples; caught</td></tr><tr><td><b>Android apps (Java)</b><span class="sub">DIVA and InsecureBankv2: 19 labeled files</span></td>
+<td><div class="bar c"><i style="width:7.1%"></i></div><span class="num">7%</span></td>
+<td><div class="bar g"><i style="width:50.0%"></i></div><span class="num"><b>50%</b></span></td>
+<td class="sub">real apps; caught</td></tr><tr><td><b>iOS app (DVIA-v2) *</b><span class="sub">10 labeled files</span></td>
+<td><div class="bar c"><i style="width:0%"></i></div><span class="num">0%</span></td>
+<td><div class="bar g"><i style="width:50.0%"></i></div><span class="num"><b>50%</b></span></td>
+<td class="sub">real app; caught</td></tr><tr><td><b>iOS app (iGoat-Swift) *</b><span class="sub">17 labeled files</span></td>
+<td><div class="bar c"><i style="width:0%"></i></div><span class="num">0%</span></td>
+<td><div class="bar g"><i style="width:20.0%"></i></div><span class="num"><b>20%</b></span></td>
+<td class="sub">real app; caught</td></tr><tr><td><b>Kotlin apps (InsecureShop, KotlinGoat) *</b><span class="sub">17 labeled files</span></td>
+<td><div class="bar c"><i style="width:0%"></i></div><span class="num">0%</span></td>
+<td><div class="bar g"><i style="width:71.4%"></i></div><span class="num"><b>71%</b></span></td>
+<td class="sub">real apps; caught</td></tr><tr><td><b>Dart / Flutter *</b><span class="sub">DVMA: 107 modules whose folder holds logic</span></td>
+<td><div class="bar c"><i style="width:0%"></i></div><span class="num">0%</span></td>
+<td><div class="bar g"><i style="width:7.1%"></i></div><span class="num"><b>7%</b></span></td>
+<td class="sub">real app (mostly behavioral simulations); caught</td></tr>
+</tbody></table><p class="sub" style="display:block">* tuned on all files of the set; indicative only.</p></div>
+<h2>What these numbers do not say</h2><ul><li>Scores are measured with scanners only (no AI review). The AI review step removes false alarms but cannot add findings the scanners missed.</li><li>&#x27;Held out&#x27; means half of each benchmark&#x27;s cases, chosen by a hash of their names, that were not looked at while writing rules. Rows marked &#x27;tuned on all files&#x27; were not kept strictly separate and are indicative only.</li><li>The community Semgrep rules are the free Semgrep rule set. GapScan cannot ship them (their license forbids it), which is why GapScan has its own rule library.</li><li>On Java, GapScan is level with the free Semgrep rules and below CodeQL (about +60 in a competitor&#x27;s published comparison), which follows data across functions and files; GapScan&#x27;s rules follow it within one function.</li><li>The mobile and Go sets are small, mostly contain vulnerable samples and say little about false alarms. Labels for the real apps were written by hand from each project&#x27;s own challenge or vulnerability list.</li><li>Dart numbers are a floor: most DVMA modules simulate behavior that no static rule can see.</li><li>Score = share of vulnerable cases caught minus share of safe cases wrongly flagged (the OWASP Benchmark &#x27;Youden&#x27; score). Where a set has no safe cases, only the catch rate is reported.</li></ul>
+<footer>Generated 2026-10-05 with Semgrep 1.176.0. Reproduce with <code>uv run python tools/results_report.py</code>. Scanners only: the AI review step is not included.</footer>
+</main></body></html>

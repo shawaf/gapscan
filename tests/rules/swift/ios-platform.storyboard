@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="21701">
+    <scenes>
+        <scene sceneID="login">
+            <objects>
+                <viewController id="vc1">
+                    <view key="view" contentMode="scaleToFill" id="v1">
+                        <subviews>
+                            <!-- ruleid: gapscan.swift.storyboard-secret-field-not-masked -->
+                            <textField opaque="NO" contentMode="scaleToFill" borderStyle="roundedRect" placeholder="Password" textAlignment="natural" minimumFontSize="17" id="tf1">
+                                <fontDescription key="fontDescription" type="system" pointSize="14"/>
+                                <textInputTraits key="textInputTraits"/>
+                            </textField>
+                            <!-- ok: gapscan.swift.storyboard-secret-field-not-masked -->
+                            <textField opaque="NO" contentMode="scaleToFill" borderStyle="roundedRect" placeholder="Password" textAlignment="natural" minimumFontSize="17" id="tf2">
+                                <fontDescription key="fontDescription" type="system" pointSize="14"/>
+                                <textInputTraits key="textInputTraits" secureTextEntry="YES"/>
+                            </textField>
+                            <textField opaque="NO" contentMode="scaleToFill" borderStyle="roundedRect" placeholder="Secret" textAlignment="natural" minimumFontSize="17" id="tf4">
+                                <!-- ruleid: gapscan.swift.storyboard-secret-field-not-masked -->
+                                <textInputTraits key="textInputTraits" textContentType="password"/>
+                            </textField>
+                            <textField opaque="NO" contentMode="scaleToFill" borderStyle="roundedRect" placeholder="Secret" textAlignment="natural" minimumFontSize="17" id="tf5">
+                                <!-- ok: gapscan.swift.storyboard-secret-field-not-masked -->
+                                <textInputTraits key="textInputTraits" secureTextEntry="YES" textContentType="password"/>
+                            </textField>
+                            <!-- ok: gapscan.swift.storyboard-secret-field-not-masked -->
+                            <textField opaque="NO" contentMode="scaleToFill" borderStyle="roundedRect" placeholder="Username" textAlignment="natural" minimumFontSize="17" id="tf3">
+                                <textInputTraits key="textInputTraits"/>
+                            </textField>
+                        </subviews>
+                    </view>
+                </viewController>
+            </objects>
+        </scene>
+    </scenes>
+</document>

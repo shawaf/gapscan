@@ -1,0 +1,120 @@
+# Core Java: sinks, sanitizers and library calls that never carry text through.
+name = "java-core"
+languages = ["java"]
+
+[[sink]]
+kind = "sql"
+cwe = "CWE-89"
+severity = "high"
+title = "SQL injection"
+callee = '\.(executeQuery|executeUpdate|execute|executeLargeUpdate|addBatch|prepareStatement|prepareCall|queryForObject|queryForList|queryForMap|queryForRowSet|query|update|batchUpdate|createQuery|createNativeQuery|createSQLQuery|nativeQuery)$'
+args = [0]
+
+[[sink]]
+kind = "cmd"
+cwe = "CWE-78"
+severity = "critical"
+title = "OS command injection"
+callee = '(\.exec|^new (?:[\w.]+\.)?ProcessBuilder|\.command|ProcessBuilder\.start)$'
+
+[[sink]]
+kind = "path"
+cwe = "CWE-22"
+severity = "high"
+title = "Path traversal"
+callee = '^new (?:[\w.]+\.)?(File|FileInputStream|FileOutputStream|FileReader|FileWriter|RandomAccessFile|PrintWriter|Scanner)$|(^|\.)(Paths\.get|Path\.of|Files\.(read\w*|write\w*|new\w+|copy|move|delete\w*|lines|list|walk|exists|createFile|createDirectory\w*))$|\.getResourceAsStream$|\.(getRealPath|getResource)$'
+
+[[sink]]
+kind = "ssrf"
+cwe = "CWE-918"
+severity = "high"
+title = "Server-side request forgery"
+callee = '^new (?:[\w.]+\.)?(URL|java\.net\.URL)$|\bURI\.create$|\.(getForObject|getForEntity|postForObject|postForEntity|exchange|execute|uri)$|HttpRequest\.newBuilder.*\.uri$'
+
+[[sink]]
+kind = "xss"
+cwe = "CWE-79"
+severity = "medium"
+title = "Cross-site scripting"
+callee = '(\.getWriter\(\)|\bout|\bwriter|\.getOutputStream\(\))\.(print|println|printf|write|append|format)$|\.getWriter\(\)\.(print|println|printf|write|append|format)$|(^|\.)(sendError)$'
+
+[[sink]]
+kind = "redirect"
+cwe = "CWE-601"
+severity = "medium"
+title = "Open redirect"
+callee = '\.(sendRedirect|setHeader|addHeader)$'
+args = [1]
+
+[[sink]]
+kind = "redirect"
+cwe = "CWE-601"
+severity = "medium"
+title = "Open redirect"
+callee = '\.sendRedirect$'
+args = [0]
+
+[[sink]]
+kind = "ldap"
+cwe = "CWE-90"
+severity = "high"
+title = "LDAP injection"
+callee = '(\.search|\.searchByUsername|\.lookup)$'
+args = [0, 1]
+
+[[sink]]
+kind = "xpath"
+cwe = "CWE-643"
+severity = "high"
+title = "XPath injection"
+callee = '\.(evaluate|compile|selectNodes|selectSingleNode)$'
+args = [0]
+
+[[sink]]
+kind = "deserialization"
+cwe = "CWE-502"
+severity = "critical"
+title = "Insecure deserialization"
+callee = '^new (?:[\w.]+\.)?(ObjectInputStream|XMLDecoder)$|\.(readObject|fromXML|readValue|load)$'
+
+[[sink]]
+kind = "code"
+cwe = "CWE-94"
+severity = "critical"
+title = "Code injection"
+callee = '(ScriptEngine|engine)\.eval$|(^|\.)Class\.forName$|\.(loadClass|defineClass)$'
+
+[[sink]]
+kind = "trust_boundary"
+cwe = "CWE-501"
+severity = "low"
+title = "Trust boundary violation"
+callee = '\.(setAttribute|putValue)$'
+
+[[sanitizer]]
+callee = '(^|\.)(Integer\.parseInt|Integer\.valueOf|Long\.parseLong|Long\.valueOf|Double\.parseDouble|Float\.parseFloat|Short\.parseShort|Byte\.parseByte|Boolean\.parseBoolean|UUID\.fromString|BigInteger|BigDecimal)$|^new (?:[\w.]+\.)?(BigInteger|BigDecimal)$'
+cleans = ["*"]
+
+[[sanitizer]]
+callee = '(ESAPI\.encoder\(\)\.encodeFor\w+|StringEscapeUtils\.escape(Html\w*|Xml\w*|JavaScript)|HtmlUtils\.htmlEscape\w*|Encode\.for(Html\w*|JavaScript\w*|Uri\w*|XmlContent)|URLEncoder\.encode|Jsoup\.clean|Sanitizers?\.\w+)$'
+cleans = ["xss", "redirect"]
+
+[[sanitizer]]
+callee = '(FilenameUtils\.(getName|getBaseName)|\.normalize|\.getFileName|Paths\.get\(\w+\)\.getFileName)$'
+cleans = ["path"]
+
+[[sanitizer]]
+callee = '(ESAPI\.encoder\(\)\.encodeForSQL|\.setString|\.setInt|\.setLong|\.setObject|\.setParameter)$'
+cleans = ["sql"]
+
+[[sanitizer]]
+callee = '(ESAPI\.encoder\(\)\.encodeForLDAP|ESAPI\.encoder\(\)\.encodeForDN|LdapEncoder\.\w+|Rdn\.escapeValue)$'
+cleans = ["ldap"]
+
+[[sanitizer]]
+callee = 'ESAPI\.encoder\(\)\.encodeForXPath$'
+cleans = ["xpath"]
+
+[[deny]]
+# results that are numbers or booleans or otherwise cannot carry attacker text
+callee = '\.(length|size|isEmpty|isBlank|equals|equalsIgnoreCase|contains|containsKey|startsWith|endsWith|hashCode|matches|indexOf|lastIndexOf|compareTo|charAt|exists|isDirectory|isFile|canRead|canWrite|hasNext)$'

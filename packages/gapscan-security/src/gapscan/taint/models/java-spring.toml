@@ -1,0 +1,11 @@
+name = "java-spring"
+languages = ["java"]
+requires = 'org\.springframework|@(RestController|Controller|RequestMapping|GetMapping|PostMapping)'
+
+[[param_source]]
+kind = "http_param"
+pattern = '@(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|RequestPart|MatrixVariable)\b'
+
+[[source]]
+kind = "http_param"
+pattern = '\w+\.(getParameter|getHeader|getQueryString)\('

@@ -1,0 +1,28 @@
+name = "python-django"
+languages = ["python"]
+requires = 'django|rest_framework'
+
+[[source]]
+kind = "http_param"
+pattern = '(?:\w+\.)?request\.(GET|POST|FILES|COOKIES|META|body|data|query_params|headers|path|path_info|get_full_path|build_absolute_uri)\b'
+
+[[sink]]
+kind = "xss"
+cwe = "CWE-79"
+severity = "medium"
+title = "Cross-site scripting"
+callee = '^(HttpResponse|JsonResponse|mark_safe|format_html)$'
+args = [0]
+
+[[assign_sink]]
+kind = "trust_boundary"
+cwe = "CWE-501"
+severity = "low"
+title = "Trust boundary violation"
+target = '(^|\.)session\['
+key = true
+
+[[template_sink]]
+callee = '(^|\.)(render|render_to_response|TemplateResponse)$'
+template_arg = 1
+context_arg = 2

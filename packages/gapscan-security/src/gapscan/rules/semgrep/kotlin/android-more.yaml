@@ -1,0 +1,275 @@
+# GapScan Rules: Kotlin / Android, second set (covers the OWASP MASTG weakness classes). Licensed Apache-2.0.
+# Every rule has a vulnerable and a safe case in tests/rules/kotlin/android-more.kt (run: make rules-test).
+rules:
+  - id: gapscan.kotlin.weak-key-length
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      A cryptographic key is generated with too few bits (RSA below 2048, symmetric keys below 128). Such keys can be
+      brute-forced or factored. Use RSA 2048 or more (or an EC curve such as P-256) and AES-128/256.
+    metadata:
+      cwe: ["CWE-326: Inadequate Encryption Strength"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - patterns:
+              - pattern-either:
+                  - pattern: $G.initialize($N, ...)
+                  - pattern: $B.setKeySize($N)
+              - metavariable-regex:
+                  metavariable: $N
+                  regex: ^(512|768|1024)$
+          - patterns:
+              - pattern: $G.init($N)
+              - metavariable-regex:
+                  metavariable: $N
+                  regex: ^(40|56|64|80)$
+
+  - id: gapscan.kotlin.webview-ssl-error-ignored
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      The WebView carries on after a certificate error (`handler.proceed()`), so an attacker on the network can present
+      any certificate and read or change the page. Call `handler.cancel()` instead.
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-inside: |
+          override fun onReceivedSslError(...) { ... }
+      - pattern-either:
+          - pattern: $H.proceed()
+          - pattern: $H?.proceed()
+
+  - id: gapscan.kotlin.webview-file-access
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      The WebView is allowed to read local files or content providers, so a page that gets loaded into it (or a
+      script injected into it) can read the app's private files. Turn these settings off unless a feature needs them.
+    metadata:
+      cwe: ["CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: $S.allowFileAccess = true
+      - pattern: $S.allowContentAccess = true
+      - pattern: $S.allowFileAccessFromFileURLs = true
+      - pattern: $S.allowUniversalAccessFromFileURLs = true
+      - pattern: $S.setAllowFileAccess(true)
+      - pattern: $S.setAllowContentAccess(true)
+      - pattern: $S.setAllowFileAccessFromFileURLs(true)
+      - pattern: $S.setAllowUniversalAccessFromFileURLs(true)
+
+  - id: gapscan.kotlin.external-storage-use
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      Data is written to external or shared storage, where other apps (and the user's computer) can read it. Keep
+      sensitive files in the app's internal storage (`filesDir`), and encrypt anything that has to leave it.
+    metadata:
+      cwe: ["CWE-922: Insecure Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: LOW
+    pattern-either:
+      - pattern: $C.getExternalFilesDir(...)
+      - pattern: $C.getExternalCacheDir()
+      - pattern: $C.getExternalMediaDirs()
+      - pattern: Environment.getExternalStorageDirectory()
+      - pattern: Environment.getExternalStoragePublicDirectory(...)
+      - pattern: $R.insert(MediaStore.$X.EXTERNAL_CONTENT_URI, ...)
+
+  - id: gapscan.kotlin.world-accessible-file
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      The file or preferences are created readable or writable by every app on the device. Use `MODE_PRIVATE` and share
+      data through a `FileProvider` with a narrow path configuration.
+    metadata:
+      cwe: ["CWE-276: Incorrect Default Permissions"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: Context.MODE_WORLD_READABLE
+      - pattern: Context.MODE_WORLD_WRITEABLE
+      - pattern: MODE_WORLD_READABLE
+      - pattern: MODE_WORLD_WRITEABLE
+
+  - id: gapscan.kotlin.strictmode-penalty-log
+    languages: [kotlin]
+    severity: INFO
+    message: >-
+      StrictMode violations are written to the log, which other tools on the device can read and which may reveal
+      internals (open cursors, leaked objects). Keep StrictMode to debug builds.
+    metadata:
+      cwe: ["CWE-532: Insertion of Sensitive Information into Log File"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: LOW
+    pattern: $B.penaltyLog()
+
+  - id: gapscan.kotlin.pendingintent-mutable
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      The PendingIntent is created without `FLAG_IMMUTABLE`, so the app that receives it can fill in or change the
+      intent and act with this app's identity. Add `PendingIntent.FLAG_IMMUTABLE` (use `FLAG_MUTABLE` only when you must).
+    metadata:
+      cwe: ["CWE-927: Use of Implicit Intent for Sensitive Communication"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern: PendingIntent.$M($A, $B, $I, $F)
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^(getActivity|getService|getBroadcast|getActivities|getForegroundService)$
+      - metavariable-regex:
+          metavariable: $F
+          regex: (?s)^(?!.*FLAG_IMMUTABLE).*$
+
+  - id: gapscan.kotlin.implicit-intent-sensitive-extra
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      An intent with no target component carries what looks like a secret (a token, session, password or id). Any app
+      that registers for the action can receive it. Address the intent to your own component (`Intent(context,
+      Target::class.java)`) or call `setPackage`.
+    metadata:
+      cwe: ["CWE-927: Use of Implicit Intent for Sensitive Communication"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?i)Intent\((?:Intent\.\w+|"[^"]*")?\)\s*\.apply\s*\{(?:(?!setPackage|setClass|setComponent|component\s*=|\bpackage\b|Intent\()[\s\S])*?putExtra\(\s*"[^"]*(?:token|session|password|secret|auth|credential|user_?id|email)[^"]*"'
+
+  - id: gapscan.kotlin.unsafe-deserialization
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      Java deserialization can run code chosen by whoever wrote the data. Do not deserialize data from outside the app
+      (a file, an intent, a network response); use JSON or Parcelable with fixed types.
+    metadata:
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: ObjectInputStream(...).readObject()
+      - pattern: $O.readObject()
+      - pattern: $I.getSerializableExtra(...)
+      - pattern: $I.getSerializable(...)
+
+  - id: gapscan.kotlin.deeplink-data-used
+    languages: [kotlin]
+    severity: INFO
+    message: >-
+      Data from a deep link or custom URL scheme (anyone can craft one) is read here. Check the host, scheme and every
+      parameter before acting on it, and never perform a sensitive action from a link alone.
+    metadata:
+      cwe: ["CWE-939: Improper Authorization in Handler for Custom URL Scheme", "CWE-20: Improper Input Validation"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: LOW
+    pattern-either:
+      - pattern: $I?.data
+      - pattern: $I.data?.getQueryParameter(...)
+      - pattern: $U.getQueryParameter(...)
+
+  - id: gapscan.kotlin.ui-cache-enabled
+    languages: [kotlin]
+    severity: INFO
+    message: >-
+      The view's drawing cache keeps a bitmap of what is on screen, which can include sensitive text and may be read
+      from memory or snapshots. Do not enable it for views that show secrets.
+    metadata:
+      cwe: ["CWE-524: Use of Cache Containing Sensitive Information"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: LOW
+    pattern-either:
+      - pattern: $V.isDrawingCacheEnabled = true
+      - pattern: $V.setDrawingCacheEnabled(true)
+      - pattern: $V.buildDrawingCache(...)
+
+  - id: gapscan.kotlin.provider-sql-injection
+    languages: [kotlin]
+    mode: taint
+    severity: ERROR
+    message: >-
+      A value that a calling app (or a crafted URI) controls reaches an SQL query without being bound as a parameter, so
+      other apps can read or change rows they should not (SQL injection through a content provider). Pass `selection`
+      with `?` placeholders and put the values in `selectionArgs`; validate URI path segments.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: $U.lastPathSegment
+          - pattern: $U.getLastPathSegment()
+          - pattern: $U.pathSegments
+          - pattern: $U.getPathSegments()
+          - pattern: $U.path
+          - patterns:
+              - pattern-inside: |
+                  override fun query(...) { ... }
+              - pattern: selection
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $QB.query($DB, $P, $X, ...)
+              - pattern: $QB.appendWhere($X)
+              - pattern: $DB.rawQuery($X, ...)
+              - pattern: $DB.execSQL($X)
+          - focus-metavariable: $X
+
+  - id: gapscan.kotlin.log-user-input
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      What the user typed is written to the system log, which other tools on the device can read. Do not log credentials,
+      card numbers, tokens or personal data; log a fixed message instead.
+    metadata:
+      cwe: ["CWE-532: Insertion of Sensitive Information into Log File"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: Log.$M($TAG, <... $E.text ...>)
+      - pattern: Log.$M($TAG, <... $E.getText() ...>)
+
+  - id: gapscan.kotlin.prefs-user-input
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      Text the user typed is saved in SharedPreferences, which stores it as an unencrypted XML file readable from a backup
+      or a rooted device. Use EncryptedSharedPreferences or the Android Keystore for anything sensitive.
+    metadata:
+      cwe: ["CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: LOW
+    pattern-either:
+      - pattern: $E.putString($K, $T.text.toString())
+      - pattern: $E.putString($K, $T.getText().toString())
+
+  - id: gapscan.kotlin.credentials-in-database
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A user name and password (or another secret) is inserted into a local SQLite table as it is. The database file is
+      readable from a backup or a rooted device. Store a salted hash, or keep the secret in the Keystore.
+    metadata:
+      cwe: ["CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?i)INSERT\s+INTO\s+\w+[^\n;]*?\+\s*\w*(?:pwd|pass|password|pin|token|secret)\w*\s*\+'

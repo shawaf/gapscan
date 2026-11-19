@@ -1,0 +1,40 @@
+# Curated "which function is the vulnerable one" hints, keyed by CVE. Advisory data from the OSV
+# database is used first (Go publishes affected symbols); this file fills the gaps for well-known
+# advisories. Each entry is a judgment call: verify against the advisory before adding more.
+# A call to any listed name in a file that imports the package marks the finding `reachable`.
+
+[[hint]]
+cve = "CVE-2021-23337"
+package = "lodash"
+ecosystem = "npm"
+symbols = ["template"]
+
+[[hint]]
+cve = "CVE-2019-10744"
+package = "lodash"
+ecosystem = "npm"
+symbols = ["defaultsDeep"]
+
+[[hint]]
+cve = "CVE-2020-8203"
+package = "lodash"
+ecosystem = "npm"
+symbols = ["zipObjectDeep"]
+
+[[hint]]
+cve = "CVE-2018-16487"
+package = "lodash"
+ecosystem = "npm"
+symbols = ["merge", "mergeWith", "defaultsDeep"]
+
+[[hint]]
+cve = "CVE-2020-1747"
+package = "pyyaml"
+ecosystem = "PyPI"
+symbols = ["load", "load_all", "full_load", "full_load_all"]
+
+[[hint]]
+cve = "CVE-2020-14343"
+package = "pyyaml"
+ecosystem = "PyPI"
+symbols = ["load", "load_all", "full_load", "full_load_all"]

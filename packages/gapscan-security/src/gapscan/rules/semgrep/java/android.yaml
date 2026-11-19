@@ -1,0 +1,259 @@
+# GapScan Rules: Java / Android apps. Licensed Apache-2.0 with the rest of GapScan.
+# Every rule has a vulnerable and a safe case in tests/rules/java/android.java (run: make rules-test).
+# The Kotlin rules cover the same classes for Kotlin code; the manifest rules (in the kotlin folder) read the XML files.
+rules:
+  - id: gapscan.java.android-sql-string-built
+    languages: [java]
+    severity: ERROR
+    message: >-
+      An SQLite statement is built by concatenating a value into it, so a user value can change the statement (SQL
+      injection). Use `?` placeholders and pass the values in the arguments array (`rawQuery(sql, new String[] {value})`).
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $DB.rawQuery($Q + ..., ...)
+          - pattern: $DB.rawQuery(String.format(...), ...)
+          - pattern: $DB.execSQL($Q + ...)
+          - pattern: $DB.execSQL(String.format(...))
+          - pattern: $DB.compileStatement($Q + ...)
+          - pattern: $DB.query($T, $C, $Q + ..., ...)
+      - pattern-not: $DB.$M("..." + "...", ...)
+
+  - id: gapscan.java.android-log-user-input
+    languages: [java]
+    severity: WARNING
+    message: >-
+      What the user typed (or a value that looks like a secret) is written to the system log, which other tools on the
+      device can read. Do not log credentials, card numbers, tokens or personal data; log a fixed message instead.
+    metadata:
+      cwe: ["CWE-532: Insertion of Sensitive Information into Log File"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: Log.$M($TAG, <... $E.getText() ...>)
+      - patterns:
+          - pattern: Log.$M($TAG, <... $V ...>)
+          - metavariable-regex:
+              metavariable: $V
+              regex: (?i)^(.*(password|passwd|pwd|secret|token|creditcard|card|cvv|ssn|pin|authorization).*)$
+
+  - id: gapscan.java.android-prefs-sensitive
+    languages: [java]
+    severity: WARNING
+    message: >-
+      A credential-like value (or text the user typed) is saved in SharedPreferences, which stores it as an unencrypted
+      XML file readable from a backup or a rooted device. Use EncryptedSharedPreferences or the Android Keystore.
+    metadata:
+      cwe: ["CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - patterns:
+          - pattern: $E.putString($K, $V)
+          - metavariable-regex:
+              metavariable: $K
+              regex: (?i)^".*(password|passwd|pwd|secret|token|credential|card|cvv|pin|session|user(name)?|auth).*"$
+      - pattern: $E.putString($K, $T.getText().toString())
+
+  - id: gapscan.java.android-world-accessible-file
+    languages: [java]
+    severity: ERROR
+    message: >-
+      The file or preferences are created readable or writable by every app on the device. Use `MODE_PRIVATE` and share
+      data through a `FileProvider` with a narrow path configuration.
+    metadata:
+      cwe: ["CWE-276: Incorrect Default Permissions"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: Context.MODE_WORLD_READABLE
+      - pattern: Context.MODE_WORLD_WRITEABLE
+      - pattern: MODE_WORLD_READABLE
+      - pattern: MODE_WORLD_WRITEABLE
+
+  - id: gapscan.java.android-external-storage
+    languages: [java]
+    severity: WARNING
+    message: >-
+      Data is written to external or shared storage, where other apps (and the user's computer) can read it. Keep
+      sensitive files in the app's internal storage, and encrypt anything that has to leave it.
+    metadata:
+      cwe: ["CWE-922: Insecure Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: LOW
+    pattern-either:
+      - pattern: $C.getExternalFilesDir(...)
+      - pattern: $C.getExternalCacheDir()
+      - pattern: Environment.getExternalStorageDirectory()
+      - pattern: Environment.getExternalStoragePublicDirectory(...)
+
+  - id: gapscan.java.android-webview-ssl-error-ignored
+    languages: [java]
+    severity: ERROR
+    message: >-
+      The WebView carries on after a certificate error (`handler.proceed()`), so an attacker on the network can present
+      any certificate and read or change the page. Call `handler.cancel()` instead.
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-inside: |
+          public void onReceivedSslError(...) { ... }
+      - pattern: $H.proceed()
+
+  - id: gapscan.java.android-webview-risky-settings
+    languages: [java]
+    severity: WARNING
+    message: >-
+      The WebView exposes a Java object to page scripts, or may read local files. A page that gets loaded into it (or a
+      script injected into it) can call those methods or read private files. Avoid `addJavascriptInterface` for
+      untrusted pages, and turn file access off.
+    metadata:
+      cwe: ["CWE-749: Exposed Dangerous Method or Function", "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: $W.addJavascriptInterface(...)
+      - pattern: $S.setAllowFileAccess(true)
+      - pattern: $S.setAllowContentAccess(true)
+      - pattern: $S.setAllowFileAccessFromFileURLs(true)
+      - pattern: $S.setAllowUniversalAccessFromFileURLs(true)
+
+  - id: gapscan.java.android-hardcoded-key
+    languages: [java]
+    severity: ERROR
+    message: >-
+      A cryptographic key or initialization vector is written into the code (or is a fixed array), so anyone with the app
+      can decrypt the data and a fixed IV breaks the cipher. Generate keys with the Android Keystore and a random IV for
+      every message.
+    metadata:
+      cwe: ["CWE-321: Use of Hard-coded Cryptographic Key", "CWE-329: Generation of Predictable IV with CBC Mode"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: new SecretKeySpec("...".getBytes(...), ...)
+      - pattern: new SecretKeySpec(new byte[] {...}, ...)
+      - pattern: new IvParameterSpec("...".getBytes(...))
+      - pattern: new IvParameterSpec(new byte[...])
+      - pattern: new IvParameterSpec(new byte[] {...})
+
+  - id: gapscan.java.android-hardcoded-credential
+    languages: [java]
+    severity: WARNING
+    message: >-
+      A secret (an API key, user name and password, or token) is written in a string in the code. Anyone with the app can
+      read it, and it stays in the version history. Fetch credentials from your server after login, and rotate this one.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '(?i)"[^"\n]*(?:api[ _-]?key|password|passwd|pwd|secret|token)[^"\n]{0,40}?\s*[:=]\s*[^"\s\\][^"\n]{3,}"'
+      - pattern: $T.getText().toString().equals("...")
+
+  - id: gapscan.java.android-cleartext-url
+    languages: [java]
+    severity: WARNING
+    message: >-
+      A web address starting with `http://` is used, so data to and from it can be read and changed on the network. Use
+      `https://`.
+    metadata:
+      cwe: ["CWE-319: Cleartext Transmission of Sensitive Information"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '"http://(?!localhost|127\.0\.0\.1|10\.0\.2\.2|schemas\.android\.com|www\.w3\.org|xmlpull\.org)[^"\s]+"'
+
+  - id: gapscan.java.android-pendingintent-mutable
+    languages: [java]
+    severity: WARNING
+    message: >-
+      The PendingIntent is created without `FLAG_IMMUTABLE`, so the app that receives it can fill in or change the intent
+      and act with this app's identity. Add `PendingIntent.FLAG_IMMUTABLE`.
+    metadata:
+      cwe: ["CWE-927: Use of Implicit Intent for Sensitive Communication"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern: PendingIntent.$M($A, $B, $I, $F)
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^(getActivity|getService|getBroadcast|getActivities|getForegroundService)$
+      - metavariable-regex:
+          metavariable: $F
+          regex: (?s)^(?!.*FLAG_IMMUTABLE).*$
+
+  - id: gapscan.java.android-provider-sql-injection
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: >-
+      A value that a calling app (or a crafted URI) controls reaches an SQL query as the WHERE clause or part of it, so
+      other apps can read or change rows they should not (SQL injection through a content provider). Validate the
+      selection against an allow-list, build it yourself with `?` placeholders, and check URI path segments.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: $U.getLastPathSegment()
+          - pattern: $U.getPathSegments()
+          - pattern: $U.getPath()
+          - patterns:
+              - pattern-inside: |
+                  public Cursor query(Uri $URI, String[] $P, String $SEL, ...) { ... }
+              - pattern: $SEL
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $QB.query($DB, $P, $X, ...)
+              - pattern: $DB.query($T, $C, $X, ...)
+              - pattern: $QB.appendWhere($X)
+              - pattern: $DB.rawQuery($X, ...)
+              - pattern: $DB.execSQL($X)
+          - focus-metavariable: $X
+
+  - id: gapscan.java.android-temp-file-credentials
+    languages: [java]
+    severity: INFO
+    message: >-
+      A temporary file is created and written to. Temporary files are easy to forget, are not protected from other
+      code, and often end up holding data (credentials, tokens) that should not be on disk in clear text. Encrypt what
+      you write and delete the file when done.
+    metadata:
+      cwe: ["CWE-922: Insecure Storage of Sensitive Information", "CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: LOW
+    pattern-either:
+      - pattern: File.createTempFile(...)
+      - pattern: java.io.File.createTempFile(...)
+
+  - id: gapscan.java.android-credentials-in-database
+    languages: [java]
+    severity: WARNING
+    message: >-
+      A user name and password (or another secret) is inserted into a local SQLite table as it is. The database file is
+      readable from a backup or a rooted device. Store a salted hash, or keep the secret in the Keystore.
+    metadata:
+      cwe: ["CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?i)INSERT\s+INTO\s+\w+[^\n;]*?\+\s*\w*(?:pwd|pass|password|pin|token|secret)\w*\s*\+'

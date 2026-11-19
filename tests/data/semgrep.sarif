@@ -1,0 +1,595 @@
+{
+ "version": "2.1.0",
+ "runs": [
+  {
+   "invocations": [
+    {
+     "executionSuccessful": true,
+     "toolExecutionNotifications": []
+    }
+   ],
+   "results": [
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "eval/fixtures/vuln-app/app.py",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 67,
+         "endLine": 16,
+         "snippet": {
+          "text": "    cur.execute(\"SELECT * FROM users WHERE name = '\" + name + \"'\")  # SQL injection"
+         },
+         "startColumn": 5,
+         "startLine": 16
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection. In order to execute raw query safely, prepared statement should be used. SQLAlchemy provides TextualSQL to easily used prepared statement with named parameters. For complex SQL composition, use SQL Expression Language or Schema Definition Language. In most cases, SQLAlchemy ORM will be a better option."
+     },
+     "properties": {},
+     "ruleId": "data.semgrep-rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "eval/fixtures/vuln-app/app.py",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 66,
+         "endLine": 16,
+         "snippet": {
+          "text": "    cur.execute(\"SELECT * FROM users WHERE name = '\" + name + \"'\")  # SQL injection"
+         },
+         "startColumn": 17,
+         "startLine": 16
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using the Django object-relational mappers (ORM) instead of raw SQL queries."
+     },
+     "properties": {},
+     "ruleId": "data.semgrep-rules.python.django.security.injection.tainted-sql-string"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "eval/fixtures/vuln-app/app.py",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 66,
+         "endLine": 16,
+         "snippet": {
+          "text": "    cur.execute(\"SELECT * FROM users WHERE name = '\" + name + \"'\")  # SQL injection"
+         },
+         "startColumn": 17,
+         "startLine": 16
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using an object-relational mapper (ORM) such as SQLAlchemy which will protect your queries."
+     },
+     "properties": {},
+     "ruleId": "data.semgrep-rules.python.flask.security.injection.tainted-sql-string"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "eval/fixtures/vuln-app/app.py",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 68,
+         "endLine": 23,
+         "snippet": {
+          "text": "    return subprocess.check_output(\"ping -c 1 \" + host, shell=True)  # command injection"
+         },
+         "startColumn": 12,
+         "startLine": 23
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "Detected user input entering a `subprocess` call unsafely. This could result in a command injection vulnerability. An attacker could use this vulnerability to execute arbitrary commands on the host, which allows them to download malware, scan sensitive data, or run any command they wish on the server. Do not let users choose the command to run. In general, prefer to use Python API versions of system commands. If you must use subprocess, use a dictionary to allowlist a set of commands."
+     },
+     "properties": {},
+     "ruleId": "data.semgrep-rules.python.flask.security.injection.subprocess-injection"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "eval/fixtures/vuln-app/app.py",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 68,
+         "endLine": 23,
+         "snippet": {
+          "text": "    return subprocess.check_output(\"ping -c 1 \" + host, shell=True)  # command injection"
+         },
+         "startColumn": 12,
+         "startLine": 23
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "Detected subprocess function 'check_output' without a static string. If this data can be controlled by a malicious actor, it may be an instance of command injection. Audit the use of this call to ensure it is not controllable by an external resource. You may consider using 'shlex.escape()'."
+     },
+     "properties": {},
+     "ruleId": "data.semgrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "eval/fixtures/vuln-app/app.py",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 55,
+         "endLine": 23,
+         "snippet": {
+          "text": "    return subprocess.check_output(\"ping -c 1 \" + host, shell=True)  # command injection"
+         },
+         "startColumn": 36,
+         "startLine": 23
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "Detected subprocess function 'check_output' with user controlled data. A malicious actor could leverage this to perform command injection. You may consider using 'shlex.escape()'."
+     },
+     "properties": {},
+     "ruleId": "data.semgrep-rules.python.lang.security.dangerous-subprocess-use"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "eval/fixtures/vuln-app/app.py",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 67,
+         "endLine": 23,
+         "snippet": {
+          "text": "    return subprocess.check_output(\"ping -c 1 \" + host, shell=True)  # command injection"
+         },
+         "startColumn": 63,
+         "startLine": 23
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "Found 'subprocess' function 'check_output' with 'shell=True'. This is dangerous because this call will spawn the command using a shell process. Doing so propagates current shell settings and variables, which makes it much easier for a malicious actor to execute commands. Use 'shell=False' instead."
+     },
+     "properties": {},
+     "ruleId": "data.semgrep-rules.python.lang.security.audit.subprocess-shell-true"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "eval/fixtures/vuln-app/app.py",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 42,
+         "endLine": 28,
+         "snippet": {
+          "text": "    return str(pickle.loads(request.data))  # insecure deserialization"
+         },
+         "startColumn": 16,
+         "startLine": 28
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "Detected the use of an insecure deserialization library in a Flask route. These libraries are prone to code execution vulnerabilities. Ensure user data does not enter this function. To fix this, try to avoid serializing whole objects. Consider instead using a serializer such as JSON."
+     },
+     "properties": {},
+     "ruleId": "data.semgrep-rules.python.flask.security.insecure-deserialization"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "eval/fixtures/vuln-app/app.py",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 42,
+         "endLine": 28,
+         "snippet": {
+          "text": "    return str(pickle.loads(request.data))  # insecure deserialization"
+         },
+         "startColumn": 16,
+         "startLine": 28
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "Avoid using `pickle`, which is known to lead to code execution vulnerabilities. When unpickling, the serialized data could be manipulated to run arbitrary code. Instead, consider serializing the relevant data as JSON or a similar text-based serialization format."
+     },
+     "properties": {},
+     "ruleId": "data.semgrep-rules.python.lang.security.deserialization.avoid-pickle"
+    },
+    {
+     "fingerprints": {
+      "matchBasedId/v1": "requires login"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "eval/fixtures/vuln-app/app.py",
+         "uriBaseId": "%SRCROOT%"
+        },
+        "region": {
+         "endColumn": 36,
+         "endLine": 32,
+         "snippet": {
+          "text": "    return hashlib.md5(pw.encode()).hexdigest()  # weak hash"
+         },
+         "startColumn": 12,
+         "startLine": 32
+        }
+       }
+      }
+     ],
+     "message": {
+      "text": "Detected MD5 hash algorithm which is considered insecure. MD5 is not collision resistant and is therefore not suitable as a cryptographic signature. Use SHA256 or SHA3 instead."
+     },
+     "properties": {},
+     "ruleId": "data.semgrep-rules.python.lang.security.insecure-hash-algorithm-md5"
+    }
+   ],
+   "tool": {
+    "driver": {
+     "name": "Semgrep OSS",
+     "rules": [
+      {
+       "defaultConfiguration": {
+        "level": "error"
+       },
+       "fullDescription": {
+        "text": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using the Django object-relational mappers (ORM) instead of raw SQL queries."
+       },
+       "help": {
+        "markdown": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using the Django object-relational mappers (ORM) instead of raw SQL queries.\n\n<b>References:</b>\n - [https://docs.djangoproject.com/en/3.0/topics/security/#sql-injection-protection](https://docs.djangoproject.com/en/3.0/topics/security/#sql-injection-protection)\n",
+        "text": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using the Django object-relational mappers (ORM) instead of raw SQL queries."
+       },
+       "id": "data.semgrep-rules.python.django.security.injection.tainted-sql-string",
+       "name": "data.semgrep-rules.python.django.security.injection.tainted-sql-string",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-915: Improperly Controlled Modification of Dynamically-Determined Object Attributes",
+         "LOW CONFIDENCE",
+         "OWASP-A08:2021 - Software and Data Integrity Failures",
+         "OWASP-A08:2025 - Software or Data Integrity Failures",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: data.semgrep-rules.python.django.security.injection.tainted-sql-string"
+       }
+      },
+      {
+       "defaultConfiguration": {
+        "level": "error"
+       },
+       "fullDescription": {
+        "text": "Detected user input entering a `subprocess` call unsafely. This could result in a command injection vulnerability. An attacker could use this vulnerability to execute arbitrary commands on the host, which allows them to download malware, scan sensitive data, or run any command they wish on the server. Do not let users choose the command to run. In general, prefer to use Python API versions of system commands. If you must use subprocess, use a dictionary to allowlist a set of commands."
+       },
+       "help": {
+        "markdown": "Detected user input entering a `subprocess` call unsafely. This could result in a command injection vulnerability. An attacker could use this vulnerability to execute arbitrary commands on the host, which allows them to download malware, scan sensitive data, or run any command they wish on the server. Do not let users choose the command to run. In general, prefer to use Python API versions of system commands. If you must use subprocess, use a dictionary to allowlist a set of commands.\n\n<b>References:</b>\n - [https://semgrep.dev/docs/cheat-sheets/python-command-injection/](https://semgrep.dev/docs/cheat-sheets/python-command-injection/)\n",
+        "text": "Detected user input entering a `subprocess` call unsafely. This could result in a command injection vulnerability. An attacker could use this vulnerability to execute arbitrary commands on the host, which allows them to download malware, scan sensitive data, or run any command they wish on the server. Do not let users choose the command to run. In general, prefer to use Python API versions of system commands. If you must use subprocess, use a dictionary to allowlist a set of commands."
+       },
+       "id": "data.semgrep-rules.python.flask.security.injection.subprocess-injection",
+       "name": "data.semgrep-rules.python.flask.security.injection.subprocess-injection",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')",
+         "HIGH CONFIDENCE",
+         "OWASP-A01:2017 - Injection",
+         "OWASP-A03:2021 - Injection",
+         "OWASP-A05:2025 - Injection",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: data.semgrep-rules.python.flask.security.injection.subprocess-injection"
+       }
+      },
+      {
+       "defaultConfiguration": {
+        "level": "error"
+       },
+       "fullDescription": {
+        "text": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using an object-relational mapper (ORM) such as SQLAlchemy which will protect your queries."
+       },
+       "help": {
+        "markdown": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using an object-relational mapper (ORM) such as SQLAlchemy which will protect your queries.\n\n<b>References:</b>\n - [https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-textual-sql](https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-textual-sql)\n - [https://www.tutorialspoint.com/sqlalchemy/sqlalchemy_quick_guide.htm](https://www.tutorialspoint.com/sqlalchemy/sqlalchemy_quick_guide.htm)\n - [https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-more-specific-text-with-table-expression-literal-column-and-expression-column](https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-more-specific-text-with-table-expression-literal-column-and-expression-column)\n",
+        "text": "Detected user input used to manually construct a SQL string. This is usually bad practice because manual construction could accidentally result in a SQL injection. An attacker could use a SQL injection to steal or modify contents of the database. Instead, use a parameterized query which is available by default in most database engines. Alternatively, consider using an object-relational mapper (ORM) such as SQLAlchemy which will protect your queries."
+       },
+       "id": "data.semgrep-rules.python.flask.security.injection.tainted-sql-string",
+       "name": "data.semgrep-rules.python.flask.security.injection.tainted-sql-string",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-704: Incorrect Type Conversion or Cast",
+         "MEDIUM CONFIDENCE",
+         "OWASP-A01:2017 - Injection",
+         "OWASP-A03:2021 - Injection",
+         "OWASP-A05:2025 - Injection",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: data.semgrep-rules.python.flask.security.injection.tainted-sql-string"
+       }
+      },
+      {
+       "defaultConfiguration": {
+        "level": "error"
+       },
+       "fullDescription": {
+        "text": "Detected the use of an insecure deserialization library in a Flask route. These libraries are prone to code execution vulnerabilities. Ensure user data does not enter this function. To fix this, try to avoid serializing whole objects. Consider instead using a serializer such as JSON."
+       },
+       "help": {
+        "markdown": "Detected the use of an insecure deserialization library in a Flask route. These libraries are prone to code execution vulnerabilities. Ensure user data does not enter this function. To fix this, try to avoid serializing whole objects. Consider instead using a serializer such as JSON.\n\n<b>References:</b>\n - [https://docs.python.org/3/library/pickle.html](https://docs.python.org/3/library/pickle.html)\n",
+        "text": "Detected the use of an insecure deserialization library in a Flask route. These libraries are prone to code execution vulnerabilities. Ensure user data does not enter this function. To fix this, try to avoid serializing whole objects. Consider instead using a serializer such as JSON."
+       },
+       "id": "data.semgrep-rules.python.flask.security.insecure-deserialization",
+       "name": "data.semgrep-rules.python.flask.security.insecure-deserialization",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-502: Deserialization of Untrusted Data",
+         "LOW CONFIDENCE",
+         "OWASP-A08:2017 - Insecure Deserialization",
+         "OWASP-A08:2021 - Software and Data Integrity Failures",
+         "OWASP-A08:2025 - Software or Data Integrity Failures",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: data.semgrep-rules.python.flask.security.insecure-deserialization"
+       }
+      },
+      {
+       "defaultConfiguration": {
+        "level": "error"
+       },
+       "fullDescription": {
+        "text": "Detected subprocess function '$FUNC' without a static string. If this data can be controlled by a malicious actor, it may be an instance of command injection. Audit the use of this call to ensure it is not controllable by an external resource. You may consider using 'shlex.escape()'."
+       },
+       "help": {
+        "markdown": "Detected subprocess function '$FUNC' without a static string. If this data can be controlled by a malicious actor, it may be an instance of command injection. Audit the use of this call to ensure it is not controllable by an external resource. You may consider using 'shlex.escape()'.\n\n<b>References:</b>\n - [https://stackoverflow.com/questions/3172470/actual-meaning-of-shell-true-in-subprocess](https://stackoverflow.com/questions/3172470/actual-meaning-of-shell-true-in-subprocess)\n - [https://docs.python.org/3/library/subprocess.html](https://docs.python.org/3/library/subprocess.html)\n - [https://docs.python.org/3/library/shlex.html](https://docs.python.org/3/library/shlex.html)\n - [https://semgrep.dev/docs/cheat-sheets/python-command-injection/](https://semgrep.dev/docs/cheat-sheets/python-command-injection/)\n",
+        "text": "Detected subprocess function '$FUNC' without a static string. If this data can be controlled by a malicious actor, it may be an instance of command injection. Audit the use of this call to ensure it is not controllable by an external resource. You may consider using 'shlex.escape()'."
+       },
+       "id": "data.semgrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit",
+       "name": "data.semgrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')",
+         "LOW CONFIDENCE",
+         "OWASP-A01:2017 - Injection",
+         "OWASP-A03:2021 - Injection",
+         "OWASP-A05:2025 - Injection",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: data.semgrep-rules.python.lang.security.audit.dangerous-subprocess-use-audit"
+       }
+      },
+      {
+       "defaultConfiguration": {
+        "level": "error"
+       },
+       "fullDescription": {
+        "text": "Found 'subprocess' function '$FUNC' with 'shell=True'. This is dangerous because this call will spawn the command using a shell process. Doing so propagates current shell settings and variables, which makes it much easier for a malicious actor to execute commands. Use 'shell=False' instead."
+       },
+       "help": {
+        "markdown": "Found 'subprocess' function '$FUNC' with 'shell=True'. This is dangerous because this call will spawn the command using a shell process. Doing so propagates current shell settings and variables, which makes it much easier for a malicious actor to execute commands. Use 'shell=False' instead.\n\n<b>References:</b>\n - [Semgrep Rule](https://bandit.readthedocs.io/en/latest/plugins/b602_subprocess_popen_with_shell_equals_true.html)\n - [https://stackoverflow.com/questions/3172470/actual-meaning-of-shell-true-in-subprocess](https://stackoverflow.com/questions/3172470/actual-meaning-of-shell-true-in-subprocess)\n - [https://docs.python.org/3/library/subprocess.html](https://docs.python.org/3/library/subprocess.html)\n",
+        "text": "Found 'subprocess' function '$FUNC' with 'shell=True'. This is dangerous because this call will spawn the command using a shell process. Doing so propagates current shell settings and variables, which makes it much easier for a malicious actor to execute commands. Use 'shell=False' instead."
+       },
+       "helpUri": "https://bandit.readthedocs.io/en/latest/plugins/b602_subprocess_popen_with_shell_equals_true.html",
+       "id": "data.semgrep-rules.python.lang.security.audit.subprocess-shell-true",
+       "name": "data.semgrep-rules.python.lang.security.audit.subprocess-shell-true",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')",
+         "MEDIUM CONFIDENCE",
+         "OWASP-A01:2017 - Injection",
+         "OWASP-A03:2021 - Injection",
+         "OWASP-A05:2025 - Injection",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: data.semgrep-rules.python.lang.security.audit.subprocess-shell-true"
+       }
+      },
+      {
+       "defaultConfiguration": {
+        "level": "error"
+       },
+       "fullDescription": {
+        "text": "Detected subprocess function '$FUNC' with user controlled data. A malicious actor could leverage this to perform command injection. You may consider using 'shlex.escape()'."
+       },
+       "help": {
+        "markdown": "Detected subprocess function '$FUNC' with user controlled data. A malicious actor could leverage this to perform command injection. You may consider using 'shlex.escape()'.\n\n<b>References:</b>\n - [https://stackoverflow.com/questions/3172470/actual-meaning-of-shell-true-in-subprocess](https://stackoverflow.com/questions/3172470/actual-meaning-of-shell-true-in-subprocess)\n - [https://docs.python.org/3/library/subprocess.html](https://docs.python.org/3/library/subprocess.html)\n - [https://docs.python.org/3/library/shlex.html](https://docs.python.org/3/library/shlex.html)\n - [https://semgrep.dev/docs/cheat-sheets/python-command-injection/](https://semgrep.dev/docs/cheat-sheets/python-command-injection/)\n",
+        "text": "Detected subprocess function '$FUNC' with user controlled data. A malicious actor could leverage this to perform command injection. You may consider using 'shlex.escape()'."
+       },
+       "id": "data.semgrep-rules.python.lang.security.dangerous-subprocess-use",
+       "name": "data.semgrep-rules.python.lang.security.dangerous-subprocess-use",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')",
+         "MEDIUM CONFIDENCE",
+         "OWASP-A01:2017 - Injection",
+         "OWASP-A03:2021 - Injection",
+         "OWASP-A05:2025 - Injection",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: data.semgrep-rules.python.lang.security.dangerous-subprocess-use"
+       }
+      },
+      {
+       "defaultConfiguration": {
+        "level": "warning"
+       },
+       "fullDescription": {
+        "text": "Avoid using `pickle`, which is known to lead to code execution vulnerabilities. When unpickling, the serialized data could be manipulated to run arbitrary code. Instead, consider serializing the relevant data as JSON or a similar text-based serialization format."
+       },
+       "help": {
+        "markdown": "Avoid using `pickle`, which is known to lead to code execution vulnerabilities. When unpickling, the serialized data could be manipulated to run arbitrary code. Instead, consider serializing the relevant data as JSON or a similar text-based serialization format.\n\n<b>References:</b>\n - [https://docs.python.org/3/library/pickle.html](https://docs.python.org/3/library/pickle.html)\n",
+        "text": "Avoid using `pickle`, which is known to lead to code execution vulnerabilities. When unpickling, the serialized data could be manipulated to run arbitrary code. Instead, consider serializing the relevant data as JSON or a similar text-based serialization format."
+       },
+       "id": "data.semgrep-rules.python.lang.security.deserialization.avoid-pickle",
+       "name": "data.semgrep-rules.python.lang.security.deserialization.avoid-pickle",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-502: Deserialization of Untrusted Data",
+         "LOW CONFIDENCE",
+         "OWASP-A08:2017 - Insecure Deserialization",
+         "OWASP-A08:2021 - Software and Data Integrity Failures",
+         "OWASP-A08:2025 - Software or Data Integrity Failures",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: data.semgrep-rules.python.lang.security.deserialization.avoid-pickle"
+       }
+      },
+      {
+       "defaultConfiguration": {
+        "level": "warning"
+       },
+       "fullDescription": {
+        "text": "Detected MD5 hash algorithm which is considered insecure. MD5 is not collision resistant and is therefore not suitable as a cryptographic signature. Use SHA256 or SHA3 instead."
+       },
+       "help": {
+        "markdown": "Detected MD5 hash algorithm which is considered insecure. MD5 is not collision resistant and is therefore not suitable as a cryptographic signature. Use SHA256 or SHA3 instead.\n\n<b>References:</b>\n - [Semgrep Rule](https://github.com/PyCQA/bandit/blob/d5f8fa0d89d7b11442fc6ec80ca42953974354c8/bandit/blacklists/calls.py#L59)\n - [https://www.schneier.com/blog/archives/2012/10/when_will_we_se.html](https://www.schneier.com/blog/archives/2012/10/when_will_we_se.html)\n - [https://www.trendmicro.com/vinfo/us/security/news/vulnerabilities-and-exploits/sha-1-collision-signals-the-end-of-the-algorithm-s-viability](https://www.trendmicro.com/vinfo/us/security/news/vulnerabilities-and-exploits/sha-1-collision-signals-the-end-of-the-algorithm-s-viability)\n - [http://2012.sharcs.org/slides/stevens.pdf](http://2012.sharcs.org/slides/stevens.pdf)\n - [https://pycryptodome.readthedocs.io/en/latest/src/hash/sha3_256.html](https://pycryptodome.readthedocs.io/en/latest/src/hash/sha3_256.html)\n",
+        "text": "Detected MD5 hash algorithm which is considered insecure. MD5 is not collision resistant and is therefore not suitable as a cryptographic signature. Use SHA256 or SHA3 instead."
+       },
+       "helpUri": "https://github.com/PyCQA/bandit/blob/d5f8fa0d89d7b11442fc6ec80ca42953974354c8/bandit/blacklists/calls.py#L59",
+       "id": "data.semgrep-rules.python.lang.security.insecure-hash-algorithm-md5",
+       "name": "data.semgrep-rules.python.lang.security.insecure-hash-algorithm-md5",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-327: Use of a Broken or Risky Cryptographic Algorithm",
+         "MEDIUM CONFIDENCE",
+         "OWASP-A02:2021 - Cryptographic Failures",
+         "OWASP-A03:2017 - Sensitive Data Exposure",
+         "OWASP-A04:2025 - Cryptographic Failures",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: data.semgrep-rules.python.lang.security.insecure-hash-algorithm-md5"
+       }
+      },
+      {
+       "defaultConfiguration": {
+        "level": "error"
+       },
+       "fullDescription": {
+        "text": "Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection. In order to execute raw query safely, prepared statement should be used. SQLAlchemy provides TextualSQL to easily used prepared statement with named parameters. For complex SQL composition, use SQL Expression Language or Schema Definition Language. In most cases, SQLAlchemy ORM will be a better option."
+       },
+       "help": {
+        "markdown": "Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection. In order to execute raw query safely, prepared statement should be used. SQLAlchemy provides TextualSQL to easily used prepared statement with named parameters. For complex SQL composition, use SQL Expression Language or Schema Definition Language. In most cases, SQLAlchemy ORM will be a better option.\n\n<b>References:</b>\n - [https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-textual-sql](https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-textual-sql)\n - [https://www.tutorialspoint.com/sqlalchemy/sqlalchemy_quick_guide.htm](https://www.tutorialspoint.com/sqlalchemy/sqlalchemy_quick_guide.htm)\n - [https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-more-specific-text-with-table-expression-literal-column-and-expression-column](https://docs.sqlalchemy.org/en/14/core/tutorial.html#using-more-specific-text-with-table-expression-literal-column-and-expression-column)\n",
+        "text": "Avoiding SQL string concatenation: untrusted input concatenated with raw SQL query can result in SQL Injection. In order to execute raw query safely, prepared statement should be used. SQLAlchemy provides TextualSQL to easily used prepared statement with named parameters. For complex SQL composition, use SQL Expression Language or Schema Definition Language. In most cases, SQLAlchemy ORM will be a better option."
+       },
+       "id": "data.semgrep-rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query",
+       "name": "data.semgrep-rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query",
+       "properties": {
+        "precision": "very-high",
+        "tags": [
+         "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')",
+         "LOW CONFIDENCE",
+         "OWASP-A01:2017 - Injection",
+         "OWASP-A03:2021 - Injection",
+         "OWASP-A05:2025 - Injection",
+         "security"
+        ]
+       },
+       "shortDescription": {
+        "text": "Semgrep Finding: data.semgrep-rules.python.sqlalchemy.security.sqlalchemy-execute-raw-query"
+       }
+      }
+     ],
+     "semanticVersion": "1.176.0"
+    }
+   }
+  }
+ ],
+ "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/os/schemas/sarif-schema-2.1.0.json"
+}

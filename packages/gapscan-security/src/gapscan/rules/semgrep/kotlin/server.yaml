@@ -1,0 +1,663 @@
+# GapScan Rules: server-side Kotlin (Ktor, Spring MVC/WebFlux, JAX-RS, servlets). Licensed Apache-2.0.
+# Every rule has a vulnerable and a safe case in tests/rules/kotlin/server.kt (run: make rules-test).
+# MASVS is a mobile standard and has no server controls; every rule in this folder must carry one, so these rules
+# use the closest honest control: MASVS-CODE-4 ("validates and sanitizes all untrusted inputs") for injection, and
+# MASVS-AUTH-1 ("secure authentication and authorization protocols") for token checks, CORS and CSRF.
+rules:
+  - id: gapscan.kotlin.taint-sqli
+    languages: [kotlin]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Request data (a Ktor parameter or body, a Spring or JAX-RS handler parameter) is put into an SQL statement as
+      text. An attacker can change the query to read or modify other rows, or the whole database. Use bound parameters:
+      `prepareStatement("... where id = ?")` with `setString`, JdbcTemplate's `?` arguments, `:name` parameters in JPA, or
+      Exposed's DSL instead of `exec("...$value")`.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          # Ktor: route parameters, query string, form and body, headers and cookies
+          - pattern: call.parameters
+          - pattern: call.request.queryParameters
+          - pattern: call.request.rawQueryParameters
+          - pattern: call.receiveParameters()
+          - pattern: call.receiveText()
+          - pattern: call.receive<$T>()
+          - pattern: call.receive(...)
+          - pattern: call.receiveMultipart()
+          - pattern: call.request.header(...)
+          - pattern: call.request.headers
+          - pattern: call.request.cookies
+          - pattern: call.request.uri
+          # Spring MVC / WebFlux handler parameters and JAX-RS resource parameters
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) = $E
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) = $E
+              - metavariable-regex:
+                  metavariable: $A
+                  regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|MatrixVariable|RequestPart|QueryParam|PathParam|FormParam|HeaderParam|CookieParam)$
+              - pattern: $P
+          # servlet requests and WebFlux functional handlers
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.parameterMap
+          - pattern: $R.getHeader(...)
+          - pattern: $R.queryString
+          - pattern: $R.getQueryString()
+          - pattern: $R.queryParam(...)
+          - pattern: $R.pathVariable(...)
+          - pattern: $R.queryParams()
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: $X.toInt()
+          - pattern: $X.toLong()
+          - pattern: $X.toIntOrNull()
+          - pattern: $X.toLongOrNull()
+          - pattern: $X.toBoolean()
+          - pattern: UUID.fromString($X)
+          - pattern: $X.toInt(...)
+          - pattern: $X.toLong(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $S.executeQuery($X, ...)
+              - pattern: $S.executeUpdate($X, ...)
+              - pattern: $S.executeLargeUpdate($X, ...)
+              - pattern: $S.execute($X, ...)
+              - pattern: $S.addBatch($X)
+              - pattern: $C.prepareStatement($X, ...)
+              - pattern: $C.prepareCall($X, ...)
+              - pattern: $C.nativeSQL($X)
+              - pattern: $J.queryForObject($X, ...)
+              - pattern: $J.queryForList($X, ...)
+              - pattern: $J.queryForMap($X, ...)
+              - pattern: $J.queryForRowSet($X, ...)
+              - pattern: $J.query($X, ...)
+              - pattern: $J.update($X, ...)
+              - pattern: $J.batchUpdate($X, ...)
+              - pattern: $EM.createQuery($X, ...)
+              - pattern: $EM.createNativeQuery($X, ...)
+              - pattern: exec($X, ...)
+              - patterns:
+                  # Exposed: TransactionManager.current().exec(sql), tx.exec(sql); not Runtime.exec (a command)
+                  - pattern: $TX.exec($X, ...)
+                  - metavariable-regex:
+                      metavariable: $TX
+                      regex: (?i)^(?!.*runtime).*(transaction|tx|current\(\)).*$
+              - pattern: $D.fetch($X, ...)
+              - pattern: $D.resultQuery($X, ...)
+              - pattern: DSL.condition($X, ...)
+              - pattern: $DB.rawQuery($X, ...)
+              - pattern: $DB.execSQL($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.kotlin.taint-command-injection
+    languages: [kotlin]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Request data reaches a command the server runs. With a shell (`sh -c`) or a single command string an attacker
+      can append their own commands; even as a separate argument it can add options. Run a fixed program with a fixed
+      argument list, check the value against an allow-list, and never pass it through a shell.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          # Ktor: route parameters, query string, form and body, headers and cookies
+          - pattern: call.parameters
+          - pattern: call.request.queryParameters
+          - pattern: call.request.rawQueryParameters
+          - pattern: call.receiveParameters()
+          - pattern: call.receiveText()
+          - pattern: call.receive<$T>()
+          - pattern: call.receive(...)
+          - pattern: call.receiveMultipart()
+          - pattern: call.request.header(...)
+          - pattern: call.request.headers
+          - pattern: call.request.cookies
+          - pattern: call.request.uri
+          # Spring MVC / WebFlux handler parameters and JAX-RS resource parameters
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) = $E
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) = $E
+              - metavariable-regex:
+                  metavariable: $A
+                  regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|MatrixVariable|RequestPart|QueryParam|PathParam|FormParam|HeaderParam|CookieParam)$
+              - pattern: $P
+          # servlet requests and WebFlux functional handlers
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.parameterMap
+          - pattern: $R.getHeader(...)
+          - pattern: $R.queryString
+          - pattern: $R.getQueryString()
+          - pattern: $R.queryParam(...)
+          - pattern: $R.pathVariable(...)
+          - pattern: $R.queryParams()
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: $X.toInt()
+          - pattern: $X.toLong()
+          - pattern: $X.toIntOrNull()
+          - pattern: $X.toLongOrNull()
+          - pattern: $X.toBoolean()
+          - pattern: UUID.fromString($X)
+          - pattern: $X.toInt(...)
+          - pattern: $X.toLong(...)
+    pattern-sinks:
+      - pattern-either:
+          - pattern: Runtime.getRuntime().exec(...)
+          - patterns:
+              - pattern: $R.exec(...)
+              - metavariable-regex:
+                  metavariable: $R
+                  regex: (?i)^.*runtime.*$
+          - pattern: ProcessBuilder(...)
+          - pattern: $PB.command(...)
+
+  - id: gapscan.kotlin.taint-path-traversal
+    languages: [kotlin]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Request data is used as (part of) a file path. A value such as `../../etc/passwd` reads or overwrites files
+      outside the folder you meant. Keep only the base name (`File(name).name`), or map the value to a known file, then
+      check that `file.canonicalPath` starts with the base folder's canonical path.
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          # Ktor: route parameters, query string, form and body, headers and cookies
+          - pattern: call.parameters
+          - pattern: call.request.queryParameters
+          - pattern: call.request.rawQueryParameters
+          - pattern: call.receiveParameters()
+          - pattern: call.receiveText()
+          - pattern: call.receive<$T>()
+          - pattern: call.receive(...)
+          - pattern: call.receiveMultipart()
+          - pattern: call.request.header(...)
+          - pattern: call.request.headers
+          - pattern: call.request.cookies
+          - pattern: call.request.uri
+          # Spring MVC / WebFlux handler parameters and JAX-RS resource parameters
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) = $E
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) = $E
+              - metavariable-regex:
+                  metavariable: $A
+                  regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|MatrixVariable|RequestPart|QueryParam|PathParam|FormParam|HeaderParam|CookieParam)$
+              - pattern: $P
+          # servlet requests and WebFlux functional handlers
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.parameterMap
+          - pattern: $R.getHeader(...)
+          - pattern: $R.queryString
+          - pattern: $R.getQueryString()
+          - pattern: $R.queryParam(...)
+          - pattern: $R.pathVariable(...)
+          - pattern: $R.queryParams()
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: File($X).name
+          - pattern: $X.substringAfterLast(...)
+          - pattern: FilenameUtils.getName($X)
+          - pattern: $X.toInt()
+          - pattern: $X.toLong()
+          - pattern: UUID.fromString($X)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: File($X)
+              - pattern: File($D, $X)
+              - pattern: Paths.get($X, ...)
+              - pattern: Paths.get($D, $X, ...)
+              - pattern: Path.of($X, ...)
+              - pattern: Path.of($D, $X, ...)
+              - pattern: $P.resolve($X)
+              - pattern: FileInputStream($X)
+              - pattern: FileOutputStream($X, ...)
+              - pattern: FileReader($X)
+              - pattern: FileWriter($X, ...)
+              - pattern: call.respondFile($X)
+              - pattern: call.respondFile($D, $X, ...)
+              - pattern: FileSystemResource($X)
+              - pattern: ClassPathResource($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.kotlin.taint-ssrf
+    languages: [kotlin]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Request data decides the address the server connects to. An attacker can make the server call internal
+      services, cloud metadata endpoints (169.254.169.254) or other hosts with its own network position and
+      credentials. Choose the host from an allow-list (compare the parsed host exactly), and only let the request pick a
+      path or an id.
+    metadata:
+      cwe: ["CWE-918: Server-Side Request Forgery (SSRF)"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          # Ktor: route parameters, query string, form and body, headers and cookies
+          - pattern: call.parameters
+          - pattern: call.request.queryParameters
+          - pattern: call.request.rawQueryParameters
+          - pattern: call.receiveParameters()
+          - pattern: call.receiveText()
+          - pattern: call.receive<$T>()
+          - pattern: call.receive(...)
+          - pattern: call.receiveMultipart()
+          - pattern: call.request.header(...)
+          - pattern: call.request.headers
+          - pattern: call.request.cookies
+          - pattern: call.request.uri
+          # Spring MVC / WebFlux handler parameters and JAX-RS resource parameters
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) = $E
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) = $E
+              - metavariable-regex:
+                  metavariable: $A
+                  regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|MatrixVariable|RequestPart|QueryParam|PathParam|FormParam|HeaderParam|CookieParam)$
+              - pattern: $P
+          # servlet requests and WebFlux functional handlers
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.parameterMap
+          - pattern: $R.getHeader(...)
+          - pattern: $R.queryString
+          - pattern: $R.getQueryString()
+          - pattern: $R.queryParam(...)
+          - pattern: $R.pathVariable(...)
+          - pattern: $R.queryParams()
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: URL($X)
+              - pattern: URL($X).$M(...)
+              - pattern: $CL.get($X, ...)
+              - pattern: $CL.post($X, ...)
+              - pattern: $CL.put($X, ...)
+              - pattern: $CL.delete($X, ...)
+              - pattern: $CL.request($X, ...)
+              - pattern: $CL.head($X, ...)
+              - pattern: $CL.prepareGet($X, ...)
+              - pattern: HttpRequest.newBuilder($X)
+              - pattern: $B.uri($X)
+              - pattern: $B.url($X)
+              - pattern: $RT.getForObject($X, ...)
+              - pattern: $RT.getForEntity($X, ...)
+              - pattern: $RT.postForObject($X, ...)
+              - pattern: $RT.postForEntity($X, ...)
+              - pattern: $RT.exchange($X, ...)
+              - pattern: WebClient.create($X)
+              - pattern: $B.baseUrl($X)
+          - focus-metavariable: $X
+
+  - id: gapscan.kotlin.taint-open-redirect
+    languages: [kotlin]
+    mode: taint
+    severity: WARNING
+    message: >-
+      Request data decides where the user is redirected. An attacker can send a link on your domain that lands on
+      their phishing page (or leaks tokens in the URL). Redirect only to relative paths you recognise, or to hosts on an
+      allow-list.
+    metadata:
+      cwe: ["CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          # Ktor: route parameters, query string, form and body, headers and cookies
+          - pattern: call.parameters
+          - pattern: call.request.queryParameters
+          - pattern: call.request.rawQueryParameters
+          - pattern: call.receiveParameters()
+          - pattern: call.receiveText()
+          - pattern: call.receive<$T>()
+          - pattern: call.receive(...)
+          - pattern: call.receiveMultipart()
+          - pattern: call.request.header(...)
+          - pattern: call.request.headers
+          - pattern: call.request.cookies
+          - pattern: call.request.uri
+          # Spring MVC / WebFlux handler parameters and JAX-RS resource parameters
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) = $E
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) = $E
+              - metavariable-regex:
+                  metavariable: $A
+                  regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|MatrixVariable|RequestPart|QueryParam|PathParam|FormParam|HeaderParam|CookieParam)$
+              - pattern: $P
+          # servlet requests and WebFlux functional handlers
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.parameterMap
+          - pattern: $R.getHeader(...)
+          - pattern: $R.queryString
+          - pattern: $R.getQueryString()
+          - pattern: $R.queryParam(...)
+          - pattern: $R.pathVariable(...)
+          - pattern: $R.queryParams()
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: call.respondRedirect($X, ...)
+              - pattern: $RES.sendRedirect($X)
+              - pattern: RedirectView($X, ...)
+              - pattern: ModelAndView("redirect:" + $X)
+              - pattern: '"redirect:" + $X'
+              - pattern: '"redirect:${$X}"'
+              - pattern: $H.location(URI($X))
+              - pattern: $H.location(URI.create($X))
+              - pattern: $RES.setHeader("Location", $X)
+              - pattern: $RES.addHeader("Location", $X)
+              - pattern: call.response.header(HttpHeaders.Location, $X)
+              - pattern: call.response.header("Location", $X)
+          - focus-metavariable: $X
+
+  - id: gapscan.kotlin.taint-xss
+    languages: [kotlin]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Request data is written into an HTML response without escaping. A value containing `<script>` runs in the
+      victim's browser on your origin, with their session. Render through a template engine or kotlinx.html (which
+      escape by default), escape with `StringEscapeUtils.escapeHtml4` / `HtmlUtils.htmlEscape`, and never put request
+      data inside `unsafe { }`.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          # Ktor: route parameters, query string, form and body, headers and cookies
+          - pattern: call.parameters
+          - pattern: call.request.queryParameters
+          - pattern: call.request.rawQueryParameters
+          - pattern: call.receiveParameters()
+          - pattern: call.receiveText()
+          - pattern: call.receive<$T>()
+          - pattern: call.receive(...)
+          - pattern: call.receiveMultipart()
+          - pattern: call.request.header(...)
+          - pattern: call.request.headers
+          - pattern: call.request.cookies
+          - pattern: call.request.uri
+          # Spring MVC / WebFlux handler parameters and JAX-RS resource parameters
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) = $E
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) = $E
+              - metavariable-regex:
+                  metavariable: $A
+                  regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|MatrixVariable|RequestPart|QueryParam|PathParam|FormParam|HeaderParam|CookieParam)$
+              - pattern: $P
+          # servlet requests and WebFlux functional handlers
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.parameterMap
+          - pattern: $R.getHeader(...)
+          - pattern: $R.queryString
+          - pattern: $R.getQueryString()
+          - pattern: $R.queryParam(...)
+          - pattern: $R.pathVariable(...)
+          - pattern: $R.queryParams()
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: StringEscapeUtils.escapeHtml4($X)
+          - pattern: HtmlUtils.htmlEscape($X, ...)
+          - pattern: Encode.forHtml($X)
+          - pattern: $X.escapeHTML()
+          - pattern: $X.toInt()
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: call.respondText($X, ContentType.Text.Html, ...)
+              - pattern: call.respondText($X, ContentType.parse("text/html"), ...)
+              - pattern: call.respondText($X, contentType = ContentType.Text.Html, ...)
+              - pattern: call.respondText(contentType = ContentType.Text.Html, text = $X, ...)
+              - pattern: unsafe { +$X }
+              - pattern: unsafe { raw($X) }
+              - pattern: $RES.writer.write($X)
+              - pattern: $RES.writer.print($X)
+              - pattern: $RES.writer.println($X)
+              - pattern: $RES.getWriter().write($X)
+              - pattern: $RES.getWriter().print($X)
+              - pattern: $RES.getWriter().println($X)
+              - pattern: $RB.contentType(MediaType.TEXT_HTML).body($X)
+          - focus-metavariable: $X
+
+  - id: gapscan.kotlin.taint-code-injection
+    languages: [kotlin]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Request data is evaluated as code or as an expression (a script engine, Spring SpEL, OGNL, MVEL, Groovy). An
+      attacker can run any code on the server. Never evaluate request data; map it to fixed operations, or evaluate
+      with a `SimpleEvaluationContext` that has no type or bean access.
+    metadata:
+      cwe: ["CWE-94: Improper Control of Generation of Code ('Code Injection')", "CWE-917: Improper Neutralization of Special Elements used in an Expression Language Statement ('Expression Language Injection')"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          # Ktor: route parameters, query string, form and body, headers and cookies
+          - pattern: call.parameters
+          - pattern: call.request.queryParameters
+          - pattern: call.request.rawQueryParameters
+          - pattern: call.receiveParameters()
+          - pattern: call.receiveText()
+          - pattern: call.receive<$T>()
+          - pattern: call.receive(...)
+          - pattern: call.receiveMultipart()
+          - pattern: call.request.header(...)
+          - pattern: call.request.headers
+          - pattern: call.request.cookies
+          - pattern: call.request.uri
+          # Spring MVC / WebFlux handler parameters and JAX-RS resource parameters
+          - patterns:
+              - pattern-either:
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) { ... }
+                  - pattern-inside: |
+                      fun $F(..., @$A $P: $T, ...) = $E
+                  - pattern-inside: |
+                      fun $F(..., @$A(...) $P: $T, ...) = $E
+              - metavariable-regex:
+                  metavariable: $A
+                  regex: ^(RequestParam|PathVariable|RequestBody|RequestHeader|CookieValue|ModelAttribute|MatrixVariable|RequestPart|QueryParam|PathParam|FormParam|HeaderParam|CookieParam)$
+              - pattern: $P
+          # servlet requests and WebFlux functional handlers
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.parameterMap
+          - pattern: $R.getHeader(...)
+          - pattern: $R.queryString
+          - pattern: $R.getQueryString()
+          - pattern: $R.queryParam(...)
+          - pattern: $R.pathVariable(...)
+          - pattern: $R.queryParams()
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $ENG.eval($X, ...)
+              - pattern: $P.parseExpression($X, ...)
+              - pattern: Ognl.getValue($X, ...)
+              - pattern: MVEL.eval($X, ...)
+              - pattern: GroovyShell(...).evaluate($X, ...)
+              - pattern: $G.evaluate($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.kotlin.jwt-unverified
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      A JSON Web Token is accepted without checking its signature: the `none` algorithm, an unsecured (unsigned) parser,
+      or `JWT.decode` in a function that never verifies. Anyone can then write a token with any user or role in it.
+      Verify every token with a fixed algorithm and key (`JWT.require(Algorithm.HMAC256(key)).build().verify(token)`,
+      `Jwts.parser().verifyWith(key).build().parseSignedClaims(token)`, Ktor's `jwt { verifier(...) }`).
+    metadata:
+      cwe: ["CWE-347: Improper Verification of Cryptographic Signature", "CWE-287: Improper Authentication"]
+      masvs: ["MASVS-AUTH-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: Algorithm.none()
+      - pattern: $P.parseClaimsJwt(...)
+      - pattern: $P.parseUnsecuredClaims(...)
+      - pattern: $P.parseUnsecuredContent(...)
+      - pattern: $B.unsecured()
+      - patterns:
+          - pattern: JWT.decode($T)
+          - pattern-inside: |
+              fun $F(...) { $...BODY }
+          - metavariable-regex:
+              metavariable: $...BODY
+              regex: (?s)^(?!.*\.verify\().*$
+
+  - id: gapscan.kotlin.jwt-hardcoded-secret
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      The key that signs or checks JSON Web Tokens is a literal in the source. Anyone with the code (or a leaked build)
+      can mint valid tokens for any user. Load the key from a secret store or environment at start-up, make it long and
+      random, and rotate the one that was committed.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials", "CWE-321: Use of Hard-coded Cryptographic Key"]
+      masvs: ["MASVS-AUTH-1"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: Algorithm.HMAC256("...")
+      - pattern: Algorithm.HMAC384("...")
+      - pattern: Algorithm.HMAC512("...")
+      - pattern: Keys.hmacShaKeyFor("...".toByteArray(...))
+      - pattern: Keys.hmacShaKeyFor("...".encodeToByteArray())
+      - pattern: $B.signWith($ALG, "...")
+      - pattern: $B.setSigningKey("...")
+      - pattern: $B.setSigningKey("...".toByteArray(...))
+
+  - id: gapscan.kotlin.cors-any-origin-with-credentials
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      CORS allows every origin and also allows credentials (cookies, Authorization headers). Any web site the user
+      visits can then call your API as that user and read the answers. List the exact origins that may call the API
+      (`allowHost("app.example.com", schemes = listOf("https"))`, `allowedOrigins("https://app.example.com")`), or turn
+      credentials off. The rule reads the configuration block as text.
+    metadata:
+      cwe: ["CWE-942: Permissive Cross-domain Policy with Untrusted Domains", "CWE-346: Origin Validation Error"]
+      masvs: ["MASVS-AUTH-1"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      # Ktor: install(CORS) { anyHost(); allowCredentials = true }
+      - pattern-regex: '(?s)install\(\s*CORS\s*\)\s*\{(?=(?:(?!\n\}|install\()[\s\S])*?\banyHost\(\))(?:(?!\n\}|install\()[\s\S])*?allowCredentials\s*=\s*true'
+      # Spring: a wildcard origin (pattern) with allowCredentials(true) / allowCredentials = true, in either order
+      - pattern-regex: '(?s)(?:allowedOriginPatterns|addAllowedOriginPattern|allowedOrigins|addAllowedOrigin)\(\s*"\*"\s*\)[^;{}]{0,400}?(?:allowCredentials\(\s*true\s*\)|allowCredentials\s*=\s*true)'
+      - pattern-regex: '(?s)(?:allowCredentials\(\s*true\s*\)|allowCredentials\s*=\s*true)[^;{}]{0,400}?(?:allowedOriginPatterns|addAllowedOriginPattern|allowedOrigins|addAllowedOrigin)\(\s*"\*"\s*\)'
+      - pattern-regex: '@CrossOrigin\((?=[^)]*origins\s*=\s*\[\s*"\*"\s*\])(?=[^)]*allowCredentials\s*=\s*"true")[^)]*\)'
+
+  - id: gapscan.kotlin.csrf-protection-disabled
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      Spring Security's CSRF protection is switched off. If the app authenticates browsers with cookies (a session or a
+      remember-me cookie), another site can make the user's browser submit state-changing requests. Keep CSRF on for
+      cookie-based sessions; switching it off is only safe for stateless APIs that take tokens from a header.
+    metadata:
+      cwe: ["CWE-352: Cross-Site Request Forgery (CSRF)"]
+      masvs: ["MASVS-AUTH-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: $H.csrf().disable()
+      - pattern: csrf { disable() }
+      - pattern: $H.csrf { $C -> $C.disable() }
+      - pattern: $H.csrf { it.disable() }
+      - pattern: $H.csrf(AbstractHttpConfigurer<$A, $B>::disable)
+      - pattern-regex: '\.csrf\(\s*(?:AbstractHttpConfigurer|CsrfConfigurer)\S*::disable\s*\)'
+
+  - id: gapscan.kotlin.cookie-insecure-flags
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A cookie is set with `Secure` or `HttpOnly` switched off. Without `Secure` it is also sent over plain HTTP, where
+      it can be read on the network; without `HttpOnly` any script injected into the page can steal it. Set both on
+      session and authentication cookies (and `SameSite=Lax` or `Strict`).
+    metadata:
+      cwe: ["CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute", "CWE-1004: Sensitive Cookie Without 'HttpOnly' Flag"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: $C.secure = false
+      - pattern: $C.isSecure = false
+      - pattern: $C.httpOnly = false
+      - pattern: $C.isHttpOnly = false
+      - pattern: $C.setSecure(false)
+      - pattern: $C.setHttpOnly(false)
+      - pattern: $B.secure(false)
+      - pattern: $B.httpOnly(false)
+      - pattern: Cookie($N, $V, ..., secure = false, ...)
+      - pattern: Cookie($N, $V, ..., httpOnly = false, ...)

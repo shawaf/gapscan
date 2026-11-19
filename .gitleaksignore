@@ -1,0 +1,8 @@
+# Historical findings of deliberately fake test tokens, by gitleaks fingerprint (commit:file:rule:line).
+# The current files build these tokens at runtime instead. Never add a real secret's fingerprint here.
+4943ae72702b41a432ec81f62ff8e369e4da1811:tests/test_investigate.py:stripe-access-token:348
+4d25781056f71ea24302e14e7dfbaf78fb593927:tests/test_agent.py:github-pat:343
+5d294e15c702e8586e297d53c5ef8bd69a72d4d4:tests/test_secret_facts.py:generic-api-key:118
+5d294e15c702e8586e297d53c5ef8bd69a72d4d4:tests/test_secret_facts.py:generic-api-key:94
+edde016d41bd86de454227ff32b89559fc9029dc:tests/test_context.py:aws-access-token:200
+edde016d41bd86de454227ff32b89559fc9029dc:tests/test_context.py:github-pat:200

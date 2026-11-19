@@ -1,0 +1,200 @@
+[
+ {
+  "id": "tp-sqli-route",
+  "rule_id": "python.flask.security.injection.tainted-sql-string",
+  "title": "SQL built from request input",
+  "cwe": "CWE-89",
+  "file": "app/views.py",
+  "line": 6,
+  "code": "@app.route(\"/user\")\ndef user():\n    name = request.args.get(\"name\")\n    cur = db.cursor()\n    # look the user up\n    cur.execute(\"SELECT * FROM users WHERE name = '\" + name + \"'\")\n    return jsonify(cur.fetchall())\n",
+  "expected": "true_positive",
+  "why": "query concatenates a request parameter"
+ },
+ {
+  "id": "tp-cmd-injection",
+  "rule_id": "B602",
+  "title": "subprocess call with shell=True",
+  "cwe": "CWE-78",
+  "file": "app/ping.py",
+  "line": 4,
+  "code": "@app.route(\"/ping\")\ndef ping():\n    host = request.args.get(\"host\")\n    return subprocess.check_output(\"ping -c 1 \" + host, shell=True)\n",
+  "expected": "true_positive",
+  "why": "user input reaches a shell"
+ },
+ {
+  "id": "tp-pickle-request",
+  "rule_id": "B301",
+  "title": "pickle.loads on untrusted data",
+  "cwe": "CWE-502",
+  "file": "app/load.py",
+  "line": 3,
+  "code": "@app.route(\"/load\", methods=[\"POST\"])\ndef load():\n    obj = pickle.loads(request.data)\n    return str(obj)\n",
+  "expected": "true_positive",
+  "why": "deserializes request body"
+ },
+ {
+  "id": "tp-md5-password",
+  "rule_id": "python.lang.security.insecure-hash-algorithm-md5",
+  "title": "Weak hash MD5",
+  "cwe": "CWE-327",
+  "file": "auth/passwords.py",
+  "line": 3,
+  "code": "def hash_password(pw):\n    \"\"\"Store this in the users table.\"\"\"\n    return hashlib.md5(pw.encode()).hexdigest()\n",
+  "expected": "true_positive",
+  "why": "MD5 used to hash passwords"
+ },
+ {
+  "id": "tp-hardcoded-token",
+  "rule_id": "github-pat",
+  "title": "GitHub personal access token",
+  "cwe": "CWE-798",
+  "file": "deploy/config.py",
+  "line": 2,
+  "code": "# production deploy settings\nGITHUB_TOKEN = [snippet withheld: line contains a possible secret]\nREPO = \"acme/payments\"\nDEPLOY_BRANCH = \"main\"\n",
+  "expected": "true_positive",
+  "why": "rule github-pat matched a token-shaped value in a production deploy config (value withheld by design)"
+ },
+ {
+  "id": "tp-path-traversal",
+  "rule_id": "python.flask.security.path-traversal-open",
+  "title": "open() with user-controlled path",
+  "cwe": "CWE-22",
+  "file": "app/files.py",
+  "line": 4,
+  "code": "@app.route(\"/download\")\ndef download():\n    name = request.args.get(\"file\")\n    with open(\"/srv/uploads/\" + name, \"rb\") as fh:\n        return fh.read()\n",
+  "expected": "true_positive",
+  "why": "no normalization; ../ escapes the uploads dir"
+ },
+ {
+  "id": "fp-md5-cache-key",
+  "rule_id": "python.lang.security.insecure-hash-algorithm-md5",
+  "title": "Weak hash MD5",
+  "cwe": "CWE-327",
+  "file": "app/cache.py",
+  "line": 3,
+  "code": "def cache_key(url: str) -> str:\n    # Non-security use: bucket names for the page cache, collisions are harmless.\n    return hashlib.md5(url.encode()).hexdigest()\n",
+  "expected": "false_positive",
+  "why": "md5 only builds a cache key"
+ },
+ {
+  "id": "fp-subprocess-constant",
+  "rule_id": "B602",
+  "title": "subprocess call with shell=True",
+  "cwe": "CWE-78",
+  "file": "scripts/build_docs.py",
+  "line": 3,
+  "code": "def build():\n    # Fixed command, no external input.\n    subprocess.run(\"make -C docs html\", shell=True, check=True)\n",
+  "expected": "false_positive",
+  "why": "command is a constant"
+ },
+ {
+  "id": "fp-sql-parameterized",
+  "rule_id": "python.lang.security.audit.formatted-sql-query",
+  "title": "Possible SQL injection",
+  "cwe": "CWE-89",
+  "file": "app/repo.py",
+  "line": 4,
+  "code": "def find_user(conn, email):\n    cur = conn.cursor()\n    # parameterized: the driver escapes the value\n    cur.execute(\"SELECT id, name FROM users WHERE email = %s\", (email,))\n    return cur.fetchone()\n",
+  "expected": "false_positive",
+  "why": "parameterized query"
+ },
+ {
+  "id": "fp-test-assert",
+  "rule_id": "B101",
+  "title": "Use of assert detected",
+  "cwe": "CWE-703",
+  "file": "tests/test_orders.py",
+  "line": 3,
+  "code": "def test_total():\n    order = make_order(items=3)\n    assert order.total == 30\n",
+  "expected": "false_positive",
+  "why": "assert in a unit test"
+ },
+ {
+  "id": "fp-placeholder-secret",
+  "rule_id": "generic-api-key",
+  "title": "Generic API key",
+  "cwe": "CWE-798",
+  "file": "config.example.py",
+  "line": 2,
+  "code": "# Copy to config.py and fill in your own values.\nAPI_KEY = [snippet withheld: line contains a possible secret]\nDEBUG = False\n",
+  "expected": "false_positive",
+  "why": "example config file whose comment says to fill in your own values (value withheld by design)"
+ },
+ {
+  "id": "fp-pickle-own-cache",
+  "rule_id": "B301",
+  "title": "pickle.loads on untrusted data",
+  "cwe": "CWE-502",
+  "file": "app/ml/cache.py",
+  "line": 4,
+  "code": "CACHE = Path(\"/var/lib/app/model.cache\")  # written only by this service at startup\n\ndef load_model():\n    return pickle.loads(CACHE.read_bytes())\n",
+  "expected": "false_positive",
+  "why": "deserializes a file the service itself wrote, no external input reaches it"
+ },
+ {
+  "id": "tp-xss-template",
+  "rule_id": "python.flask.security.xss.render-template-string",
+  "title": "User input rendered as a template",
+  "cwe": "CWE-79",
+  "file": "app/greet.py",
+  "line": 4,
+  "code": "@app.route(\"/hello\")\ndef hello():\n    name = request.args.get(\"name\", \"\")\n    return render_template_string(\"<h1>Hello \" + name + \"</h1>\")\n",
+  "expected": "true_positive",
+  "why": "request input is concatenated into a template string (XSS and template injection)"
+ },
+ {
+  "id": "tp-ssrf",
+  "rule_id": "python.requests.security.ssrf",
+  "title": "Request to user-controlled URL",
+  "cwe": "CWE-918",
+  "file": "app/preview.py",
+  "line": 4,
+  "code": "@app.route(\"/preview\")\ndef preview():\n    url = request.args.get(\"url\")\n    resp = requests.get(url, timeout=5)\n    return resp.text[:2000]\n",
+  "expected": "true_positive",
+  "why": "server fetches any URL a caller supplies, including internal addresses"
+ },
+ {
+  "id": "tp-weak-reset-token",
+  "rule_id": "python.lang.security.audit.insecure-random",
+  "title": "random used for a security token",
+  "cwe": "CWE-338",
+  "file": "auth/reset.py",
+  "line": 4,
+  "code": "import random, string\n\ndef make_reset_token():\n    alphabet = string.ascii_letters + string.digits\n    return \"\".join(random.choice(alphabet) for _ in range(24))  # emailed to users to reset passwords\n",
+  "expected": "true_positive",
+  "why": "predictable PRNG used for a password-reset token"
+ },
+ {
+  "id": "fp-sql-allowlisted-table",
+  "rule_id": "python.lang.security.audit.formatted-sql-query",
+  "title": "Possible SQL injection",
+  "cwe": "CWE-89",
+  "file": "app/reports.py",
+  "line": 6,
+  "code": "REPORT_TABLES = {\"daily\": \"report_daily\", \"weekly\": \"report_weekly\"}\n\ndef load_report(conn, kind: str):\n    if kind not in REPORT_TABLES:\n        raise ValueError(\"unknown report\")\n    return conn.execute(f\"SELECT * FROM {REPORT_TABLES[kind]}\").fetchall()\n",
+  "expected": "false_positive",
+  "why": "the interpolated table name comes from a fixed allowlist"
+ },
+ {
+  "id": "fp-literal-eval",
+  "rule_id": "python.lang.security.audit.eval-detected",
+  "title": "Use of eval",
+  "cwe": "CWE-95",
+  "file": "app/parse.py",
+  "line": 3,
+  "code": "import ast\n\ndef parse_point(text):\n    return ast.literal_eval(text)  # only literals are evaluated, never code\n",
+  "expected": "false_positive",
+  "why": "ast.literal_eval cannot execute code (rule matched the name 'eval')"
+ },
+ {
+  "id": "fp-tls-off-in-test",
+  "rule_id": "python.requests.security.disabled-cert-validation",
+  "title": "requests with verify=False",
+  "cwe": "CWE-295",
+  "file": "tests/conftest.py",
+  "line": 4,
+  "code": "import pytest, requests\n\n@pytest.fixture\ndef local_session():\n    s = requests.Session()\n    s.verify = False  # test server uses a self-signed cert on localhost\n    return s\n",
+  "expected": "false_positive",
+  "why": "TLS verification disabled only in a test fixture talking to localhost"
+ }
+]

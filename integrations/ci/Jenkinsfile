@@ -1,0 +1,28 @@
+// Jenkins (also the usual route for Bitbucket Data Center: set SCM_PROVIDER to bitbucket and
+// REPO to PROJECT/slug). The agent needs `gapscan` installed. The token comes from a Jenkins
+// credential, never from the command line.
+pipeline {
+  agent { label 'gapscan' }
+  environment {
+    SCM_PROVIDER = 'github'                 // github | gitlab | bitbucket | azure
+    SCM_URL      = 'https://scm.example.internal/api/v3'
+    REPO         = 'owner/repo'
+    BASE_BRANCH  = 'main'
+  }
+  stages {
+    stage('GapScan') {
+      steps {
+        withCredentials([string(credentialsId: 'gapscan-scm-token', variable: 'GAPSCAN_SCM_TOKEN')]) {
+          script {
+            def status = sh(returnStatus: true, script: 'gapscan ci run . --base "origin/$BASE_BRANCH" --comment gapscan-comment.md --out gapscan-findings.json')
+            if (env.CHANGE_ID) {
+              sh 'gapscan ci comment gapscan-comment.md --provider "$SCM_PROVIDER" --url "$SCM_URL" --repo "$REPO" --pr "$CHANGE_ID"'
+            }
+            if (status != 0) { error 'GapScan: a policy rule says block' }
+          }
+        }
+      }
+    }
+  }
+  post { always { archiveArtifacts artifacts: 'gapscan-findings.json', allowEmptyArchive: true } }
+}

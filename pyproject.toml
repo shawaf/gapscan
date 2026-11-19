@@ -1,0 +1,221 @@
+[project]
+name = "gapscan"
+version = "1.0.0"
+description = "GapScan Open: a free, offline security scanner that maps every finding to OWASP, with evidence. Deterministic scanners plus optional local AI review."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+# The product as one install: every package of the workspace (packages/, ARCHITECTURE.md section 6).
+dependencies = ["gapscan-local"]
+
+[project.optional-dependencies]
+pdf = ["gapscan-security[pdf]"]  # PDF executive report via headless Chromium
+
+[dependency-groups]
+desktop = ["pywebview>=5.4"]  # the native window of `gapscan app`
+build = [
+    "pyinstaller>=6.22.3",
+]
+dev = [
+    "ruff>=0.16.9",
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "pre-commit>=4.6.2",
+    "playwright>=1.63.0",
+    "import-linter>=2.15",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+bypass-selection = true  # a meta-package: the code is in the workspace packages
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+gapscan-core = { workspace = true }
+gapscan-engine = { workspace = true }
+gapscan-security = { workspace = true }
+gapscan-local = { workspace = true }
+
+[tool.ruff]
+extend-exclude = ["tests/rules", "tests/taint"]  # deliberately vulnerable sample code for the Semgrep rule tests
+line-length = 100
+target-version = "py311"
+src = ["packages/*/src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+"packages/*/src/gapscan/kb/*" = ["E501"]  # long SQL, regex and table-driven literals
+"tools/*" = ["E501"]
+"packages/*/src/gapscan/runtime/*" = ["E501"]  # docstrings and table-driven literals
+"packages/*/src/gapscan/desktop.py" = ["E501"]  # docstrings
+"packages/*/src/gapscan/server/*" = ["E501"]  # SQL and route tables
+"packages/*/src/gapscan/cli.py" = ["E501"]  # typer option help strings
+"packages/*/src/gapscan/offline/*" = ["E501"]  # long URLs and manifests
+"packages/*/src/gapscan/context/injection.py" = ["E501"]  # long regexes and prose
+"packages/*/src/gapscan/taint/*" = ["E501"]  # dense rule tables and explanatory step strings
+"packages/*/src/gapscan/manifests.py" = ["E501"]  # manifest regexes
+"packages/*/src/gapscan/malware.py" = ["E501"]  # advisory prose
+"packages/*/src/gapscan/autofix.py" = ["E501"]  # prompts and messages
+"packages/*/src/gapscan/flywheel.py" = ["E501"]  # prompts and messages
+"packages/*/src/gapscan/diffscan.py" = ["E501"]  # error and pattern strings
+"packages/*/src/gapscan/ci.py" = ["E501"]  # comment text
+"packages/*/src/gapscan/mcp_server.py" = ["E501"]  # tool descriptions
+"packages/*/src/gapscan/scm.py" = ["E501"]  # API paths
+"packages/*/src/gapscan/reachability.py" = ["E501"]  # evidence strings
+"packages/*/src/gapscan/context/flow.py" = ["E501"]  # long regexes and explanatory result lines
+"packages/*/src/gapscan/evaluation/*" = ["E501"]  # dense metric/label tables
+"packages/*/src/gapscan/report/*" = ["E501"]  # explanatory prose and table-driven literals
+
+# Import boundaries (ARCHITECTURE.md section 2), checked by `make lint`.
+# The layers contract describes today's code, not the target: it stops new upward imports while
+# the 4.0 steps move code into core → engine → domain packs → mode adapters → apps. Every
+# `ignore_imports` entry is known debt with the step that removes it; tighten, never loosen.
+[tool.importlinter]
+root_package = "gapscan"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+id = "layers"
+name = "Layering inside the packages: imports only point down"
+type = "layers"
+containers = ["gapscan"]
+layers = [
+    "cli",
+    "mcp_server : desktop : server",
+    "ci : evaluation : autofix : flywheel : doctor : runtime",
+    "report | offline | security_pack",
+    "agent",
+    "pipeline | services | scanners | enrich | reachability | owasp | kb | secret_facts",
+    "normalize | taint | malware | llm | memory | diffscan | policy | compliance | scm | compare",
+    "context | manifests | fingerprint",
+    "redact | registry | stages | controls | versions",
+    "models | config | paths | store",
+    "core",
+]
+
+# The packages (ARCHITECTURE.md section 6). The engine runs a domain only through what the packs
+# register (scanners, target packs, collectors, annotators, flow filters) and the review steps an
+# app passes in, so it never imports a pack; a pack never imports an app or a mode's adapters.
+[[tool.importlinter.contracts]]
+id = "engine"
+name = "The engine (gapscan-engine) imports no domain pack or app"
+type = "forbidden"
+source_modules = [
+    "gapscan.models", "gapscan.config", "gapscan.paths", "gapscan.store", "gapscan.registry", "gapscan.stages",
+    "gapscan.controls", "gapscan.redact", "gapscan.context", "gapscan.llm", "gapscan.memory", "gapscan.normalize",
+    "gapscan.pipeline", "gapscan.services", "gapscan.fingerprint", "gapscan.diffscan", "gapscan.policy", "gapscan.versions",
+    "gapscan.compare",
+]
+forbidden_modules = [
+    "gapscan.security_pack", "gapscan.scanners", "gapscan.taint", "gapscan.malware", "gapscan.manifests", "gapscan.reachability",
+    "gapscan.enrich", "gapscan.secret_facts", "gapscan.owasp", "gapscan.kb", "gapscan.compliance", "gapscan.agent",
+    "gapscan.report", "gapscan.autofix", "gapscan.flywheel", "gapscan.evaluation", "gapscan.cli", "gapscan.desktop",
+    "gapscan.server", "gapscan.runtime", "gapscan.offline", "gapscan.doctor", "gapscan.ci", "gapscan.scm",
+    "gapscan.mcp_server",
+]
+
+[[tool.importlinter.contracts]]
+id = "security"
+name = "The security pack (gapscan-security) imports no app"
+type = "forbidden"
+source_modules = [
+    "gapscan.security_pack", "gapscan.scanners", "gapscan.taint", "gapscan.malware", "gapscan.manifests", "gapscan.reachability",
+    "gapscan.enrich", "gapscan.secret_facts", "gapscan.owasp", "gapscan.kb", "gapscan.compliance", "gapscan.agent",
+    "gapscan.report", "gapscan.autofix", "gapscan.flywheel", "gapscan.evaluation",
+]
+forbidden_modules = [
+    "gapscan.cli", "gapscan.desktop", "gapscan.server", "gapscan.runtime", "gapscan.offline", "gapscan.doctor",
+    "gapscan.ci", "gapscan.scm", "gapscan.mcp_server",
+]
+
+[[tool.importlinter.contracts]]
+id = "core"
+name = "Core does no I/O: no network, processes or databases"
+type = "forbidden"
+source_modules = ["gapscan.core"]
+forbidden_modules = ["httpx", "socket", "smtplib", "subprocess", "sqlite3", "shutil"]
+
+[[tool.importlinter.contracts]]
+id = "network"
+name = "Only approved modules open network connections (hard rule 2)"
+type = "forbidden"
+source_modules = ["gapscan"]
+forbidden_modules = ["httpx", "requests", "aiohttp", "urllib3", "socket", "smtplib"]
+allow_indirect_imports = true
+ignore_imports = [
+    "gapscan.llm.client -> httpx",  # local LLM endpoint, localhost or configured internal host
+    "gapscan.kb.embed -> httpx",  # embeddings from the same local endpoint
+    "gapscan.doctor -> httpx",  # checks that the local endpoint answers
+    "gapscan.runtime.** -> httpx",  # setup wizard: pinned hosts from runtime/manifest.json
+    "gapscan.runtime.server -> socket",  # picks a free localhost port for the AI engine
+    "gapscan.offline.fetch -> httpx",  # `gapscan bundle`, run on a connected machine
+    "gapscan.offline.versions -> httpx",  # OWASP edition check during `gapscan bundle`
+    "gapscan.scm -> httpx",  # CI mode: posts the PR comment the user asked for
+    "gapscan.server.workspace -> httpx",  # "Send to workspace": the team server the user saved, on request
+]
+
+[[tool.importlinter.contracts]]
+id = "llm-provider"
+name = "The engine uses LLMProvider; only apps construct the local client"
+type = "forbidden"
+source_modules = [
+    "gapscan.pipeline", "gapscan.agent", "gapscan.autofix", "gapscan.evaluation", "gapscan.flywheel",
+    "gapscan.llm.structured", "gapscan.llm.bench", "gapscan.llm.cache", "gapscan.llm.prompts",
+]
+forbidden_modules = ["gapscan.llm.client"]
+allow_indirect_imports = true  # kb still reaches it for embeddings; the Data/KB adapter step removes that
+
+[[tool.importlinter.contracts]]
+id = "downloads"
+name = "Downloads and bundle fetches are reachable only from the apps"
+type = "forbidden"
+source_modules = [
+    "gapscan.pipeline", "gapscan.report", "gapscan.normalize", "gapscan.agent",
+    "gapscan.scanners", "gapscan.enrich", "gapscan.reachability", "gapscan.owasp", "gapscan.kb",
+    "gapscan.secret_facts", "gapscan.taint", "gapscan.malware", "gapscan.llm", "gapscan.memory",
+    "gapscan.context", "gapscan.redact", "gapscan.models", "gapscan.config", "gapscan.core",
+    "gapscan.ci", "gapscan.evaluation", "gapscan.autofix", "gapscan.flywheel", "gapscan.mcp_server",
+]
+forbidden_modules = [
+    "gapscan.runtime", "gapscan.offline.fetch", "gapscan.offline.versions", "gapscan.offline.refresh",
+]
+
+[tool.mypy]
+# numpy 2.5 ships stubs that use Python 3.12 syntax, so mypy runs as 3.12; ruff still enforces
+# 3.11-compatible syntax (target-version = "py311").
+python_version = "3.12"
+strict = true
+# `gapscan` is a namespace package spread over the workspace packages: mypy reads it from all of
+# their source folders as one package.
+files = ["packages/*/src/gapscan"]
+mypy_path = [
+    "packages/gapscan-core/src", "packages/gapscan-engine/src", "packages/gapscan-security/src",
+    "packages/gapscan-local/src",
+]
+namespace_packages = true
+explicit_package_bases = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "psycopg.*"
+ignore_missing_imports = true  # optional extra, not installed everywhere
+
+[[tool.mypy.overrides]]
+module = "webview.*"
+ignore_missing_imports = true  # the desktop group (`gapscan app`), not installed in CI
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

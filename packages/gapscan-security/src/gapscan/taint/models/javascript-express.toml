@@ -1,0 +1,7 @@
+name = "javascript-express"
+languages = ["javascript", "typescript", "tsx"]
+requires = 'express|koa|fastify|hapi|next|restify|router'
+
+[[source]]
+kind = "http_param"
+pattern = '(req|request|ctx\.request|ctx)\.(query|body|params|headers|cookies|url|originalUrl|path|hostname|get|header|files|rawBody)\b'

@@ -1,0 +1,59 @@
+{
+  "name": "gapscan",
+  "displayName": "GapScan",
+  "description": "Offline security findings from your local GapScan, shown as problems in the editor.",
+  "version": "0.1.0",
+  "publisher": "gapscan",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "gapscan.scanWorkspace",
+        "title": "GapScan: Scan workspace"
+      },
+      {
+        "command": "gapscan.clear",
+        "title": "GapScan: Clear findings"
+      }
+    ],
+    "configuration": {
+      "title": "GapScan",
+      "properties": {
+        "gapscan.executable": {
+          "type": "string",
+          "default": "gapscan",
+          "description": "Path to the gapscan command."
+        },
+        "gapscan.scanOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Re-scan the workspace when a file is saved (can be slow on large projects)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test",
+    "e2e": "node e2e/run.js",
+    "package": "vsce package --no-dependencies"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shawaf/gapscan"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "4.0.0"
+  }
+}

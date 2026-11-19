@@ -1,0 +1,97 @@
+/* Control Center, "soft" edition: rounded surfaces, gentle shadows, pill controls.
+   Every rule is scoped to [data-ui="soft"], so the classic look is untouched. Tokens come from ../styles-soft.css. */
+:root[data-ui="soft"] {
+  --r: var(--radius); --rs: var(--radius-sm);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* sidebar */
+:root[data-ui="soft"] .cc-side { background: var(--bg); border-right: 0; padding: 18px 14px; }
+:root[data-ui="soft"] .cc-switch > button { border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-sm); }
+:root[data-ui="soft"] .cc-nav a { border-radius: var(--rs); color: var(--text-2); transition: background-color 0.15s, color 0.15s; }
+:root[data-ui="soft"] .cc-nav a:hover { color: var(--text); }
+:root[data-ui="soft"] .cc-nav a[aria-current="page"] { background: var(--surface); color: var(--accent); box-shadow: var(--shadow); }
+:root[data-ui="soft"] .cc-key { border-radius: 999px; border-color: transparent; background: var(--sunken); }
+:root[data-ui="soft"] .cc-nav a[aria-current="page"] .cc-key { background: var(--accent-weak); color: var(--accent); }
+:root[data-ui="soft"] .cc-offline { border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+:root[data-ui="soft"] .cc-sep { background: transparent; border-top: 1px dashed var(--line); height: 0; }
+
+/* top bar */
+:root[data-ui="soft"] .cc-top { background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+:root[data-ui="soft"] .cc-search { border-radius: 999px; border-color: var(--line); background: var(--surface); box-shadow: var(--shadow-sm); }
+:root[data-ui="soft"] .cc-pill { border-color: var(--line); box-shadow: var(--shadow-sm); }
+:root[data-ui="soft"] .cc-pill .mini, :root[data-ui="soft"] .cc-pill .mini i { border-radius: 999px; }
+:root[data-ui="soft"] .cc-seg { border: 1px solid var(--line); border-radius: 999px; background: var(--sunken); padding: 2px; gap: 2px; }
+:root[data-ui="soft"] .cc-seg button { border-left: 0; border-radius: 999px; min-height: 28px; color: var(--text-2); transition: background-color 0.15s, color 0.15s; }
+:root[data-ui="soft"] .cc-seg button[aria-pressed="true"], :root[data-ui="soft"] .cc-seg button[aria-checked="true"] { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
+
+/* surfaces */
+:root[data-ui="soft"] .cc-card, :root[data-ui="soft"] .cc-strip, :root[data-ui="soft"] .fx-filters, :root[data-ui="soft"] .fx-table,
+:root[data-ui="soft"] .tbl-wrap, :root[data-ui="soft"] .state3 > div, :root[data-ui="soft"] .skel, :root[data-ui="soft"] .treemap {
+  border-radius: var(--r); border-color: var(--line); box-shadow: var(--shadow);
+}
+:root[data-ui="soft"] .cc-card { padding: 20px; }
+:root[data-ui="soft"] .cc-card.dom { --cp: 20px; }
+:root[data-ui="soft"] .cc-card .tbl-wrap, :root[data-ui="soft"] .cc-card .cc-card { box-shadow: none; border-radius: 12px; }
+:root[data-ui="soft"] .cc-card.live { border-width: 1px; border-color: var(--accent); box-shadow: var(--ring), var(--shadow); }
+:root[data-ui="soft"] .fx-bulk { border-radius: var(--r) var(--r) 0 0; }
+:root[data-ui="soft"] .fx-bulk + .fx-table { border-radius: 0 0 var(--r) var(--r); }
+:root[data-ui="soft"] .stat3 > div, :root[data-ui="soft"] .fd-decide, :root[data-ui="soft"] .fd-box, :root[data-ui="soft"] .fd-code,
+:root[data-ui="soft"] .logbox, :root[data-ui="soft"] .cc-scanners, :root[data-ui="soft"] .fd-banner, :root[data-ui="soft"] .cc-err { border-radius: 12px; }
+:root[data-ui="soft"] .stat3 > div { background: var(--bg); border-color: transparent; }
+:root[data-ui="soft"] .fd-banner.warn, :root[data-ui="soft"] .fd-banner.bad, :root[data-ui="soft"] .cc-err { border-color: color-mix(in srgb, currentColor 18%, transparent); }
+:root[data-ui="soft"] .fd-ai { border-radius: 14px; border-style: solid; border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--accent-weak) 55%, transparent); }
+
+/* popovers, drawers, dialogs */
+:root[data-ui="soft"] .cc-menu, :root[data-ui="soft"] .dd-panel, :root[data-ui="soft"] .cc-cmd, :root[data-ui="soft"] .dlg { border-radius: var(--r); border-color: var(--line); }
+:root[data-ui="soft"] .cc-menu button, :root[data-ui="soft"] .cc-menu a, :root[data-ui="soft"] .cc-cmd li, :root[data-ui="soft"] .dd-list label { border-radius: 10px; }
+:root[data-ui="soft"] .cc-drawer-bg { background: rgba(20, 22, 40, 0.28); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+:root[data-ui="soft"] .cc-drawer { top: 8px; right: 8px; bottom: 8px; width: min(720px, calc(100vw - 16px)); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
+:root[data-ui="soft"] .cc-drawer.fd { width: min(780px, calc(100vw - 16px)); }
+
+/* controls */
+:root[data-ui="soft"] .cc-input, :root[data-ui="soft"] .cc-select, :root[data-ui="soft"] .fx-search, :root[data-ui="soft"] .dd-btn,
+:root[data-ui="soft"] .dlg textarea { border-radius: var(--rs); border-color: var(--line); box-shadow: var(--shadow-sm); transition: border-color 0.15s, box-shadow 0.15s; }
+:root[data-ui="soft"] .cc-input:focus, :root[data-ui="soft"] .cc-select:focus, :root[data-ui="soft"] .fx-search:focus-within, :root[data-ui="soft"] .dlg textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+:root[data-ui="soft"] .dd-btn.on { border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
+:root[data-ui="soft"] .cc-chip { border-color: var(--line); }
+:root[data-ui="soft"] .cc-chip[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
+:root[data-ui="soft"] .cc-toggle { border-color: var(--line); }
+:root[data-ui="soft"] .kbd { border-radius: 6px; border-color: var(--line); background: var(--sunken); }
+
+/* badges and pills */
+:root[data-ui="soft"] .badge2, :root[data-ui="soft"] .sev2, :root[data-ui="soft"] .chip2, :root[data-ui="soft"] .fx-chip, :root[data-ui="soft"] .ai-tag { border-radius: 999px; padding-left: 10px; padding-right: 10px; }
+:root[data-ui="soft"] .fx-chip { padding-right: 6px; }
+:root[data-ui="soft"] .vpill { border-color: var(--line); }
+:root[data-ui="soft"] .chip2 { border-color: var(--line); }
+:root[data-ui="soft"] .ai-tag { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+
+/* tables and lists */
+:root[data-ui="soft"] .tbl th, :root[data-ui="soft"] .fx-head { background: color-mix(in srgb, var(--sunken) 60%, var(--surface)); }
+:root[data-ui="soft"] .tbl td { transition: background-color 0.12s; }
+:root[data-ui="soft"] .fx-item.cur { outline: 0; box-shadow: inset 3px 0 var(--accent); background: var(--accent-weak); }
+
+/* meters and charts */
+:root[data-ui="soft"] .bar2, :root[data-ui="soft"] .bar2 > i, :root[data-ui="soft"] .stack, :root[data-ui="soft"] .seg3,
+:root[data-ui="soft"] .verd .t, :root[data-ui="soft"] .verd .t i, :root[data-ui="soft"] .scale i, :root[data-ui="soft"] .conf i { border-radius: 999px; }
+:root[data-ui="soft"] .bar2 > i { background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--sev-critical-fill))); }
+:root[data-ui="soft"] .stack, :root[data-ui="soft"] .seg3 { gap: 2px; }
+:root[data-ui="soft"] .verd .t i { background: color-mix(in srgb, var(--accent) 55%, var(--line-strong)); }
+:root[data-ui="soft"] .scale { gap: 4px; } :root[data-ui="soft"] .scale i.on { background: var(--accent); }
+:root[data-ui="soft"] .grade-box { border: 0; border-radius: 16px; background: var(--sunken); }
+:root[data-ui="soft"] .pipe .st.done .dot { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+:root[data-ui="soft"] .pipe .st.done::before { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+:root[data-ui="soft"] .pipe .st::before { border-radius: 999px; }
+
+/* standards heat tiles and the hotspot treemap */
+:root[data-ui="soft"] .tile { border-left-width: 1px; border-radius: var(--r); box-shadow: var(--shadow-sm); transition: box-shadow 0.15s, transform 0.15s; }
+:root[data-ui="soft"] .tile:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+:root[data-ui="soft"] .tile.critical { border-color: color-mix(in srgb, var(--sev-critical-fill) 40%, transparent); }
+:root[data-ui="soft"] .tile.high { border-color: color-mix(in srgb, var(--sev-high-fill) 40%, transparent); }
+:root[data-ui="soft"] .tile.medium { border-color: color-mix(in srgb, var(--sev-medium-fill) 45%, transparent); }
+:root[data-ui="soft"] .tile.low { border-color: color-mix(in srgb, var(--sev-low-fill) 45%, transparent); }
+:root[data-ui="soft"] .tile.info { border-color: color-mix(in srgb, var(--sev-info-fill) 45%, transparent); }
+:root[data-ui="soft"] .tile.none { border-color: var(--line); }
+:root[data-ui="soft"] .treemap { background: var(--bg); }
+:root[data-ui="soft"] .tm { border: 3px solid var(--bg); border-radius: 12px; }
+@media (prefers-reduced-motion: reduce) { :root[data-ui="soft"] .tile:hover { transform: none; } }

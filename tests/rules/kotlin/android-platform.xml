@@ -1,0 +1,12 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- ruleid: gapscan.kotlin.layout-password-field-keyboard-cache -->
+    <EditText android:id="@+id/password" android:inputType="text" />
+    <!-- ok: gapscan.kotlin.layout-password-field-keyboard-cache -->
+    <EditText android:id="@+id/password2" android:inputType="textPassword" />
+    <!-- ok: gapscan.kotlin.layout-password-field-keyboard-cache -->
+    <EditText android:id="@+id/username" android:inputType="text" />
+    <!-- ruleid: gapscan.kotlin.layout-password-field-keyboard-cache -->
+    <com.google.android.material.textfield.TextInputEditText android:hint="@string/x" android:id="@+id/card_cvv" android:inputType="number" />
+    <!-- ok: gapscan.kotlin.layout-password-field-keyboard-cache -->
+    <EditText android:id="@+id/pin_code" android:inputType="numberPassword" />
+</LinearLayout>

@@ -1,0 +1,49 @@
+# GitHub Actions / GitHub Enterprise Server. Needs a self-hosted runner with `gapscan` installed
+# (offline bundle) and, for the comment and SARIF upload, network access to your GHES instance only.
+# Actions are pinned to commit SHAs (checked 2026-10-25); on GHES, sync these versions with
+# actions-sync or GitHub Connect. Event values reach the shell through `env:` only, never
+# interpolated into the script.
+#
+# For a one-line setup on github.com, use the composite action instead (see `action.yml` and
+# `docs/github-action.md`): `uses: <owner>/gapscan@v1`.
+name: gapscan
+on:
+  pull_request:
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write          # upload SARIF to the Security tab (code scanning)
+jobs:
+  scan:
+    runs-on: [self-hosted, gapscan]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0          # the diff against the base branch needs history
+      - name: Scan what this pull request introduces
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: >
+          gapscan ci run . --base "origin/$BASE_REF"
+          --comment gapscan-comment.md --out gapscan-findings.json --sarif gapscan.sarif
+      - name: Upload SARIF to the Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@0fda7a646fd14a20daf520829ca1ae8847000819 # codeql-bundle-v2.27.3
+        with:
+          sarif_file: gapscan.sarif
+          category: gapscan
+      - name: Comment on the pull request
+        if: always()
+        env:
+          GAPSCAN_SCM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          API_URL: ${{ github.api_url }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: >
+          gapscan ci comment gapscan-comment.md --provider github
+          --url "$API_URL" --repo "$REPO" --pr "$PR_NUMBER"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: gapscan-findings
+          path: gapscan-findings.json

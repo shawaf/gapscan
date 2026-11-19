@@ -1,0 +1,255 @@
+# GapScan Rules: Kotlin / Android, fourth set (IPC, shared files, user interface). Licensed Apache-2.0.
+# Every rule has a vulnerable and a safe case in tests/rules/kotlin/android-platform.kt (run: make rules-test).
+rules:
+  - id: gapscan.kotlin.shared-uri-opened-as-file
+    languages: [kotlin]
+    mode: taint
+    severity: ERROR
+    message: >-
+      A URI that another app handed in (an intent's data or `EXTRA_STREAM`) is turned into a `File` and opened
+      directly. A caller can pass `file:///data/data/<this app>/...` and make the app read or copy its own private files
+      (or follow `../`). Open shared content only through `contentResolver.openInputStream(uri)` for `content://` URIs,
+      reject the `file` scheme, and check the canonical path stays inside the folder you expect.
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')", "CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: $I.getParcelableExtra(...)
+          - pattern: $I.getParcelableExtra<$T>(...)
+          - pattern: $I.getParcelableArrayListExtra<$T>(...)
+          - pattern: intent.data
+          - pattern: intent?.data
+          - pattern: getIntent().getData()
+    pattern-sanitizers:
+      - pattern: $X.canonicalPath
+      - pattern: $X.getCanonicalPath()
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: File($X)
+              - pattern: File($X, ...)
+              - pattern: FileInputStream($X)
+              - pattern: FileOutputStream($X)
+              - pattern: RandomAccessFile($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.kotlin.uri-name-path-traversal
+    languages: [kotlin]
+    mode: taint
+    severity: ERROR
+    message: >-
+      A file name taken from a URI (its last path segment, or the display name a content provider reports) is joined to
+      a folder. The name is chosen by whoever built the URI and can be `../../shared_prefs/x.xml`, so the app reads or
+      overwrites a file outside that folder. Keep only the base name (`File(name).name`), or generate your own name, and
+      check that the canonical path stays inside the folder.
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: $U.lastPathSegment
+          - pattern: $U.getLastPathSegment()
+          - pattern: $U.pathSegments
+          - pattern: $U.getQueryParameter(...)
+          - patterns:
+              - pattern: $C.getString($IDX)
+              - metavariable-pattern:
+                  metavariable: $IDX
+                  pattern-regex: DISPLAY_NAME
+    pattern-sanitizers:
+      - pattern: File($X).name
+      - pattern: $X.substringAfterLast(...)
+      - pattern: $X.canonicalPath
+      - pattern: $X.getCanonicalPath()
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: File($DIR, $X)
+              - pattern: File($DIR + $X)
+              - pattern: File("...$X...")
+          - focus-metavariable: $X
+
+  - id: gapscan.kotlin.provider-returns-secret
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A cursor built here carries a column named like a credential (password, token, secret, key). If the content
+      provider that returns it is exported, or a URI permission is granted for it, other apps can read the secret. Do
+      not serve credentials from a provider; keep them in the Keystore or encrypted storage and protect the provider
+      with a signature permission.
+    metadata:
+      cwe: ["CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+      masvs: ["MASVS-PLATFORM-1"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern: MatrixCursor($COLS, ...)
+      - metavariable-regex:
+          metavariable: $COLS
+          regex: '(?is).*"[^"]*(password|passwd|pwd|token|secret|credential|api_?key|private_?key)[^"]*"'
+
+  - id: gapscan.kotlin.password-field-keyboard-cache
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A text field whose hint asks for a password, PIN or card code is given an ordinary input type, so the keyboard may
+      learn, suggest and store what is typed. Use a password variation (`TYPE_TEXT_VARIATION_PASSWORD`,
+      `TYPE_NUMBER_VARIATION_PASSWORD`) or add `TYPE_TEXT_FLAG_NO_SUGGESTIONS` for sensitive fields. The match is a text
+      search over one `apply { }` block, so check the field it reports.
+    metadata:
+      cwe: ["CWE-524: Use of Cache Containing Sensitive Information"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '(?i)\bhint\s*=\s*"[^"\n]*\b(password|passcode|pin|cvv|cvc|otp)\b[^"\n]*"[^{}]*?\binputType\s*=\s*(?![^\n]*(PASSWORD|NO_SUGGESTIONS))[^\n]+'
+      - pattern-regex: '(?i)\binputType\s*=\s*(?![^\n]*(PASSWORD|NO_SUGGESTIONS))[^\n]+\n[^{}]*?\bhint\s*=\s*"[^"\n]*\b(password|passcode|pin|cvv|cvc|otp)\b[^"\n]*"'
+
+  - id: gapscan.kotlin.layout-password-field-keyboard-cache
+    languages: [generic]
+    paths: {include: ["*.xml"]}
+    severity: WARNING
+    message: >-
+      An `EditText` in a layout is named or hinted as a password, PIN or card code but its `android:inputType` is not a
+      password type, so the keyboard may learn and suggest what is typed. Set `android:inputType="textPassword"` (or
+      `numberPassword`), or at least `textNoSuggestions`.
+    metadata:
+      cwe: ["CWE-524: Use of Cache Containing Sensitive Information"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?i)<(?:[\w.]*EditText|[\w.]*TextInputEditText)\b(?=[^>]*android:(?:id|hint)\s*=\s*"[^"]*(?:password|passcode|\bpin\b|_pin\b|cvv|cvc)[^"]*")(?=[^>]*android:inputType\s*=\s*"(?![^"]*(?:[Pp]assword|NoSuggestions))[^"]*")[^>]*>'
+
+  - id: gapscan.kotlin.zip-slip
+    languages: [kotlin]
+    severity: ERROR
+    message: >-
+      A file is created from the name of an archive entry, and the function never checks where that path ends up. An
+      entry named `../../shared_prefs/auth.xml` (zip slip) writes outside the target folder and can overwrite the app's
+      own files or code. Resolve the path, then check `out.canonicalPath.startsWith(dest.canonicalPath + File.separator)`
+      before writing, and skip entries that fail.
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: File($D, $E.name)
+          - pattern: File($D, $E.getName())
+          - pattern: File("...${$E.name}...")
+          - pattern: File($D + $E.name)
+          - pattern: $P.resolve($E.name)
+          - pattern: Paths.get($D, $E.name)
+      - pattern-inside: |
+          fun $F(...) { $...BODY }
+      - metavariable-regex:
+          metavariable: $...BODY
+          # the function walks a zip (or jar) and never canonicalizes or normalizes the result
+          regex: (?s)^(?=.*(\.nextEntry|\.getNextEntry\(\)|\.entries\(\)|ZipEntry|JarEntry))(?!.*(canonicalPath|getCanonicalPath|toRealPath|normalize\(\))).*$
+
+  - id: gapscan.kotlin.clipboard-sensitive-value
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A value named like a secret (password, token, PIN, OTP, card number) is put on the clipboard. Other apps, keyboard
+      apps and (on older Android versions) any app in the background can read the clipboard. Do not copy secrets; if a
+      copy is needed, mark the clip sensitive (`ClipDescription.EXTRA_IS_SENSITIVE`) and clear it after a short time.
+    metadata:
+      cwe: ["CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: ClipData.newPlainText($L, $V)
+          - pattern: ClipData.newHtmlText($L, $V, ...)
+      - metavariable-regex:
+          metavariable: $V
+          regex: ^(?!["'])[\w.?!]*?((?i:password|passwd|pwd|secret|token|apikey|api_key|otp|cvv|cardnumber|creditcard|privatekey|seed|mnemonic)|(^|[._])(pin)(code)?$|[a-z0-9](Pin)(Code)?$)
+
+  - id: gapscan.kotlin.flag-secure-cleared
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      `FLAG_SECURE` is removed from the window, so its content can again appear in screenshots, screen recordings, the
+      recent-apps preview and on casting. If this screen shows sensitive data, keep `FLAG_SECURE` set while it is
+      visible.
+    metadata:
+      cwe: ["CWE-200: Exposure of Sensitive Information to an Unauthorized Actor"]
+      masvs: ["MASVS-PLATFORM-3"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: $W.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+      - pattern: $W.clearFlags(LayoutParams.FLAG_SECURE)
+      - pattern: $W.clearFlags(FLAG_SECURE)
+      - pattern: $W.setFlags(0, WindowManager.LayoutParams.FLAG_SECURE)
+
+  - id: gapscan.kotlin.webview-debugging-enabled
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      WebView remote debugging is switched on unconditionally, so anyone with USB access (or malware using ADB) can
+      inspect and script every WebView in the app, including its cookies and storage. Enable it only in debug builds
+      (`if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)`).
+    metadata:
+      cwe: ["CWE-489: Active Debug Code"]
+      masvs: ["MASVS-RESILIENCE-4"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern: WebView.setWebContentsDebuggingEnabled(true)
+      - pattern-not-inside: |
+          if (<... BuildConfig.DEBUG ...>) { ... }
+      - pattern-not-inside: |
+          if (<... BuildConfig.DEBUG ...>) $X
+
+  - id: gapscan.kotlin.webview-javascript-built
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      JavaScript run in a WebView is built by joining strings or a template with values. If a value contains a quote it
+      can break out of the string and run its own script in the page, with the page's cookies and any JavaScript bridge.
+      Pass data as JSON (`JSONObject.quote(value)`) or through `postWebMessage`, never by pasting it into code.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation ('Cross-site Scripting')", "CWE-94: Improper Control of Generation of Code ('Code Injection')"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $W.evaluateJavascript("...${...}...", ...)
+          - pattern: $W.evaluateJavascript("...$...", ...)
+          - pattern: $W.evaluateJavascript($S + ..., ...)
+          - patterns:
+              - pattern-either:
+                  - pattern: $W.loadUrl("...${...}...")
+                  - pattern: $W.loadUrl("...$...")
+                  - pattern: $W.loadUrl($S + ...)
+              - pattern-regex: 'loadUrl\(\s*"javascript:'
+
+  - id: gapscan.kotlin.hardcoded-secret
+    languages: [kotlin]
+    severity: WARNING
+    message: >-
+      A credential (API key, client secret, password, token or private key) is written into the source, so everyone
+      with the app or the repository has it: an APK is easy to unpack. Keep server secrets on the server, fetch
+      per-user tokens at run time, and restrict any key that must ship in the app (for example by package name and
+      signing certificate in the provider's console). Rotate a key that has been committed.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials"]
+      masvs: ["MASVS-STORAGE-1", "MASVS-CRYPTO-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      # a secret-named property set to a literal that looks like a real value (has a digit, no spaces, 12+ characters)
+      - pattern-regex: '(?i)\b(?:val|var)\s+\w*(?:apikey|api_key|secret|password|passwd|privatekey|private_key|authtoken|auth_token|accesstoken|access_token|clientsecret|client_secret)\w*\s*(?::\s*String\??)?\s*=\s*"(?=[^"\s\\$]*\d)(?![^"]*(?:example|placeholder|changeme|your[_-]|xxxx|\*\*\*))[^"\s\\$]{12,}"'
+      # Google / Firebase API keys and private keys (for example a service-account JSON pasted into code)
+      - pattern-regex: '"AIza[0-9A-Za-z_\-]{35}"'
+      - pattern-regex: '-----BEGIN (?:RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----'

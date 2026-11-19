@@ -1,0 +1,1424 @@
+# GapScan Rules: Java (servlets, Spring, plain JDK code). Licensed Apache-2.0 with the rest of GapScan.
+# Every rule has a vulnerable and a safe case in tests/rules/java/java.java (run: make rules-test).
+# Taint rules follow servlet and Spring request data within one method.
+rules:
+  - id: gapscan.java.sqli-string-built
+    languages: [java]
+    severity: ERROR
+    message: >-
+      An SQL statement is built from a string with concatenation, `String.format` or `concat`. Use a
+      `PreparedStatement` with `?` placeholders (or named parameters in JPA) and bind the values.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $S.$M($Q + ..., ...)
+          - pattern: $S.$M(String.format(...), ...)
+          - pattern: $S.$M($Q.concat(...), ...)
+          - pattern: $S.$M($Q.formatted(...), ...)
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^(executeQuery|executeUpdate|execute|executeLargeUpdate|addBatch|prepareStatement|prepareCall|createQuery|createNativeQuery|query|queryForObject|queryForList|queryForMap|update|batchUpdate)$
+      - pattern-not: $S.$M("..." + "...", ...)
+
+  - id: gapscan.java.command-injection
+    languages: [java]
+    severity: ERROR
+    message: >-
+      A shell command is built at run time. If any part comes from a user, they can run their own commands. Pass the
+      program and its arguments separately (`new ProcessBuilder("ls", dir)`), never through `sh -c`.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: Runtime.getRuntime().exec($CMD)
+          - pattern: Runtime.getRuntime().exec($CMD, ...)
+          - pattern: (Runtime $R).exec($CMD)
+          - pattern: new ProcessBuilder("sh", "-c", $CMD)
+          - pattern: new ProcessBuilder("bash", "-c", $CMD)
+          - pattern: new ProcessBuilder("cmd", "/c", $CMD)
+          - pattern: new ProcessBuilder("cmd.exe", "/c", $CMD)
+          - pattern: new ProcessBuilder("powershell", ..., $CMD)
+      - pattern-not: Runtime.getRuntime().exec("...")
+      - pattern-not: Runtime.getRuntime().exec("...", ...)
+      - pattern-not: new ProcessBuilder($A, $B, "...")
+
+  - id: gapscan.java.weak-hash
+    languages: [java]
+    severity: WARNING
+    message: >-
+      MD5 and SHA-1 are broken for security use. Fine for a cache key or file checksum, not for passwords,
+      signatures or tokens: use SHA-256 (or bcrypt/scrypt/Argon2 for passwords).
+    metadata:
+      cwe: ["CWE-328: Use of Weak Hash", "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - patterns:
+          - pattern: java.security.MessageDigest.getInstance($ALG, ...)
+          - metavariable-regex:
+              metavariable: $ALG
+              regex: (?i)^"(md2|md4|md5|sha-?1)"$
+      - pattern: DigestUtils.md5Hex(...)
+      - pattern: DigestUtils.md5(...)
+      - pattern: DigestUtils.sha1Hex(...)
+      - pattern: DigestUtils.sha1(...)
+      - pattern: DigestUtils.getMd5Digest()
+      - pattern: DigestUtils.getSha1Digest()
+      - pattern: Hashing.md5()
+      - pattern: Hashing.sha1()
+
+  - id: gapscan.java.weak-cipher
+    languages: [java]
+    severity: ERROR
+    message: >-
+      A broken cipher (DES, 3DES, RC4, Blowfish) or ECB mode is requested; plain `"AES"` also means ECB. Use
+      `AES/GCM/NoPadding` with a fresh random IV for every message.
+    metadata:
+      cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - patterns:
+          - pattern: javax.crypto.Cipher.getInstance($ALG, ...)
+          # broken algorithms, plain "AES" (which means ECB) or any ECB mode; the match ignores letter case
+          - metavariable-regex:
+              metavariable: $ALG
+              regex: (?i)^"(((des|desede|3des|rc2|rc4|arcfour|blowfish)(/[^"]*)?)|aes|([^"/]*/ecb/[^"]*))"$
+      - patterns:
+          - pattern-either:
+              - pattern: javax.crypto.KeyGenerator.getInstance($ALG, ...)
+              - pattern: new javax.crypto.spec.SecretKeySpec($K, $ALG)
+              - pattern: javax.crypto.SecretKeyFactory.getInstance($ALG, ...)
+          - metavariable-regex:
+              metavariable: $ALG
+              regex: (?i)^"(des|desede|3des|rc2|rc4|arcfour|blowfish|pbewithmd5anddes|pbewithsha1anddes)"$
+
+  - id: gapscan.java.tls-verification-disabled
+    languages: [java]
+    severity: ERROR
+    message: >-
+      TLS checks are disabled: a trust manager or hostname verifier accepts everything, or an obsolete protocol is
+      requested. Anyone on the network path can read and change the traffic. Use the platform defaults.
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: |
+          public void checkServerTrusted(...) {}
+      - pattern: |
+          public void checkClientTrusted(...) {}
+      - pattern: |
+          public boolean verify(String $H, SSLSession $S) { return true; }
+      - pattern: $B.setHostnameVerifier(($H, $S) -> true)
+      - pattern: $B.hostnameVerifier(($H, $S) -> true)
+      - pattern: javax.net.ssl.HttpsURLConnection.setDefaultHostnameVerifier(($H, $S) -> true)
+      - pattern: new NoopHostnameVerifier()
+      - pattern: NoopHostnameVerifier.INSTANCE
+      - pattern: SSLConnectionSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER
+      - pattern: new TrustSelfSignedStrategy()
+      - pattern: javax.net.ssl.SSLContext.getInstance("SSL")
+      - pattern: javax.net.ssl.SSLContext.getInstance("SSLv3")
+      - pattern: javax.net.ssl.SSLContext.getInstance("TLSv1")
+      - pattern: javax.net.ssl.SSLContext.getInstance("TLSv1.1")
+
+  - id: gapscan.java.xxe-parser-not-hardened
+    languages: [java]
+    severity: ERROR
+    message: >-
+      The XML parser is created without turning off DTDs and external entities, so a crafted document can read local
+      files or reach internal servers (XXE). Set `disallow-doctype-decl` to true (or the other hardening features) before
+      parsing.
+    metadata:
+      cwe: ["CWE-611: Improper Restriction of XML External Entity Reference"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $F = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+          - pattern: $F = javax.xml.parsers.SAXParserFactory.newInstance();
+          - pattern: $F = javax.xml.stream.XMLInputFactory.newInstance();
+          - pattern: $F = javax.xml.stream.XMLInputFactory.newFactory();
+          - pattern: $F = javax.xml.transform.TransformerFactory.newInstance();
+      - pattern-not-inside: |
+          $F = $X.$NEW();
+          ...
+          $F.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+      - pattern-not-inside: |
+          $F = $X.$NEW();
+          ...
+          $F.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+      - pattern-not-inside: |
+          $F = $X.$NEW();
+          ...
+          $F.setProperty(XMLInputFactory.SUPPORT_DTD, false);
+      - pattern-not-inside: |
+          $F = $X.$NEW();
+          ...
+          $F.setProperty("javax.xml.stream.isSupportingExternalEntities", false);
+      - pattern-not-inside: |
+          $F = $X.$NEW();
+          ...
+          $F.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+
+  - id: gapscan.java.unsafe-deserialization
+    languages: [java]
+    severity: ERROR
+    message: >-
+      Java deserialization (and polymorphic JSON/XML/YAML typing) can run code chosen by whoever wrote the data. Do not
+      deserialize data from outside; use JSON with fixed types, or a serialization filter that allows only known classes.
+    metadata:
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: new java.io.ObjectInputStream(...)
+      - pattern: new java.beans.XMLDecoder(...)
+      - pattern: new Yaml().load(...)
+      - pattern: new Yaml().loadAs(...)
+      - pattern: $M.enableDefaultTyping(...)
+      - pattern: $M.activateDefaultTyping(...)
+      - pattern: new XStream().fromXML(...)
+
+  - id: gapscan.java.hardcoded-secret
+    languages: [java]
+    severity: WARNING
+    message: >-
+      A password, key or token is written into the source. Anyone with the code has it, and it stays in the version
+      history. Read it from the environment or a secret store, and rotate the value.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: String $N = "...";
+          - pattern: $N = "...";
+          - pattern: $O.setPassword("...")
+          - pattern: DriverManager.getConnection($U, $USER, "...")
+      - metavariable-regex:
+          metavariable: $N
+          regex: (?i)^(.*[_-])?(password|passwd|pwd|secret|apikey|api_?key|access_?key|secret_?key|private_?key|auth_?token|token|client_?secret)([_-].*)?$
+      - pattern-not: String $N = "";
+      - pattern-not-regex: (?i)=\s*"(changeme|change-me|your[_-].*|<.*>|\*+|x+|example|placeholder|test|none|null|todo|password|secret|token|key)"
+      - pattern-not-regex: (?i)(token|password|secret)_?(url|file|path|endpoint|header|field|name|type|length|prefix|expiry|ttl|key|param|claim)\s*=
+
+  - id: gapscan.java.insecure-random-token
+    languages: [java]
+    severity: WARNING
+    message: >-
+      `java.util.Random` and `Math.random()` are predictable, so a token, password, key or code made with them can be
+      guessed. Use `SecureRandom`.
+    metadata:
+      cwe: ["CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $T $N = new java.util.Random(...).$F(...);
+          - pattern: $T $N = Math.random(...);
+          - pattern: $T $N = (int)(Math.random(...) * ...);
+          - pattern: $T $N = Long.toString(new java.util.Random(...).$F(...), ...);
+      - metavariable-regex:
+          metavariable: $N
+          regex: (?i).*(token|password|passwd|secret|otp|nonce|session|api_?key|reset|csrf|salt|code|pin).*
+
+  - id: gapscan.java.csrf-protection-off
+    languages: [java]
+    severity: WARNING
+    message: >-
+      CSRF protection is turned off in the security configuration, so another site can make a logged-in user's browser
+      submit requests. Keep it on unless the API uses bearer tokens that browsers do not attach by themselves.
+    metadata:
+      cwe: ["CWE-352: Cross-Site Request Forgery (CSRF)"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: $H.csrf().disable()
+      - pattern: $H.csrf(AbstractHttpConfigurer::disable)
+      - pattern: $H.csrf(($C) -> $C.disable())
+      - pattern: $H.csrf($C -> $C.disable())
+
+  - id: gapscan.java.cookie-flags-off
+    languages: [java]
+    severity: WARNING
+    message: >-
+      A cookie is sent without `Secure` or `HttpOnly`, so it travels over plain HTTP or can be read by page scripts. Turn
+      both on (and set `SameSite`).
+    metadata:
+      cwe: ["CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $C.setSecure(false)
+      - pattern: $C.setHttpOnly(false)
+
+  - id: gapscan.java.cors-allow-all
+    languages: [java]
+    severity: WARNING
+    message: >-
+      Every website is allowed to call this API from a browser. Allow only the origins that need it, and never combine a
+      wildcard with credentials.
+    metadata:
+      cwe: ["CWE-942: Permissive Cross-domain Policy with Untrusted Domains"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: '@CrossOrigin(origins = "*")'
+      - pattern: '@CrossOrigin(origins = "*", ...)'
+      - pattern: $R.allowedOrigins("*")
+      - pattern: $R.addAllowedOrigin("*")
+      - pattern: $R.setHeader("Access-Control-Allow-Origin", "*")
+      - pattern: $R.addHeader("Access-Control-Allow-Origin", "*")
+
+  - id: gapscan.java.zip-slip
+    languages: [java]
+    severity: ERROR
+    message: >-
+      A file is created from an archive entry's name without checking where it ends up, so an entry named `../../x`
+      writes outside the target folder (zip slip). Resolve the path and check that it still starts with the target folder.
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: new java.io.File($D, $E.getName())
+          - pattern: java.nio.file.Paths.get($D, $E.getName())
+          - pattern: $D.resolve($E.getName())
+      - pattern-either:
+          - pattern-inside: |
+              while (($E = $Z.getNextEntry()) != null) { ... }
+          - pattern-inside: |
+              while ($ENTRIES.hasMoreElements()) { ... $E = $ENTRIES.nextElement(); ... }
+      - pattern-not-inside: |
+          while ($COND) { ... if (<... $X.getCanonicalPath().startsWith(...) ...>) { ... } ... }
+      - pattern-not-inside: |
+          while ($COND) { ... if (<... $X.normalize().startsWith(...) ...>) { ... } ... }
+
+  - id: gapscan.java.weak-random-generator
+    languages: [java]
+    severity: INFO
+    message: >-
+      `java.util.Random`, `Math.random()` and `ThreadLocalRandom` are predictable. That is fine for a dice roll or a
+      shuffle, but anything an attacker must not guess (a token, key, password, id or code) needs `SecureRandom`.
+      Check what this value is used for.
+    metadata:
+      cwe: ["CWE-330: Use of Insufficiently Random Values", "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator"]
+      category: security
+      confidence: LOW
+    pattern-either:
+      - pattern: new java.util.Random(...)
+      - pattern: Math.random()
+      - pattern: java.lang.Math.random()
+      - pattern: java.util.concurrent.ThreadLocalRandom.current()
+
+  - id: gapscan.java.ldap-filter-string-built
+    languages: [java]
+    severity: ERROR
+    message: >-
+      An LDAP search filter or name is built from a string, so a user value such as `*)(uid=*` changes what the query
+      matches (LDAP injection). Escape the value with an LDAP encoder (OWASP ESAPI / Spring `LdapEncoder.filterEncode`)
+      or use parameterized filters (`search(base, "(cn={0})", args, controls)`).
+    metadata:
+      cwe: ["CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $C.search($B, $F + ..., ...)
+          - pattern: $C.search($B, String.format(...), ...)
+          - pattern: $C.search($F + ..., ...)
+          - pattern: $C.lookup($N + ...)
+      - pattern-not: $C.search($B, "..." + "...", ...)
+
+  - id: gapscan.java.xpath-string-built
+    languages: [java]
+    severity: ERROR
+    message: >-
+      An XPath expression is built from a string, so a user value can change what it selects (XPath injection). Use
+      `XPathVariableResolver` parameters instead of concatenation.
+    metadata:
+      cwe: ["CWE-643: Improper Neutralization of Data within XPath Expressions ('XPath Injection')"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $X.evaluate($E + ..., ...)
+          - pattern: $X.compile($E + ...)
+          - pattern: $X.selectNodes($E + ...)
+          - pattern: $X.selectSingleNode($E + ...)
+      - pattern-not: $X.$M("..." + "...", ...)
+
+  # --- taint rules: untrusted request data reaching a dangerous call inside one method --------------------
+  - id: gapscan.java.taint-sqli
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data reaches an SQL statement built from a string. Use a PreparedStatement and bind the value.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.getParameterMap()
+          - pattern: $R.getParameterNames()
+          - pattern: $R.getHeaderNames()
+          - pattern: $R.getHeader(...)
+          - pattern: $R.getHeaders(...)
+          - pattern: $R.getQueryString()
+          - pattern: $R.getPathInfo()
+          - pattern: $R.getRequestURI()
+          - pattern: $R.getRequestURL()
+          - pattern: (javax.servlet.http.Cookie $C).getValue()
+          - pattern: $R.getCookies()
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart $T $X, ...) { ... }
+              - pattern: $X
+    pattern-propagators:
+      - pattern: $C.put($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($I, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: Integer.parseInt(...)
+          - pattern: Long.parseLong(...)
+          - pattern: Double.parseDouble(...)
+          - pattern: Float.parseFloat(...)
+          - pattern: UUID.fromString(...)
+          - pattern: Integer.valueOf(...)
+          - pattern: Long.valueOf(...)
+          - pattern: Boolean.parseBoolean(...)
+    pattern-sinks:
+      - patterns:
+          - pattern: $S.$M($X, ...)
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(executeQuery|executeUpdate|execute|executeBatch|executeLargeUpdate|addBatch|prepareStatement|prepareCall|createQuery|createNativeQuery|createSQLQuery|queryForObject|queryForList|queryForMap|queryForRowSet|queryForInt|queryForLong|batchUpdate|nativeQuery)$
+          - focus-metavariable: $X
+      - patterns:
+          - pattern-either:
+              - pattern: (org.springframework.jdbc.core.JdbcTemplate $J).query($X, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcTemplate $J).update($X, ...)
+              - pattern: (org.springframework.jdbc.core.JdbcTemplate $J).execute($X)
+          - focus-metavariable: $X
+
+  - id: gapscan.java.taint-command-injection
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data reaches a command that is run. Pass fixed program and argument lists, and validate the value.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.getParameterMap()
+          - pattern: $R.getParameterNames()
+          - pattern: $R.getHeaderNames()
+          - pattern: $R.getHeader(...)
+          - pattern: $R.getHeaders(...)
+          - pattern: $R.getQueryString()
+          - pattern: $R.getPathInfo()
+          - pattern: $R.getRequestURI()
+          - pattern: $R.getRequestURL()
+          - pattern: (javax.servlet.http.Cookie $C).getValue()
+          - pattern: $R.getCookies()
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart $T $X, ...) { ... }
+              - pattern: $X
+    pattern-propagators:
+      - pattern: $C.put($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($I, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: Integer.parseInt(...)
+          - pattern: Long.parseLong(...)
+          - pattern: Double.parseDouble(...)
+          - pattern: Float.parseFloat(...)
+          - pattern: UUID.fromString(...)
+          - pattern: Integer.valueOf(...)
+          - pattern: Long.valueOf(...)
+          - pattern: Boolean.parseBoolean(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: Runtime.getRuntime().exec($X, ...)
+              - pattern: (Runtime $R).exec($X, ...)
+              - pattern: new ProcessBuilder($X, ...)
+              - pattern: new ProcessBuilder(..., $X)
+              - pattern: (ProcessBuilder $P).command($X)
+              - pattern: (ProcessBuilder $P).command(..., $X)
+              - pattern: Runtime.getRuntime().exec($A, $X, ...)
+              - pattern: (Runtime $R).exec($A, $X, ...)
+              - pattern: (ProcessBuilder $P).environment().put($K, $X)
+          - focus-metavariable: $X
+
+  - id: gapscan.java.taint-path-traversal
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data is used as a file path, so `../` can reach files outside the intended folder. Resolve the path against a base folder, normalize it, and check it is still inside that folder.
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.getParameterMap()
+          - pattern: $R.getParameterNames()
+          - pattern: $R.getHeaderNames()
+          - pattern: $R.getHeader(...)
+          - pattern: $R.getHeaders(...)
+          - pattern: $R.getQueryString()
+          - pattern: $R.getPathInfo()
+          - pattern: $R.getRequestURI()
+          - pattern: $R.getRequestURL()
+          - pattern: (javax.servlet.http.Cookie $C).getValue()
+          - pattern: $R.getCookies()
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart $T $X, ...) { ... }
+              - pattern: $X
+    pattern-propagators:
+      - pattern: $C.put($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($I, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: Integer.parseInt(...)
+          - pattern: Long.parseLong(...)
+          - pattern: Double.parseDouble(...)
+          - pattern: Float.parseFloat(...)
+          - pattern: UUID.fromString(...)
+          - pattern: Integer.valueOf(...)
+          - pattern: Long.valueOf(...)
+          - pattern: Boolean.parseBoolean(...)
+          - pattern: FilenameUtils.getName(...)
+          - pattern: $P.getFileName()
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: new java.io.File($X)
+              - pattern: new java.io.File($D, $X)
+              - pattern: new java.io.FileInputStream($X)
+              - pattern: new java.io.FileOutputStream($X, ...)
+              - pattern: new java.io.FileReader($X)
+              - pattern: new java.io.FileWriter($X, ...)
+              - pattern: new java.io.RandomAccessFile($X, ...)
+              - pattern: java.nio.file.Paths.get($X, ...)
+              - pattern: java.nio.file.Path.of($X, ...)
+              - pattern: java.nio.file.Files.readAllBytes($X)
+              - pattern: java.nio.file.Files.readAllLines($X, ...)
+              - pattern: java.nio.file.Files.readString($X, ...)
+              - pattern: java.nio.file.Files.newInputStream($X, ...)
+              - pattern: java.nio.file.Files.newBufferedReader($X, ...)
+              - pattern: java.nio.file.Files.write($X, ...)
+              - pattern: java.nio.file.Files.newOutputStream($X, ...)
+              - pattern: java.nio.file.Files.delete($X)
+              - pattern: java.nio.file.Files.copy($X, ...)
+              - pattern: java.nio.file.Files.move($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.java.taint-ssrf
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data chooses the address the server connects to (server-side request forgery): an attacker can reach internal services and cloud metadata. Allow only known hosts and block private address ranges.
+    metadata:
+      cwe: ["CWE-918: Server-Side Request Forgery (SSRF)"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.getParameterMap()
+          - pattern: $R.getParameterNames()
+          - pattern: $R.getHeaderNames()
+          - pattern: $R.getHeader(...)
+          - pattern: $R.getHeaders(...)
+          - pattern: $R.getQueryString()
+          - pattern: $R.getPathInfo()
+          - pattern: $R.getRequestURI()
+          - pattern: $R.getRequestURL()
+          - pattern: (javax.servlet.http.Cookie $C).getValue()
+          - pattern: $R.getCookies()
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart $T $X, ...) { ... }
+              - pattern: $X
+    pattern-propagators:
+      - pattern: $C.put($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($I, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: Integer.parseInt(...)
+          - pattern: Long.parseLong(...)
+          - pattern: Double.parseDouble(...)
+          - pattern: Float.parseFloat(...)
+          - pattern: UUID.fromString(...)
+          - pattern: Integer.valueOf(...)
+          - pattern: Long.valueOf(...)
+          - pattern: Boolean.parseBoolean(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: new java.net.URL($X)
+              - pattern: java.net.URI.create($X)
+              - pattern: new java.net.URI($X)
+              - pattern: $T.getForObject($X, ...)
+              - pattern: $T.getForEntity($X, ...)
+              - pattern: $T.postForObject($X, ...)
+              - pattern: $T.exchange($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.java.taint-open-redirect
+    languages: [java]
+    mode: taint
+    severity: WARNING
+    message: >-
+      The redirect target comes from the request, so a link on your site can send users to an attacker's page. Only redirect to relative paths or to an allow-list of hosts.
+    metadata:
+      cwe: ["CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.getParameterMap()
+          - pattern: $R.getParameterNames()
+          - pattern: $R.getHeaderNames()
+          - pattern: $R.getHeader(...)
+          - pattern: $R.getHeaders(...)
+          - pattern: $R.getQueryString()
+          - pattern: $R.getPathInfo()
+          - pattern: $R.getRequestURI()
+          - pattern: $R.getRequestURL()
+          - pattern: (javax.servlet.http.Cookie $C).getValue()
+          - pattern: $R.getCookies()
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart $T $X, ...) { ... }
+              - pattern: $X
+    pattern-propagators:
+      - pattern: $C.put($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($I, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: Integer.parseInt(...)
+          - pattern: Long.parseLong(...)
+          - pattern: Double.parseDouble(...)
+          - pattern: Float.parseFloat(...)
+          - pattern: UUID.fromString(...)
+          - pattern: Integer.valueOf(...)
+          - pattern: Long.valueOf(...)
+          - pattern: Boolean.parseBoolean(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $RES.sendRedirect($X)
+              - pattern: new RedirectView($X, ...)
+              - pattern: new RedirectView($X)
+          - focus-metavariable: $X
+
+  - id: gapscan.java.taint-xss
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data is written into the response as HTML without escaping, so a crafted link runs script in the visitor's browser. Escape the value for HTML (`HtmlUtils.htmlEscape`, OWASP Encoder) or use a template engine that escapes by default.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.getParameterMap()
+          - pattern: $R.getParameterNames()
+          - pattern: $R.getHeaderNames()
+          - pattern: $R.getHeader(...)
+          - pattern: $R.getHeaders(...)
+          - pattern: $R.getQueryString()
+          - pattern: $R.getPathInfo()
+          - pattern: $R.getRequestURI()
+          - pattern: $R.getRequestURL()
+          - pattern: (javax.servlet.http.Cookie $C).getValue()
+          - pattern: $R.getCookies()
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart $T $X, ...) { ... }
+              - pattern: $X
+    pattern-propagators:
+      - pattern: $C.put($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($I, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: Integer.parseInt(...)
+          - pattern: Long.parseLong(...)
+          - pattern: Double.parseDouble(...)
+          - pattern: Float.parseFloat(...)
+          - pattern: UUID.fromString(...)
+          - pattern: Integer.valueOf(...)
+          - pattern: Long.valueOf(...)
+          - pattern: Boolean.parseBoolean(...)
+          - pattern: HtmlUtils.htmlEscape(...)
+          - pattern: StringEscapeUtils.escapeHtml4(...)
+          - pattern: StringEscapeUtils.escapeHtml(...)
+          - pattern: Encode.forHtml(...)
+          - pattern: Encode.forHtmlContent(...)
+          - pattern: ESAPI.encoder().encodeForHTML(...)
+          - pattern: org.owasp.esapi.ESAPI.encoder().encodeForHTML(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $RES.getWriter().$M(...)
+              - pattern: $RES.getOutputStream().$M(...)
+              - pattern: (java.io.PrintWriter $W).$M(...)
+              - pattern: (javax.servlet.jsp.JspWriter $W).$M(...)
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(write|print|println|append|printf|format)$
+
+  - id: gapscan.java.taint-expression-injection
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data is evaluated as an expression (Spring SpEL, OGNL, JNDI lookup or reflection), which can run code. Do not evaluate user text; map choices to fixed values.
+    metadata:
+      cwe: ["CWE-917: Improper Neutralization of Special Elements used in an Expression Language Statement"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.getParameterMap()
+          - pattern: $R.getParameterNames()
+          - pattern: $R.getHeaderNames()
+          - pattern: $R.getHeader(...)
+          - pattern: $R.getHeaders(...)
+          - pattern: $R.getQueryString()
+          - pattern: $R.getPathInfo()
+          - pattern: $R.getRequestURI()
+          - pattern: $R.getRequestURL()
+          - pattern: (javax.servlet.http.Cookie $C).getValue()
+          - pattern: $R.getCookies()
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart $T $X, ...) { ... }
+              - pattern: $X
+    pattern-propagators:
+      - pattern: $C.put($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($I, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: Integer.parseInt(...)
+          - pattern: Long.parseLong(...)
+          - pattern: Double.parseDouble(...)
+          - pattern: Float.parseFloat(...)
+          - pattern: UUID.fromString(...)
+          - pattern: Integer.valueOf(...)
+          - pattern: Long.valueOf(...)
+          - pattern: Boolean.parseBoolean(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $P.parseExpression($X, ...)
+              - pattern: Ognl.getValue($X, ...)
+              - pattern: $C.lookup($X)
+              - pattern: Class.forName($X)
+              - pattern: new InitialContext().lookup($X)
+          - focus-metavariable: $X
+
+  - id: gapscan.java.taint-ldap-injection
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data reaches an LDAP query, so a value such as `*)(uid=*` changes what it matches (LDAP injection). Encode the value with an LDAP encoder or use parameterized filters.
+    metadata:
+      cwe: ["CWE-90: Improper Neutralization of Special Elements used in an LDAP Query ('LDAP Injection')"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.getParameterMap()
+          - pattern: $R.getParameterNames()
+          - pattern: $R.getHeaderNames()
+          - pattern: $R.getHeader(...)
+          - pattern: $R.getHeaders(...)
+          - pattern: $R.getQueryString()
+          - pattern: $R.getPathInfo()
+          - pattern: $R.getRequestURI()
+          - pattern: $R.getRequestURL()
+          - pattern: (javax.servlet.http.Cookie $C).getValue()
+          - pattern: $R.getCookies()
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart $T $X, ...) { ... }
+              - pattern: $X
+    pattern-propagators:
+      - pattern: $C.put($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($I, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: Integer.parseInt(...)
+          - pattern: Long.parseLong(...)
+          - pattern: Double.parseDouble(...)
+          - pattern: Float.parseFloat(...)
+          - pattern: UUID.fromString(...)
+          - pattern: Integer.valueOf(...)
+          - pattern: Long.valueOf(...)
+          - pattern: Boolean.parseBoolean(...)
+          - pattern: ESAPI.encoder().encodeForLDAP(...)
+          - pattern: org.owasp.esapi.ESAPI.encoder().encodeForLDAP(...)
+          - pattern: LdapEncoder.filterEncode(...)
+          - pattern: LdapEncoder.nameEncode(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $C.search($B, $X, ...)
+              - pattern: $C.search($X, ...)
+              - pattern: (org.springframework.ldap.core.LdapTemplate $L).search($B, $X, ...)
+              - pattern: (javax.naming.directory.DirContext $D).search($B, $X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.java.taint-xpath-injection
+    languages: [java]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data reaches an XPath expression, so a user value can change what it selects (XPath injection). Use `XPathVariableResolver` parameters instead of building the expression from text.
+    metadata:
+      cwe: ["CWE-643: Improper Neutralization of Data within XPath Expressions ('XPath Injection')"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.getParameterMap()
+          - pattern: $R.getParameterNames()
+          - pattern: $R.getHeaderNames()
+          - pattern: $R.getHeader(...)
+          - pattern: $R.getHeaders(...)
+          - pattern: $R.getQueryString()
+          - pattern: $R.getPathInfo()
+          - pattern: $R.getRequestURI()
+          - pattern: $R.getRequestURL()
+          - pattern: (javax.servlet.http.Cookie $C).getValue()
+          - pattern: $R.getCookies()
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart $T $X, ...) { ... }
+              - pattern: $X
+    pattern-propagators:
+      - pattern: $C.put($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($I, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: Integer.parseInt(...)
+          - pattern: Long.parseLong(...)
+          - pattern: Double.parseDouble(...)
+          - pattern: Float.parseFloat(...)
+          - pattern: UUID.fromString(...)
+          - pattern: Integer.valueOf(...)
+          - pattern: Long.valueOf(...)
+          - pattern: Boolean.parseBoolean(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: (javax.xml.xpath.XPath $P).evaluate($X, ...)
+              - pattern: (javax.xml.xpath.XPath $P).compile($X)
+              - pattern: $P.selectNodes($X)
+              - pattern: $P.selectSingleNode($X)
+          - focus-metavariable: $X
+
+  - id: gapscan.java.taint-trust-boundary
+    languages: [java]
+    mode: taint
+    severity: WARNING
+    message: >-
+      Untrusted request data is stored in the user's session as a key or value. Later code trusts anything in the session, so this lets a user plant data that looks verified (trust boundary violation). Validate the value first, and never use request data as the attribute name.
+    metadata:
+      cwe: ["CWE-501: Trust Boundary Violation"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - pattern-either:
+          - pattern: $R.getParameter(...)
+          - pattern: $R.getParameterValues(...)
+          - pattern: $R.getParameterMap()
+          - pattern: $R.getParameterNames()
+          - pattern: $R.getHeaderNames()
+          - pattern: $R.getHeader(...)
+          - pattern: $R.getHeaders(...)
+          - pattern: $R.getQueryString()
+          - pattern: $R.getPathInfo()
+          - pattern: $R.getRequestURI()
+          - pattern: $R.getRequestURL()
+          - pattern: (javax.servlet.http.Cookie $C).getValue()
+          - pattern: $R.getCookies()
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestParam $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @PathVariable $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestHeader $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestBody $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @CookieValue $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart(...) $T $X, ...) { ... }
+              - pattern: $X
+          - patterns:
+              - pattern-inside: |
+                  $RET $M(..., @RequestPart $T $X, ...) { ... }
+              - pattern: $X
+    pattern-propagators:
+      - pattern: $C.put($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.add($V)
+        from: $V
+        to: $C
+      - pattern: $C.add($I, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: Integer.parseInt(...)
+          - pattern: Long.parseLong(...)
+          - pattern: Double.parseDouble(...)
+          - pattern: Float.parseFloat(...)
+          - pattern: UUID.fromString(...)
+          - pattern: Integer.valueOf(...)
+          - pattern: Long.valueOf(...)
+          - pattern: Boolean.parseBoolean(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: (javax.servlet.http.HttpSession $S).setAttribute($X, ...)
+              - pattern: (javax.servlet.http.HttpSession $S).setAttribute($K, $X)
+              - pattern: (javax.servlet.http.HttpSession $S).putValue($X, ...)
+              - pattern: (javax.servlet.http.HttpSession $S).putValue($K, $X)
+              - pattern: $R.getSession(...).setAttribute($X, ...)
+              - pattern: $R.getSession(...).setAttribute($K, $X)
+              - pattern: $R.getSession(...).putValue($X, ...)
+              - pattern: $R.getSession(...).putValue($K, $X)
+          - focus-metavariable: $X

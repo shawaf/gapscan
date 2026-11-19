@@ -1,0 +1,135 @@
+name = "python-core"
+languages = ["python"]
+
+[[source]]
+kind = "cli_arg"
+pattern = 'sys\.argv|input\('
+
+[[source]]
+kind = "env"
+pattern = 'os\.environ|os\.getenv'
+
+[[sink]]
+kind = "sql"
+cwe = "CWE-89"
+severity = "high"
+title = "SQL injection"
+callee = '\.(execute|executemany|executescript|raw|extra|read_sql|read_sql_query)$|(^|\.)text$'
+args = [0]
+
+[[sink]]
+kind = "cmd"
+cwe = "CWE-78"
+severity = "critical"
+title = "OS command injection"
+callee = '(^|\.)(os\.system|os\.popen|commands\.getoutput|subprocess\.(run|call|Popen|check_output|check_call|getoutput|getstatusoutput)|popen|pty\.spawn|os\.exec\w+|os\.spawn\w+)$'
+args = [0]
+
+[[sink]]
+kind = "code"
+cwe = "CWE-94"
+severity = "critical"
+title = "Code injection"
+callee = '^(eval|exec|compile|__import__)$|importlib\.import_module$'
+args = [0]
+
+[[sink]]
+kind = "path"
+cwe = "CWE-22"
+severity = "high"
+title = "Path traversal"
+callee = '^(open|Path)$|(^|\.)(codecs\.open|io\.open|os\.open|pathlib\.Path|send_file|send_from_directory|FileResponse|os\.remove|os\.unlink|os\.rmdir|os\.listdir|os\.makedirs|shutil\.\w+|pathlib\.Path|zipfile\.ZipFile|tarfile\.open)$'
+args = [0]
+
+[[sink]]
+kind = "ssrf"
+cwe = "CWE-918"
+severity = "high"
+title = "Server-side request forgery"
+callee = '(^|\.)(requests\.(get|post|put|delete|head|patch|request)|urlopen|urllib\.request\.urlopen|httpx\.(get|post|put|delete|request|stream)|http\.client\.HTTP\w*Connection|aiohttp\.\w+\.get|session\.(get|post))$'
+args = [0]
+
+[[sink]]
+kind = "xss"
+cwe = "CWE-79"
+severity = "medium"
+title = "Cross-site scripting"
+callee = '^(render_template_string|Markup|HttpResponse|make_response|HTMLResponse|mark_safe|format_html)$|\.(safe)$'
+args = [0]
+
+[[sink]]
+kind = "redirect"
+cwe = "CWE-601"
+severity = "medium"
+title = "Open redirect"
+callee = '(^|\.)(redirect|HttpResponseRedirect|RedirectResponse)$'
+args = [0]
+
+[[sink]]
+kind = "deserialization"
+cwe = "CWE-502"
+severity = "critical"
+title = "Insecure deserialization"
+callee = '(^|\.)(pickle\.loads?|cPickle\.loads?|marshal\.loads?|yaml\.load|yaml\.unsafe_load|jsonpickle\.decode|dill\.loads?|shelve\.open)$'
+args = [0]
+
+[[sink]]
+kind = "ldap"
+cwe = "CWE-90"
+severity = "high"
+title = "LDAP injection"
+callee = '\.(search_s|search_ext_s|search)$'
+args = [0, 1, 2]
+
+[[sink]]
+kind = "xpath"
+cwe = "CWE-643"
+severity = "high"
+title = "XPath injection"
+callee = '\.xpath$'
+args = [0]
+
+[[sanitizer]]
+callee = '^(int|float|bool|len|ord|bytes|abs|round|uuid\.UUID|UUID|ipaddress\.ip_address|Decimal)$'
+cleans = ["*"]
+
+[[sanitizer]]
+callee = '(^|\.)(html\.escape|escape|markupsafe\.escape|bleach\.clean|django\.utils\.html\.escape|conditional_escape|quote|urllib\.parse\.quote|quote_plus)$'
+cleans = ["xss", "redirect"]
+
+[[sanitizer]]
+callee = '(^|\.)(os\.path\.basename|secure_filename|werkzeug\.utils\.secure_filename|shlex\.quote|pipes\.quote)$'
+cleans = ["path", "cmd"]
+
+[[sanitizer]]
+callee = '(^|\.)(ldap\.filter\.escape_filter_chars|escape_filter_chars|escape_dn_chars)$'
+cleans = ["ldap"]
+
+[[deny]]
+callee = '\.(startswith|endswith|isdigit|isalpha|isalnum|isnumeric|isspace|count|find|index|__len__|keys|exists|isfile|isdir)$'
+
+[[sink]]
+# methods on a pathlib.Path built from attacker input
+kind = "path"
+cwe = "CWE-22"
+severity = "high"
+title = "Path traversal"
+callee = '\.(exists|open|read_text|read_bytes|write_text|write_bytes|unlink|rmdir|mkdir|touch|stat|is_file|is_dir|iterdir|glob|rename|replace|symlink_to)$'
+args = []
+receiver = true
+
+[[sink]]
+kind = "xpath"
+cwe = "CWE-643"
+severity = "high"
+title = "XPath injection"
+callee = '(^|\.)elementpath\.(select|iter_select|Selector)$'
+args = [1]
+
+[[sink]]
+kind = "xpath"
+cwe = "CWE-643"
+severity = "high"
+title = "XPath injection"
+callee = '(^|\.)(etree\.)?XPath$'
+args = [0]

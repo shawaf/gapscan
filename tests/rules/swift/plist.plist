@@ -1,0 +1,46 @@
+<plist version="1.0">
+<dict>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <!-- ruleid: gapscan.swift.plist-ats-disabled -->
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+        <!-- ok: gapscan.swift.plist-ats-disabled -->
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>old.example.com</key>
+            <dict>
+                <!-- ruleid: gapscan.swift.plist-ats-weak-tls -->
+                <key>NSExceptionMinimumTLSVersion</key>
+                <string>TLSv1.0</string>
+                <!-- ok: gapscan.swift.plist-ats-weak-tls -->
+                <key>NSExceptionRequiresForwardSecrecy</key>
+                <true/>
+            </dict>
+        </dict>
+    </dict>
+    <!-- ruleid: gapscan.swift.plist-hardcoded-secret -->
+    <key>PaymentsAPIKey</key>
+    <string>sk_live_4eC39HqLyjWDarjtT1zdp7dc</string>
+    <!-- ok: gapscan.swift.plist-hardcoded-secret -->
+    <key>PaymentsAPIKeyFromBuild</key>
+    <string>$(PAYMENTS_API_KEY)</string>
+    <!-- ok: gapscan.swift.plist-hardcoded-secret -->
+    <key>TokenRefreshPolicy</key>
+    <string>automatic</string>
+    <!-- ruleid: gapscan.swift.plist-file-sharing-enabled -->
+    <key>UIFileSharingEnabled</key>
+    <true/>
+    <!-- ok: gapscan.swift.plist-file-sharing-enabled -->
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <false/>
+    <!-- ruleid: gapscan.swift.entitlements-get-task-allow -->
+    <key>get-task-allow</key>
+    <true/>
+    <!-- ok: gapscan.swift.entitlements-get-task-allow -->
+    <key>com.apple.developer.associated-domains</key>
+    <true/>
+</dict>
+</plist>

@@ -1,0 +1,240 @@
+{
+ "errors": [],
+ "generated_at": "2026-10-01T15:12:01Z",
+ "metrics": {
+  "_totals": {
+   "CONFIDENCE.HIGH": 6,
+   "CONFIDENCE.LOW": 0,
+   "CONFIDENCE.MEDIUM": 3,
+   "CONFIDENCE.UNDEFINED": 0,
+   "SEVERITY.HIGH": 2,
+   "SEVERITY.LOW": 5,
+   "SEVERITY.MEDIUM": 2,
+   "SEVERITY.UNDEFINED": 0,
+   "loc": 27,
+   "nosec": 0,
+   "skipped_tests": 0
+  },
+  "eval/fixtures/vuln-app/app.py": {
+   "CONFIDENCE.HIGH": 5,
+   "CONFIDENCE.LOW": 0,
+   "CONFIDENCE.MEDIUM": 1,
+   "CONFIDENCE.UNDEFINED": 0,
+   "SEVERITY.HIGH": 2,
+   "SEVERITY.LOW": 2,
+   "SEVERITY.MEDIUM": 2,
+   "SEVERITY.UNDEFINED": 0,
+   "loc": 22,
+   "nosec": 0,
+   "skipped_tests": 0
+  },
+  "eval/fixtures/vuln-app/config.py": {
+   "CONFIDENCE.HIGH": 0,
+   "CONFIDENCE.LOW": 0,
+   "CONFIDENCE.MEDIUM": 2,
+   "CONFIDENCE.UNDEFINED": 0,
+   "SEVERITY.HIGH": 0,
+   "SEVERITY.LOW": 2,
+   "SEVERITY.MEDIUM": 0,
+   "SEVERITY.UNDEFINED": 0,
+   "loc": 3,
+   "nosec": 0,
+   "skipped_tests": 0
+  },
+  "eval/fixtures/vuln-app/tests/test_app.py": {
+   "CONFIDENCE.HIGH": 1,
+   "CONFIDENCE.LOW": 0,
+   "CONFIDENCE.MEDIUM": 0,
+   "CONFIDENCE.UNDEFINED": 0,
+   "SEVERITY.HIGH": 0,
+   "SEVERITY.LOW": 1,
+   "SEVERITY.MEDIUM": 0,
+   "SEVERITY.UNDEFINED": 0,
+   "loc": 2,
+   "nosec": 0,
+   "skipped_tests": 0
+  }
+ },
+ "results": [
+  {
+   "code": "2 import hashlib\n3 import pickle\n4 import sqlite3\n",
+   "col_offset": 0,
+   "end_col_offset": 13,
+   "filename": "eval/fixtures/vuln-app/app.py",
+   "issue_confidence": "HIGH",
+   "issue_cwe": {
+    "id": 502,
+    "link": "https://cwe.mitre.org/data/definitions/502.html"
+   },
+   "issue_severity": "LOW",
+   "issue_text": "Consider possible security implications associated with pickle module.",
+   "line_number": 3,
+   "line_range": [
+    3
+   ],
+   "more_info": "https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b403-import-pickle",
+   "test_id": "B403",
+   "test_name": "blacklist"
+  },
+  {
+   "code": "4 import sqlite3\n5 import subprocess\n6 \n",
+   "col_offset": 0,
+   "end_col_offset": 17,
+   "filename": "eval/fixtures/vuln-app/app.py",
+   "issue_confidence": "HIGH",
+   "issue_cwe": {
+    "id": 78,
+    "link": "https://cwe.mitre.org/data/definitions/78.html"
+   },
+   "issue_severity": "LOW",
+   "issue_text": "Consider possible security implications associated with the subprocess module.",
+   "line_number": 5,
+   "line_range": [
+    5
+   ],
+   "more_info": "https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess",
+   "test_id": "B404",
+   "test_name": "blacklist"
+  },
+  {
+   "code": "15     cur = sqlite3.connect(\"db.sqlite\").cursor()\n16     cur.execute(\"SELECT * FROM users WHERE name = '\" + name + \"'\")  # SQL injection\n17     return str(cur.fetchall())\n",
+   "col_offset": 16,
+   "end_col_offset": 52,
+   "filename": "eval/fixtures/vuln-app/app.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 89,
+    "link": "https://cwe.mitre.org/data/definitions/89.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Possible SQL injection vector through string-based query construction.",
+   "line_number": 16,
+   "line_range": [
+    16
+   ],
+   "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b608_hardcoded_sql_expressions.html",
+   "test_id": "B608",
+   "test_name": "hardcoded_sql_expressions"
+  },
+  {
+   "code": "22     host = request.args.get(\"host\")\n23     return subprocess.check_output(\"ping -c 1 \" + host, shell=True)  # command injection\n24 \n",
+   "col_offset": 11,
+   "end_col_offset": 67,
+   "filename": "eval/fixtures/vuln-app/app.py",
+   "issue_confidence": "HIGH",
+   "issue_cwe": {
+    "id": 78,
+    "link": "https://cwe.mitre.org/data/definitions/78.html"
+   },
+   "issue_severity": "HIGH",
+   "issue_text": "subprocess call with shell=True identified, security issue.",
+   "line_number": 23,
+   "line_range": [
+    23
+   ],
+   "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b602_subprocess_popen_with_shell_equals_true.html",
+   "test_id": "B602",
+   "test_name": "subprocess_popen_with_shell_equals_true"
+  },
+  {
+   "code": "27 def load():\n28     return str(pickle.loads(request.data))  # insecure deserialization\n29 \n",
+   "col_offset": 15,
+   "end_col_offset": 41,
+   "filename": "eval/fixtures/vuln-app/app.py",
+   "issue_confidence": "HIGH",
+   "issue_cwe": {
+    "id": 502,
+    "link": "https://cwe.mitre.org/data/definitions/502.html"
+   },
+   "issue_severity": "MEDIUM",
+   "issue_text": "Pickle and modules that wrap it can be unsafe when used to deserialize untrusted data, possible security issue.",
+   "line_number": 28,
+   "line_range": [
+    28
+   ],
+   "more_info": "https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_calls.html#b301-pickle",
+   "test_id": "B301",
+   "test_name": "blacklist"
+  },
+  {
+   "code": "31 def hash_password(pw):\n32     return hashlib.md5(pw.encode()).hexdigest()  # weak hash\n",
+   "col_offset": 11,
+   "end_col_offset": 35,
+   "filename": "eval/fixtures/vuln-app/app.py",
+   "issue_confidence": "HIGH",
+   "issue_cwe": {
+    "id": 327,
+    "link": "https://cwe.mitre.org/data/definitions/327.html"
+   },
+   "issue_severity": "HIGH",
+   "issue_text": "Use of weak MD5 hash for security. Consider usedforsecurity=False",
+   "line_number": 32,
+   "line_range": [
+    32
+   ],
+   "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b324_hashlib.html",
+   "test_id": "B324",
+   "test_name": "hashlib"
+  },
+  {
+   "code": "1 # FAKE credentials for scanner testing only.\n2 GITHUB_TOKEN = \"FAKE-SECRET-VALUE\"\n3 AWS_ACCESS_KEY_ID = \"FAKE-SECRET-VALUE\"\n",
+   "col_offset": 15,
+   "end_col_offset": 57,
+   "filename": "eval/fixtures/vuln-app/config.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 259,
+    "link": "https://cwe.mitre.org/data/definitions/259.html"
+   },
+   "issue_severity": "LOW",
+   "issue_text": "Possible hardcoded password: 'FAKE-SECRET-VALUE'",
+   "line_number": 2,
+   "line_range": [
+    2
+   ],
+   "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html",
+   "test_id": "B105",
+   "test_name": "hardcoded_password_string"
+  },
+  {
+   "code": "3 AWS_ACCESS_KEY_ID = \"FAKE-SECRET-VALUE\"\n4 AWS_SECRET_ACCESS_KEY = \"FAKE-SECRET-VALUE\"\n",
+   "col_offset": 24,
+   "end_col_offset": 66,
+   "filename": "eval/fixtures/vuln-app/config.py",
+   "issue_confidence": "MEDIUM",
+   "issue_cwe": {
+    "id": 259,
+    "link": "https://cwe.mitre.org/data/definitions/259.html"
+   },
+   "issue_severity": "LOW",
+   "issue_text": "Possible hardcoded password: 'FAKE-SECRET-VALUE'",
+   "line_number": 4,
+   "line_range": [
+    4
+   ],
+   "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b105_hardcoded_password_string.html",
+   "test_id": "B105",
+   "test_name": "hardcoded_password_string"
+  },
+  {
+   "code": "1 def test_x():\n2     assert hash_password(\"a\")\n",
+   "col_offset": 4,
+   "end_col_offset": 29,
+   "filename": "eval/fixtures/vuln-app/tests/test_app.py",
+   "issue_confidence": "HIGH",
+   "issue_cwe": {
+    "id": 703,
+    "link": "https://cwe.mitre.org/data/definitions/703.html"
+   },
+   "issue_severity": "LOW",
+   "issue_text": "Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.",
+   "line_number": 2,
+   "line_range": [
+    2
+   ],
+   "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html",
+   "test_id": "B101",
+   "test_name": "assert_used"
+  }
+ ]
+}

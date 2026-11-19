@@ -1,0 +1,184 @@
+# GapScan Rules: Dart / Flutter, second set (crypto, storage and secrets idioms of real Flutter code). Licensed Apache-2.0.
+# Every rule has a vulnerable and a safe case in tests/rules/dart/flutter-more.dart (run: make rules-test).
+# Text rules (the `generic` language), because Semgrep's Dart grammar cannot express every pattern.
+rules:
+  - id: gapscan.dart.random-seeded
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: ERROR
+    message: >-
+      `Random(seed)` always produces the same sequence for the same seed, so anything made with it can be reproduced by
+      an attacker who knows or guesses the seed. For keys, tokens and codes use `Random.secure()`.
+    metadata:
+      cwe: ["CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator", "CWE-330: Use of Insufficiently Random Values"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: '(?<![\w.])Random\(\s*[^)\s][^)]*\)'
+
+  - id: gapscan.dart.random-not-secure
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: INFO
+    message: >-
+      `Random()` is predictable. That is fine for animations and shuffles, but a key, token or code made with it can be
+      guessed. Use `Random.secure()` for anything an attacker must not predict.
+    metadata:
+      cwe: ["CWE-330: Use of Insufficiently Random Values", "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: LOW
+    pattern-regex: '(?<![\w.])Random\(\s*\)'
+
+  - id: gapscan.dart.weak-key-derivation
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: ERROR
+    message: >-
+      A key is derived from a password with too few PBKDF2 iterations, or with a plain hash. That makes guessing the
+      password cheap. Use at least 600,000 PBKDF2-SHA256 iterations (or Argon2/scrypt) and a random salt.
+    metadata:
+      cwe: ["CWE-916: Use of Password Hash With Insufficient Computational Effort", "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: 'Pbkdf2Parameters\(\s*[^,\n]+,\s*(?:\d{1,5})\s*,'
+      - pattern-regex: '\bsha(?:1|256|512)\.convert\(\s*utf8\.encode\(\s*\w*[pP]ass\w*\s*\)\s*\)'
+      - pattern-regex: '\b(?:iterations|rounds)\s*=\s*(?:\d{1,4})\s*;'
+
+  - id: gapscan.dart.external-storage
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: WARNING
+    message: >-
+      Data is written to external or shared storage, where other apps (and the user's computer) can read it. Keep
+      sensitive files in the app's private folder (`getApplicationSupportDirectory`) and encrypt anything that leaves it.
+    metadata:
+      cwe: ["CWE-921: Storage of Sensitive Data in a Mechanism without Access Control", "CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: 'getExternal(?:Storage|Cache)Director(?:y|ies)\('
+      - pattern-regex: '["'']/(?:sdcard|storage/emulated)/'
+
+  - id: gapscan.dart.secure-storage-weak-accessibility
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: WARNING
+    message: >-
+      Secrets are stored with a weak accessibility setting (readable while the device is locked, or in an unencrypted
+      preferences file). Use `KeychainAccessibility.passcode` or `first_unlock_this_device`, turn on
+      `encryptedSharedPreferences`, and require user authentication for the most sensitive items.
+    metadata:
+      cwe: ["CWE-312: Cleartext Storage of Sensitive Information", "CWE-522: Insufficiently Protected Credentials"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: 'KeychainAccessibility\.(?:unlocked|always)(?:_this_device)?\b|kSecAttrAccessibleAlways'
+      - pattern-regex: 'encryptedSharedPreferences\s*:\s*false'
+
+  - id: gapscan.dart.hardcoded-secret-literal
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: WARNING
+    message: >-
+      A key, token or password is written into the source as a string. Anyone with the app can extract it, and it stays
+      in the version history. Fetch secrets from your server after login, and rotate this one.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials", "CWE-321: Use of Hard-coded Cryptographic Key"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?i)\b(?:const|final|var|String)\s+(?:static\s+)?(?:String\s+)?_?\w*(?:apikey|api_key|secret|password|passwd|privatekey|private_key|authtoken|accesstoken|clientsecret)\w*\s*=\s*["''](?!\s*["''])(?![^"'']*(?:example|placeholder|changeme|your[_-]|xxxx))[^"''\s$]{8,}["'']'
+
+  - id: gapscan.dart.cipher-without-authentication
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: INFO
+    message: >-
+      CBC, CTR or CFB encrypt but do not detect tampering, so an attacker can flip bits in the ciphertext. Use AES-GCM
+      (`AESMode.gcm`) or add an HMAC checked in constant time.
+    metadata:
+      cwe: ["CWE-353: Missing Support for Integrity Check", "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: LOW
+    pattern-regex: 'AESMode\.(?:cbc|ctr|cfb64|ofb64|sic)\b'
+
+  - id: gapscan.dart.non-constant-time-compare
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: INFO
+    message: >-
+      A MAC, signature or token is compared with `==`, which stops at the first difference and leaks, through timing,
+      how much of a guess was right. Compare with a constant-time function.
+    metadata:
+      cwe: ["CWE-208: Observable Timing Discrepancy", "CWE-347: Improper Verification of Cryptographic Signature"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: LOW
+    pattern-regex: '(?i)\b(?:mac|hmac|digest|signature|sig|tag)\w*\s*(?:==|!=)\s*[\w.(]+'
+
+  - id: gapscan.dart.pointycastle-unauthenticated-mode
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: INFO
+    message: >-
+      A block-cipher mode that encrypts but does not detect tampering (CBC, CTR/SIC, CFB, OFB) is built by hand. An attacker
+      can flip bits in the ciphertext. Use GCM (`GCMBlockCipher`) or add an HMAC checked in constant time.
+    metadata:
+      cwe: ["CWE-353: Missing Support for Integrity Check", "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: LOW
+    pattern-regex: '\b(?:CBCBlockCipher|CTRStreamCipher|SICStreamCipher|CFBBlockCipher|OFBBlockCipher)\('
+
+  - id: gapscan.dart.rsa-without-oaep
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: WARNING
+    message: >-
+      RSA is used without OAEP padding, so the ciphertext can be forged or decrypted by padding attacks. Wrap the engine in
+      `OAEPEncoding` (with SHA-256) for encryption, and use RSA-PSS for signatures.
+    metadata:
+      cwe: ["CWE-780: Use of RSA Algorithm without OAEP", "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '\bPKCS1Encoding\(\s*RSAEngine\(\)'
+      - pattern-regex: '(?<!OAEPEncoding\()\bRSAEngine\(\)'
+      - pattern-regex: 'RSAAlgorithm\([^)]*(?:encoding\s*:\s*RSAEncoding\.PKCS1)'
+
+  - id: gapscan.dart.temp-file-use
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: INFO
+    message: >-
+      A temporary file or folder is used. Temporary data is easy to forget, is not protected from other code and often ends
+      up holding secrets or personal data in clear text. Encrypt what you write there and delete it when you are done.
+    metadata:
+      cwe: ["CWE-377: Insecure Temporary File", "CWE-922: Insecure Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: LOW
+    pattern-either:
+      - pattern-regex: 'getTemporaryDirectory\('
+      - pattern-regex: 'Directory\.systemTemp\b'
+
+  - id: gapscan.dart.log-sensitive-interpolation
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: WARNING
+    message: >-
+      A secret (a password, token, key or similar) is interpolated into a log message. Logs can be read by other tools on
+      the device and end up in crash reports. Log a fixed message, or a masked value.
+    metadata:
+      cwe: ["CWE-532: Insertion of Sensitive Information into Log File"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?i)\b(?:print|debugPrint|log|logger\.\w+|developer\.log)\(\s*["''][^"''\n]*\$\{?\w*(?:password|passwd|token|secret|apikey|authorization|bearer|pin)\w*'

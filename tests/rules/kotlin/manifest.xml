@@ -1,0 +1,110 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- ruleid: gapscan.kotlin.manifest-allow-backup -->
+    <application android:allowBackup="true" android:label="a">
+    </application>
+    <!-- ok: gapscan.kotlin.manifest-allow-backup -->
+    <application android:allowBackup="false" android:label="b">
+    </application>
+    <!-- ruleid: gapscan.kotlin.manifest-cleartext-traffic -->
+    <application android:usesCleartextTraffic="true">
+    </application>
+    <!-- ok: gapscan.kotlin.manifest-cleartext-traffic -->
+    <application android:usesCleartextTraffic="false">
+    </application>
+    <!-- ruleid: gapscan.kotlin.manifest-debuggable -->
+    <application android:debuggable="true">
+    </application>
+    <!-- ok: gapscan.kotlin.manifest-debuggable -->
+    <application android:debuggable="false">
+    </application>
+
+    <!-- ruleid: gapscan.kotlin.manifest-exported-component -->
+    <service android:name=".SyncService" android:exported="true" />
+    <!-- ok: gapscan.kotlin.manifest-exported-component -->
+    <service android:name=".Safe" android:exported="false" />
+    <!-- ok: gapscan.kotlin.manifest-exported-component -->
+    <service android:name=".Guarded" android:exported="true" android:permission="com.example.PERM" />
+    <!-- ruleid: gapscan.kotlin.manifest-exported-component -->
+    <activity
+        android:name=".SecretActivity"
+        android:exported="true">
+    </activity>
+    <!-- ok: gapscan.kotlin.manifest-exported-component -->
+    <activity
+        android:name=".MainActivity"
+        android:exported="true">
+        <intent-filter>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent-filter>
+    </activity>
+
+    <!-- ruleid: gapscan.kotlin.manifest-exported-component -->
+    <activity android:name=".DeepLinkActivity" android:exported="true">
+        <!-- ruleid: gapscan.kotlin.manifest-deeplink-not-verified -->
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" android:host="example.com" />
+        </intent-filter>
+    </activity>
+    <!-- ruleid: gapscan.kotlin.manifest-exported-component -->
+    <activity android:name=".VerifiedActivity" android:exported="true">
+        <!-- ok: gapscan.kotlin.manifest-deeplink-not-verified -->
+        <intent-filter android:autoVerify="true">
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" android:host="example.com" />
+        </intent-filter>
+    </activity>
+</manifest>
+<network-security-config>
+    <base-config>
+        <trust-anchors>
+            <certificates src="system" />
+            <!-- ruleid: gapscan.kotlin.nsc-user-certificates-trusted -->
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+    <!-- ruleid: gapscan.kotlin.nsc-cleartext-permitted -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain>example.com</domain>
+    </domain-config>
+    <!-- ok: gapscan.kotlin.nsc-cleartext-permitted -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain>safe.example.com</domain>
+    </domain-config>
+</network-security-config>
+<paths>
+    <!-- ruleid: gapscan.kotlin.fileprovider-broad-path -->
+    <root-path name="root" path="." />
+    <!-- ruleid: gapscan.kotlin.fileprovider-broad-path -->
+    <files-path name="all" path="/" />
+    <!-- ok: gapscan.kotlin.fileprovider-broad-path -->
+    <files-path name="shared" path="shared/images/" />
+</paths>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.tasks">
+    <!-- ruleid: gapscan.kotlin.manifest-weak-custom-permission -->
+    <permission android:name="com.example.READ_NOTES" android:protectionLevel="normal" />
+    <!-- ruleid: gapscan.kotlin.manifest-weak-custom-permission -->
+    <permission android:name="com.example.WRITE_NOTES" />
+    <!-- ok: gapscan.kotlin.manifest-weak-custom-permission -->
+    <permission android:name="com.example.SYNC" android:protectionLevel="signature" />
+    <!-- ruleid: gapscan.kotlin.manifest-sensitive-permission -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- ruleid: gapscan.kotlin.manifest-sensitive-permission -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <!-- ok: gapscan.kotlin.manifest-sensitive-permission -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application>
+        <!-- ruleid: gapscan.kotlin.manifest-task-hijacking -->
+        <activity android:name=".PayActivity" android:taskAffinity="com.other.app" android:launchMode="singleTask" android:exported="false" />
+        <!-- ruleid: gapscan.kotlin.manifest-task-hijacking -->
+        <activity android:name=".Login" android:allowTaskReparenting="true" android:exported="false" />
+        <!-- ok: gapscan.kotlin.manifest-task-hijacking -->
+        <activity android:name=".Home" android:taskAffinity="" android:launchMode="singleTask" android:exported="false" />
+        <!-- ok: gapscan.kotlin.manifest-task-hijacking -->
+        <activity android:name=".Detail" android:launchMode="standard" android:exported="false" />
+    </application>
+</manifest>
+

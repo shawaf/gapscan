@@ -1,0 +1,947 @@
+# GapScan Rules: JavaScript and TypeScript (Node/Express backends and browser code). Licensed Apache-2.0 with the
+# rest of GapScan. Every rule has a vulnerable and a safe case in tests/rules/javascript/javascript.js
+# (run: make rules-test). Taint rules follow request data within one function.
+rules:
+  - id: gapscan.javascript.sqli-string-built
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      An SQL statement is built from a string with concatenation or a template literal. Pass the values as bound
+      parameters (`db.query("... WHERE id = $1", [id])`) or use the query builder's parameter binding.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: $DB.$M($Q + ..., ...)
+          - pattern: $DB.$M(`...${...}...`, ...)
+          - pattern: $DB.$M($Q.concat(...), ...)
+      - metavariable-regex:
+          metavariable: $M
+          regex: ^(query|execute|raw|all|each|prepare|queryRaw|executeRaw|\$queryRawUnsafe|\$executeRawUnsafe)$
+      - pattern-not: $DB.$M("..." + "...", ...)
+
+  - id: gapscan.javascript.command-injection
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      A shell command is built at run time. If any part comes from a user, they can run their own commands. Use
+      `execFile`/`spawn` with an argument array and no shell.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      category: security
+      confidence: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: child_process.exec($CMD, ...)
+          - pattern: child_process.execSync($CMD, ...)
+          - pattern: $CP.exec($CMD, ...)
+          - pattern: $CP.execSync($CMD, ...)
+          - pattern: '$CP.spawn($CMD, ..., {..., shell: true, ...})'
+          - pattern: '$CP.spawnSync($CMD, ..., {..., shell: true, ...})'
+      - metavariable-regex:
+          metavariable: $CP
+          regex: ^(child_process|cp|childProcess|shell|proc)$
+      - pattern-not: $CP.$F("...", ...)
+
+  - id: gapscan.javascript.code-injection
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Text is run as code (`eval`, `new Function`, `vm` or a string timer). If a user can influence the text this is
+      remote code execution. Use `JSON.parse` for data and explicit functions for behaviour.
+    metadata:
+      cwe: ["CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: eval($X)
+          - pattern: new Function(..., $X)
+          - pattern: vm.runInNewContext($X, ...)
+          - pattern: vm.runInThisContext($X, ...)
+          - pattern: vm.runInContext($X, ...)
+          - pattern: setTimeout($S + ..., ...)
+          - pattern: setInterval($S + ..., ...)
+          - pattern: setTimeout(`...${...}...`, ...)
+      - pattern-not: eval("...")
+      - pattern-not: new Function(..., "...")
+
+  - id: gapscan.javascript.dom-xss
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      A value is written into the page as HTML, so any markup in it runs as script (cross-site scripting). Use
+      `textContent`, build elements with the DOM API, or sanitize with a maintained library such as DOMPurify.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $E.innerHTML = $X
+          - pattern: $E.outerHTML = $X
+          - pattern: document.write($X)
+          - pattern: document.writeln($X)
+          - pattern: $E.insertAdjacentHTML($P, $X)
+          - patterns:
+              - pattern: $J.html($X)
+              - metavariable-regex:
+                  metavariable: $J
+                  regex: ^(\$|jQuery|\$\(.*\)|\$\w+)$
+          - pattern: '<$C ... dangerouslySetInnerHTML={{__html: $X}} ... />'
+      - pattern-not: $E.innerHTML = "..."
+      - pattern-not: $E.outerHTML = "..."
+      - pattern-not: document.write("...")
+      - pattern-not: $E.insertAdjacentHTML($P, "...")
+      - pattern-not: $J.html("...")
+      - pattern-not: $E.innerHTML = DOMPurify.sanitize(...)
+      - pattern-not: $J.html(DOMPurify.sanitize(...))
+      - pattern-not: '<$C ... dangerouslySetInnerHTML={{__html: DOMPurify.sanitize(...)}} ... />'
+      - pattern-not: '<$C ... dangerouslySetInnerHTML={{__html: "..."}} ... />'
+
+  - id: gapscan.javascript.tls-verification-disabled
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Certificate verification is switched off, so anyone on the network path can read and change the traffic. Remove
+      the override and fix the certificate (or add the right CA with the `ca` option).
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: '{..., rejectUnauthorized: false, ...}'
+      - pattern: '{..., strictSSL: false, ...}'
+      - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
+      - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+      - pattern: process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = "0"
+
+  - id: gapscan.javascript.weak-hash
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      MD5 and SHA-1 are broken for security use. Fine for a cache key or file checksum, not for passwords, signatures
+      or tokens: use SHA-256 (or `scrypt`/`argon2`/`bcrypt` for passwords).
+    metadata:
+      cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: $C.createHash("md5")
+      - pattern: $C.createHash("sha1")
+      - pattern: $C.createHmac("md5", ...)
+      - pattern: $C.createHmac("sha1", ...)
+      - pattern: createHash("md5")
+      - pattern: createHash("sha1")
+
+  - id: gapscan.javascript.weak-cipher
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      A broken cipher (DES, RC4) or ECB mode is used, or `createCipher` derives the key without a random IV. Use
+      `createCipheriv` with `aes-256-gcm` and a fresh random IV for every message.
+    metadata:
+      cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $C.createCipher(...)
+      - pattern: $C.createDecipher(...)
+      - patterns:
+          - pattern: $C.createCipheriv($ALG, ...)
+          - metavariable-regex:
+              metavariable: $ALG
+              regex: (?i)^["'`](des|des-ede3|des3|rc4|rc2|bf|aes-\d+-ecb)
+      - patterns:
+          - pattern: $C.createDecipheriv($ALG, ...)
+          - metavariable-regex:
+              metavariable: $ALG
+              regex: (?i)^["'`](des|des-ede3|des3|rc4|rc2|bf|aes-\d+-ecb)
+
+  - id: gapscan.javascript.jwt-unsafe
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      The JWT is signed or accepted with the `none` algorithm, or signed with a secret written in the source, so
+      tokens can be forged. Verify with a fixed algorithm list and read the secret from the environment.
+    metadata:
+      cwe: ["CWE-347: Improper Verification of Cryptographic Signature"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: '$J.verify($T, $K, {..., algorithms: [..., "none", ...], ...})'
+      - pattern: '$J.sign($P, $K, {..., algorithm: "none", ...})'
+      - pattern: $J.sign($P, "...", ...)
+      - pattern: $J.verify($T, "...", ...)
+
+  - id: gapscan.javascript.jwt-decode-not-verified
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      `jwt.decode` only reads the token; it does not check the signature, so anyone can send a token with any claims.
+      Use `jwt.verify` (with a fixed algorithm list) before trusting what is inside.
+    metadata:
+      cwe: ["CWE-347: Improper Verification of Cryptographic Signature"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: jwt.decode(...)
+      - pattern: jsonwebtoken.decode(...)
+
+  - id: gapscan.javascript.hardcoded-secret
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      A password, key or token is written into the source. Anyone with the code has it, and it stays in the git
+      history. Read it from the environment or a secret store, and rotate the value.
+    metadata:
+      cwe: ["CWE-798: Use of Hard-coded Credentials"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $N = "..."
+          - pattern: '{..., $N: "...", ...}'
+      - metavariable-regex:
+          metavariable: $N
+          regex: (?i)^(.*[_-])?(password|passwd|pwd|secret|apikey|api_?key|access_?key|secret_?key|private_?key|auth_?token|token|client_?secret)([_-].*)?$
+      - pattern-not: $N = ""
+      - pattern-not: '{..., $N: "", ...}'
+      - pattern-not-regex: (?i)["'](changeme|change-me|your[_-].*|<.*>|\*+|x+|example|placeholder|test|none|null|todo|password|secret|token)["']
+      - pattern-not-regex: (?i)(token|password|secret)_?(url|file|path|endpoint|header|field|name|type|length|prefix|expiry|ttl|key)\s*[:=]
+
+  - id: gapscan.javascript.insecure-random-token
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      `Math.random()` is predictable, so a token, password, key or code made with it can be guessed. Use
+      `crypto.randomBytes()` / `crypto.randomUUID()` / `crypto.getRandomValues()`.
+    metadata:
+      cwe: ["CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $N = Math.random(...)
+          - pattern: $N = Math.random(...).$F(...)
+          - pattern: $N = Math.floor(Math.random(...) * ...)
+          - pattern: $N = Math.random(...).$F(...).$G(...)
+      - metavariable-regex:
+          metavariable: $N
+          regex: (?i).*(token|password|passwd|secret|otp|nonce|session|api_?key|reset|csrf|salt|code|pin).*
+
+  - id: gapscan.javascript.cookie-flags-off
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      A session or auth cookie is sent without `secure` or `httpOnly`, so it travels over plain HTTP or can be read by
+      page scripts. Turn both on (and set `sameSite`).
+    metadata:
+      cwe: ["CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: '{..., cookie: {..., secure: false, ...}, ...}'
+      - pattern: '{..., cookie: {..., httpOnly: false, ...}, ...}'
+      - pattern: '$R.cookie($N, $V, {..., httpOnly: false, ...})'
+      - pattern: '$R.cookie($N, $V, {..., secure: false, ...})'
+
+  - id: gapscan.javascript.cors-allow-all
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      Every website is allowed to call this API from a browser. Allow only the origins that need it, and never combine
+      a wildcard (or reflecting the request origin) with credentials.
+    metadata:
+      cwe: ["CWE-942: Permissive Cross-domain Policy with Untrusted Domains"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern: 'cors({..., origin: "*", ...})'
+      - pattern: 'cors({..., origin: true, ..., credentials: true, ...})'
+      - pattern: 'cors({..., credentials: true, ..., origin: true, ...})'
+      - pattern: $R.header("Access-Control-Allow-Origin", "*")
+      - pattern: $R.setHeader("Access-Control-Allow-Origin", "*")
+      - pattern: $R.set("Access-Control-Allow-Origin", "*")
+      - pattern: $R.setHeader("Access-Control-Allow-Origin", req.headers.origin)
+      - pattern: $R.setHeader("Access-Control-Allow-Origin", req.get("Origin"))
+      - pattern: $R.header("Access-Control-Allow-Origin", req.headers.origin)
+      - pattern: $R.set("Access-Control-Allow-Origin", req.headers.origin)
+      - pattern: $R.set("Access-Control-Allow-Origin", req.get("Origin"))
+
+  - id: gapscan.javascript.unsafe-deserialization
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      `node-serialize` revives functions from the data, so a crafted value runs code when it is unserialized. Use
+      JSON for data from outside.
+    metadata:
+      cwe: ["CWE-502: Deserialization of Untrusted Data"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: $S.unserialize(...)
+      - pattern: unserialize(...)
+
+  - id: gapscan.javascript.postmessage-any-origin
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      A message is posted to any origin (`"*"`), so a page that has opened or framed this one can read it. Name the
+      exact target origin.
+    metadata:
+      cwe: ["CWE-346: Origin Validation Error"]
+      category: security
+      confidence: LOW
+    pattern: $W.postMessage($M, "*")
+
+  - id: gapscan.javascript.angular-sanitizer-bypass
+    languages: [javascript, typescript]
+    severity: WARNING
+    message: >-
+      `bypassSecurityTrust...` tells Angular to stop sanitizing a value, so anything in it runs as script (cross-site
+      scripting). Only use it on values you wrote yourself; sanitize everything else instead.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      category: security
+      confidence: MEDIUM
+    patterns:
+      - pattern-either:
+          - pattern: $S.bypassSecurityTrustHtml($X)
+          - pattern: $S.bypassSecurityTrustScript($X)
+          - pattern: $S.bypassSecurityTrustUrl($X)
+          - pattern: $S.bypassSecurityTrustResourceUrl($X)
+          - pattern: $S.bypassSecurityTrustStyle($X)
+      - pattern-not: $S.$M("...")
+
+  - id: gapscan.javascript.nosql-where-string-built
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      A MongoDB `$where` expression is built from a string, so a user value is run as JavaScript inside the database
+      (NoSQL injection). Use normal query operators (`{ stocks: { $gt: Number(value) } }`) instead of `$where`.
+    metadata:
+      cwe: ["CWE-943: Improper Neutralization of Special Elements in Data Query Logic", "CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern: '{..., $where: $A + ..., ...}'
+      - pattern: '{..., $where: `...${...}...`, ...}'
+      - pattern: '{..., "$where": $A + ..., ...}'
+      - pattern: '{..., "$where": `...${...}...`, ...}'
+
+  # --- taint rules: untrusted request data reaching a dangerous call inside one function -------------------
+  - id: gapscan.javascript.taint-sqli
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data reaches an SQL statement built from a string. Use bound parameters.
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: $REQ.query
+              - pattern: $REQ.query.$P
+              - pattern: $REQ.query[...]
+              - pattern: $REQ.body
+              - pattern: $REQ.body.$P
+              - pattern: $REQ.body[...]
+              - pattern: $REQ.params
+              - pattern: $REQ.params.$P
+              - pattern: $REQ.params[...]
+              - pattern: $REQ.headers.$P
+              - pattern: $REQ.headers[...]
+              - pattern: $REQ.cookies.$P
+              - pattern: $REQ.cookies[...]
+              - pattern: $REQ.get(...)
+              - pattern: $REQ.header(...)
+              - pattern: $REQ.param(...)
+              - pattern: $REQ.url
+              - pattern: $REQ.originalUrl
+          - metavariable-regex:
+              metavariable: $REQ
+              regex: ^(req|request|ctx|ctx\.request)$
+    pattern-propagators:
+      - pattern: $C.push($V)
+        from: $V
+        to: $C
+      - pattern: $C.set($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.append($K, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: parseInt(...)
+          - pattern: Number(...)
+          - pattern: parseFloat(...)
+          - pattern: Boolean(...)
+          - pattern: encodeURIComponent(...)
+    pattern-sinks:
+      - patterns:
+          - pattern: $DB.$M($X, ...)
+          - pattern-not: $DB.$M($S, [...], ...)
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(query|execute|raw|queryRaw|executeRaw|\$queryRawUnsafe|\$executeRawUnsafe|prepare)$
+          - focus-metavariable: $X
+      - patterns:
+          - pattern: $DB.$M($X, ...)
+          - pattern-not: $DB.$M($S, [...], ...)
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(get|run|all|each)$
+          - metavariable-regex:
+              metavariable: $DB
+              regex: (?i)^(.*(db|database|sqlite|conn|connection|pool|knex|sequelize|client).*)$
+          - focus-metavariable: $X
+
+  - id: gapscan.javascript.taint-command-injection
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data reaches a shell command. Use `execFile` with an argument array, and validate the value.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: $REQ.query
+              - pattern: $REQ.query.$P
+              - pattern: $REQ.query[...]
+              - pattern: $REQ.body
+              - pattern: $REQ.body.$P
+              - pattern: $REQ.body[...]
+              - pattern: $REQ.params
+              - pattern: $REQ.params.$P
+              - pattern: $REQ.params[...]
+              - pattern: $REQ.headers.$P
+              - pattern: $REQ.headers[...]
+              - pattern: $REQ.cookies.$P
+              - pattern: $REQ.cookies[...]
+              - pattern: $REQ.get(...)
+              - pattern: $REQ.header(...)
+              - pattern: $REQ.param(...)
+              - pattern: $REQ.url
+              - pattern: $REQ.originalUrl
+          - metavariable-regex:
+              metavariable: $REQ
+              regex: ^(req|request|ctx|ctx\.request)$
+    pattern-propagators:
+      - pattern: $C.push($V)
+        from: $V
+        to: $C
+      - pattern: $C.set($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.append($K, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: parseInt(...)
+          - pattern: Number(...)
+          - pattern: parseFloat(...)
+          - pattern: Boolean(...)
+          - pattern: encodeURIComponent(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $CP.exec($X, ...)
+              - pattern: $CP.execSync($X, ...)
+              - pattern: '$CP.spawn($X, ..., {..., shell: true, ...})'
+              - pattern: '$CP.spawnSync($X, ..., {..., shell: true, ...})'
+          - metavariable-regex:
+              metavariable: $CP
+              regex: ^(child_process|cp|childProcess|shell|proc)$
+          - focus-metavariable: $X
+
+  - id: gapscan.javascript.taint-path-traversal
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data is used as a file path, so `../` can reach files outside the intended folder. Resolve the path against a base folder and check that the result is still inside it (or use `res.sendFile` with `root`).
+    metadata:
+      cwe: ["CWE-22: Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal')"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: $REQ.query
+              - pattern: $REQ.query.$P
+              - pattern: $REQ.query[...]
+              - pattern: $REQ.body
+              - pattern: $REQ.body.$P
+              - pattern: $REQ.body[...]
+              - pattern: $REQ.params
+              - pattern: $REQ.params.$P
+              - pattern: $REQ.params[...]
+              - pattern: $REQ.headers.$P
+              - pattern: $REQ.headers[...]
+              - pattern: $REQ.cookies.$P
+              - pattern: $REQ.cookies[...]
+              - pattern: $REQ.get(...)
+              - pattern: $REQ.header(...)
+              - pattern: $REQ.param(...)
+              - pattern: $REQ.url
+              - pattern: $REQ.originalUrl
+          - metavariable-regex:
+              metavariable: $REQ
+              regex: ^(req|request|ctx|ctx\.request)$
+    pattern-propagators:
+      - pattern: $C.push($V)
+        from: $V
+        to: $C
+      - pattern: $C.set($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.append($K, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: parseInt(...)
+          - pattern: Number(...)
+          - pattern: parseFloat(...)
+          - pattern: Boolean(...)
+          - pattern: encodeURIComponent(...)
+          - pattern: path.basename(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: fs.readFile($X, ...)
+              - pattern: fs.readFileSync($X, ...)
+              - pattern: fs.createReadStream($X, ...)
+              - pattern: fs.writeFile($X, ...)
+              - pattern: fs.writeFileSync($X, ...)
+              - pattern: fs.createWriteStream($X, ...)
+              - pattern: fs.unlink($X, ...)
+              - pattern: fs.unlinkSync($X, ...)
+              - pattern: fs.readdir($X, ...)
+              - pattern: fs.readdirSync($X, ...)
+              - pattern: fs.stat($X, ...)
+              - pattern: fs.access($X, ...)
+              - pattern: fs.promises.readFile($X, ...)
+              - pattern: fs.promises.writeFile($X, ...)
+              - pattern: $R.sendFile($X, ...)
+              - pattern: $R.download($X, ...)
+              - pattern: $R.sendfile($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.javascript.taint-ssrf
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data chooses the address the server connects to (server-side request forgery): an attacker can reach internal services and cloud metadata. Allow only known hosts and block private address ranges.
+    metadata:
+      cwe: ["CWE-918: Server-Side Request Forgery (SSRF)"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: $REQ.query
+              - pattern: $REQ.query.$P
+              - pattern: $REQ.query[...]
+              - pattern: $REQ.body
+              - pattern: $REQ.body.$P
+              - pattern: $REQ.body[...]
+              - pattern: $REQ.params
+              - pattern: $REQ.params.$P
+              - pattern: $REQ.params[...]
+              - pattern: $REQ.headers.$P
+              - pattern: $REQ.headers[...]
+              - pattern: $REQ.cookies.$P
+              - pattern: $REQ.cookies[...]
+              - pattern: $REQ.get(...)
+              - pattern: $REQ.header(...)
+              - pattern: $REQ.param(...)
+              - pattern: $REQ.url
+              - pattern: $REQ.originalUrl
+          - metavariable-regex:
+              metavariable: $REQ
+              regex: ^(req|request|ctx|ctx\.request)$
+    pattern-propagators:
+      - pattern: $C.push($V)
+        from: $V
+        to: $C
+      - pattern: $C.set($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.append($K, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: parseInt(...)
+          - pattern: Number(...)
+          - pattern: parseFloat(...)
+          - pattern: Boolean(...)
+          - pattern: encodeURIComponent(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: axios.$F($X, ...)
+              - pattern: axios($X, ...)
+              - pattern: fetch($X, ...)
+              - pattern: got($X, ...)
+              - pattern: got.$F($X, ...)
+              - pattern: http.get($X, ...)
+              - pattern: https.get($X, ...)
+              - pattern: http.request($X, ...)
+              - pattern: https.request($X, ...)
+              - pattern: request($X, ...)
+              - pattern: request.$F($X, ...)
+              - pattern: needle($X, ...)
+              - pattern: needle.$F($X, ...)
+              - pattern: superagent.$F($X, ...)
+              - pattern: $R.fetch($X, ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.javascript.taint-open-redirect
+    languages: [javascript, typescript]
+    mode: taint
+    severity: WARNING
+    message: >-
+      The redirect target comes from the request, so a link on your site can send users to an attacker's page. Only redirect to relative paths or to an allow-list of hosts.
+    metadata:
+      cwe: ["CWE-601: URL Redirection to Untrusted Site ('Open Redirect')"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: $REQ.query
+              - pattern: $REQ.query.$P
+              - pattern: $REQ.query[...]
+              - pattern: $REQ.body
+              - pattern: $REQ.body.$P
+              - pattern: $REQ.body[...]
+              - pattern: $REQ.params
+              - pattern: $REQ.params.$P
+              - pattern: $REQ.params[...]
+              - pattern: $REQ.headers.$P
+              - pattern: $REQ.headers[...]
+              - pattern: $REQ.cookies.$P
+              - pattern: $REQ.cookies[...]
+              - pattern: $REQ.get(...)
+              - pattern: $REQ.header(...)
+              - pattern: $REQ.param(...)
+              - pattern: $REQ.url
+              - pattern: $REQ.originalUrl
+          - metavariable-regex:
+              metavariable: $REQ
+              regex: ^(req|request|ctx|ctx\.request)$
+    pattern-propagators:
+      - pattern: $C.push($V)
+        from: $V
+        to: $C
+      - pattern: $C.set($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.append($K, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: parseInt(...)
+          - pattern: Number(...)
+          - pattern: parseFloat(...)
+          - pattern: Boolean(...)
+          - pattern: encodeURIComponent(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $R.redirect($X)
+              - pattern: $R.redirect($S, $X)
+              - pattern: ctx.redirect($X)
+              - pattern: $R.location($X)
+              - pattern: '$R.writeHead($S, {..., Location: $X, ...})'
+              - pattern: $R.setHeader('Location', $X)
+              - pattern: $R.setHeader("Location", $X)
+          - focus-metavariable: $X
+
+  - id: gapscan.javascript.taint-code-injection
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data is run as code. Remove `eval`/`new Function`, and use an explicit lookup for the choices you support.
+    metadata:
+      cwe: ["CWE-94: Improper Control of Generation of Code ('Code Injection')", "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: $REQ.query
+              - pattern: $REQ.query.$P
+              - pattern: $REQ.query[...]
+              - pattern: $REQ.body
+              - pattern: $REQ.body.$P
+              - pattern: $REQ.body[...]
+              - pattern: $REQ.params
+              - pattern: $REQ.params.$P
+              - pattern: $REQ.params[...]
+              - pattern: $REQ.headers.$P
+              - pattern: $REQ.headers[...]
+              - pattern: $REQ.cookies.$P
+              - pattern: $REQ.cookies[...]
+              - pattern: $REQ.get(...)
+              - pattern: $REQ.header(...)
+              - pattern: $REQ.param(...)
+              - pattern: $REQ.url
+              - pattern: $REQ.originalUrl
+          - metavariable-regex:
+              metavariable: $REQ
+              regex: ^(req|request|ctx|ctx\.request)$
+    pattern-propagators:
+      - pattern: $C.push($V)
+        from: $V
+        to: $C
+      - pattern: $C.set($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.append($K, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: parseInt(...)
+          - pattern: Number(...)
+          - pattern: parseFloat(...)
+          - pattern: Boolean(...)
+          - pattern: encodeURIComponent(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: eval($X)
+              - pattern: new Function(..., $X)
+              - pattern: vm.runInNewContext($X, ...)
+              - pattern: vm.runInThisContext($X, ...)
+              - pattern: vm.runInContext($X, ...)
+              - pattern: setTimeout($X, ...)
+              - pattern: setInterval($X, ...)
+          - pattern-not: setTimeout(() => ..., ...)
+          - focus-metavariable: $X
+
+  - id: gapscan.javascript.taint-nosql-injection
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: >-
+      A request value goes into a database query as-is. Query strings and JSON bodies can carry objects such as `{"$ne": ""}`, which change the query's meaning (NoSQL injection). Convert the value to a string or number first (`String(req.body.name)`) or validate it with a schema.
+    metadata:
+      cwe: ["CWE-943: Improper Neutralization of Special Elements in Data Query Logic"]
+      category: security
+      confidence: MEDIUM
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: $REQ.query
+              - pattern: $REQ.query.$P
+              - pattern: $REQ.query[...]
+              - pattern: $REQ.body
+              - pattern: $REQ.body.$P
+              - pattern: $REQ.body[...]
+              - pattern: $REQ.params
+              - pattern: $REQ.params.$P
+              - pattern: $REQ.params[...]
+              - pattern: $REQ.headers.$P
+              - pattern: $REQ.headers[...]
+              - pattern: $REQ.cookies.$P
+              - pattern: $REQ.cookies[...]
+              - pattern: $REQ.get(...)
+              - pattern: $REQ.header(...)
+              - pattern: $REQ.param(...)
+              - pattern: $REQ.url
+              - pattern: $REQ.originalUrl
+          - metavariable-regex:
+              metavariable: $REQ
+              regex: ^(req|request|ctx|ctx\.request)$
+    pattern-propagators:
+      - pattern: $C.push($V)
+        from: $V
+        to: $C
+      - pattern: $C.set($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.append($K, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: parseInt(...)
+          - pattern: Number(...)
+          - pattern: parseFloat(...)
+          - pattern: Boolean(...)
+          - pattern: encodeURIComponent(...)
+          - pattern: String(...)
+          - pattern: $V.toString()
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $M.find($X, ...)
+              - pattern: $M.findOne($X, ...)
+              - pattern: $M.findOneAndUpdate($X, ...)
+              - pattern: $M.updateOne($X, ...)
+              - pattern: $M.updateMany($X, ...)
+              - pattern: $M.deleteOne($X, ...)
+              - pattern: $M.deleteMany($X, ...)
+              - pattern: $M.countDocuments($X, ...)
+              - pattern: $M.aggregate($X, ...)
+          - metavariable-regex:
+              metavariable: $M
+              regex: ^(?!(Array|array|Object|arr|list|items|users\\.data|_|lodash|\\$)$).*$
+          - focus-metavariable: $X
+
+  - id: gapscan.javascript.taint-xss
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Untrusted request data is written into the response as HTML without escaping, so a crafted link runs script in the visitor's browser. Escape the value for HTML or return it through a template that escapes by default.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: $REQ.query
+              - pattern: $REQ.query.$P
+              - pattern: $REQ.query[...]
+              - pattern: $REQ.body
+              - pattern: $REQ.body.$P
+              - pattern: $REQ.body[...]
+              - pattern: $REQ.params
+              - pattern: $REQ.params.$P
+              - pattern: $REQ.params[...]
+              - pattern: $REQ.headers.$P
+              - pattern: $REQ.headers[...]
+              - pattern: $REQ.cookies.$P
+              - pattern: $REQ.cookies[...]
+              - pattern: $REQ.get(...)
+              - pattern: $REQ.header(...)
+              - pattern: $REQ.param(...)
+              - pattern: $REQ.url
+              - pattern: $REQ.originalUrl
+          - metavariable-regex:
+              metavariable: $REQ
+              regex: ^(req|request|ctx|ctx\.request)$
+    pattern-propagators:
+      - pattern: $C.push($V)
+        from: $V
+        to: $C
+      - pattern: $C.set($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.append($K, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: parseInt(...)
+          - pattern: Number(...)
+          - pattern: parseFloat(...)
+          - pattern: Boolean(...)
+          - pattern: encodeURIComponent(...)
+          - pattern: escapeHtml(...)
+          - pattern: _.escape(...)
+          - pattern: he.encode(...)
+          - pattern: he.escape(...)
+          - pattern: DOMPurify.sanitize(...)
+          - pattern: validator.escape(...)
+          - pattern: sanitizeHtml(...)
+          - pattern: xss(...)
+          - pattern: escape(...)
+          - pattern: JSON.stringify(...)
+          - pattern: encodeURI(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $R.send($X)
+              - pattern: $R.status(...).send($X)
+              - pattern: $R.type(...).send($X)
+              - pattern: $R.set(...).send($X)
+              - pattern: $R.write($X)
+              - pattern: $R.end($X)
+              - pattern: $R.status(...).end($X)
+          - pattern-not: $R.send({...})
+          - pattern-not: $R.send(JSON.stringify(...))
+          - pattern-not: $R.send([...])
+          - metavariable-regex:
+              metavariable: $R
+              regex: ^(res|response|reply)$
+          - focus-metavariable: $X
+
+  - id: gapscan.javascript.taint-dom-xss
+    languages: [javascript, typescript]
+    mode: taint
+    severity: ERROR
+    message: >-
+      Text taken from the page's address, referrer or window name is written into the page as HTML, so a crafted link runs script in the visitor's browser. Use `textContent`, or sanitize with DOMPurify.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      category: security
+      confidence: HIGH
+    pattern-sources:
+      - pattern-either:
+          - pattern: location.hash
+          - pattern: location.search
+          - pattern: window.location.hash
+          - pattern: window.location.search
+          - pattern: document.location.hash
+          - pattern: document.location.search
+          - pattern: document.referrer
+          - pattern: window.name
+          - pattern: document.URL
+          - pattern: new URLSearchParams(...).get(...)
+          - pattern: $ROUTE.snapshot.queryParams
+          - pattern: $ROUTE.snapshot.queryParams.$P
+          - pattern: $ROUTE.snapshot.params.$P
+          - pattern: $ROUTE.snapshot.fragment
+    pattern-propagators:
+      - pattern: $C.push($V)
+        from: $V
+        to: $C
+      - pattern: $C.set($K, $V)
+        from: $V
+        to: $C
+      - pattern: $C.append($K, $V)
+        from: $V
+        to: $C
+    pattern-sanitizers:
+      - pattern-either:
+          - pattern: parseInt(...)
+          - pattern: Number(...)
+          - pattern: parseFloat(...)
+          - pattern: Boolean(...)
+          - pattern: encodeURIComponent(...)
+          - pattern: DOMPurify.sanitize(...)
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $E.innerHTML = $X
+              - pattern: $E.outerHTML = $X
+              - pattern: document.write($X)
+              - pattern: $E.insertAdjacentHTML($P, $X)
+              - pattern: eval($X)
+              - pattern: $S.bypassSecurityTrustHtml($X)
+              - pattern: $S.bypassSecurityTrustResourceUrl($X)
+              - pattern: $S.bypassSecurityTrustUrl($X)
+              - pattern: $S.bypassSecurityTrustScript($X)
+          - focus-metavariable: $X

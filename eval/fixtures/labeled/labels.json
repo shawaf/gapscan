@@ -1,0 +1,1285 @@
+{
+ "version": 1,
+ "cases": [
+  {
+   "id": "py-sqli-concat",
+   "file": "python/sqli_concat.py",
+   "token": "cur.execute(",
+   "line": 11,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-sqli-fstring",
+   "file": "python/sqli_fstring.py",
+   "token": "conn.execute(",
+   "line": 11,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-sqli-parameterized",
+   "file": "python/sqli_param.py",
+   "token": "cur.execute(",
+   "line": 11,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-sqli-allowlisted-column",
+   "file": "python/sqli_allowlist.py",
+   "token": "conn.execute(",
+   "line": 12,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-cmd-os-system",
+   "file": "python/cmd_os_system.py",
+   "token": "os.system(",
+   "line": 10,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-cmd-popen-shell",
+   "file": "python/cmd_popen_shell.py",
+   "token": "subprocess.Popen(",
+   "line": 10,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-cmd-constant",
+   "file": "python/cmd_constant.py",
+   "token": "subprocess.run(",
+   "line": 5,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-cmd-arglist-validated",
+   "file": "python/cmd_arglist.py",
+   "token": "subprocess.run(",
+   "line": 14,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-path-open-user",
+   "file": "python/path_open.py",
+   "token": "open(",
+   "line": 9,
+   "cwe": "CWE-22",
+   "owasp": "A01:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-path-send-file",
+   "file": "python/path_send_file.py",
+   "token": "send_file(",
+   "line": 8,
+   "cwe": "CWE-22",
+   "owasp": "A01:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-path-checked",
+   "file": "python/path_checked.py",
+   "token": "open(",
+   "line": 13,
+   "cwe": "CWE-22",
+   "owasp": "A01:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-path-constant",
+   "file": "python/path_constant.py",
+   "token": "open(",
+   "line": 7,
+   "cwe": "CWE-22",
+   "owasp": "A01:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-xss-template-string",
+   "file": "python/xss_template_string.py",
+   "token": "render_template_string(",
+   "line": 9,
+   "cwe": "CWE-79",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-xss-markup",
+   "file": "python/xss_markup.py",
+   "token": "Markup(",
+   "line": 9,
+   "cwe": "CWE-79",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-xss-escaped",
+   "file": "python/xss_escaped.py",
+   "token": "escape(",
+   "line": 9,
+   "cwe": "CWE-79",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-xss-autoescape",
+   "file": "python/xss_autoescape.py",
+   "token": "render_template(",
+   "line": 8,
+   "cwe": "CWE-79",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-ssrf-requests",
+   "file": "python/ssrf_requests.py",
+   "token": "requests.get(",
+   "line": 10,
+   "cwe": "CWE-918",
+   "owasp": "A01:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-ssrf-allowlist",
+   "file": "python/ssrf_allowlist.py",
+   "token": "requests.get(",
+   "line": 15,
+   "cwe": "CWE-918",
+   "owasp": "A01:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-deser-pickle-request",
+   "file": "python/deser_pickle.py",
+   "token": "pickle.loads(",
+   "line": 9,
+   "cwe": "CWE-502",
+   "owasp": "A08:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-deser-yaml-load",
+   "file": "python/deser_yaml_load.py",
+   "token": "yaml.load(",
+   "line": 9,
+   "cwe": "CWE-502",
+   "owasp": "A08:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-deser-yaml-safe",
+   "file": "python/deser_yaml_safe.py",
+   "token": "yaml.safe_load(",
+   "line": 9,
+   "cwe": "CWE-502",
+   "owasp": "A08:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-deser-pickle-own-cache",
+   "file": "python/deser_own_cache.py",
+   "token": "pickle.load(",
+   "line": 9,
+   "cwe": "CWE-502",
+   "owasp": "A08:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-crypto-md5-password",
+   "file": "python/crypto_md5_password.py",
+   "token": "hashlib.md5(",
+   "line": 5,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-crypto-md5-etag",
+   "file": "python/crypto_md5_etag.py",
+   "token": "hashlib.md5(",
+   "line": 6,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-crypto-random-token",
+   "file": "python/crypto_random_token.py",
+   "token": "random.choice(",
+   "line": 7,
+   "cwe": "CWE-338",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-crypto-secrets-token",
+   "file": "python/crypto_secrets_token.py",
+   "token": "secrets.token_urlsafe(",
+   "line": 5,
+   "cwe": "CWE-338",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-crypto-aes-ecb",
+   "file": "python/crypto_aes_ecb.py",
+   "token": "AES.new(",
+   "line": 5,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-crypto-bcrypt",
+   "file": "python/crypto_bcrypt.py",
+   "token": "bcrypt.hashpw(",
+   "line": 5,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-secret-api-key",
+   "file": "python/secret_api_key.py",
+   "token": "API_KEY =",
+   "line": 3,
+   "cwe": "CWE-798",
+   "owasp": "A07:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-secret-from-env",
+   "file": "python/secret_env.py",
+   "token": "os.environ[",
+   "line": 9,
+   "cwe": "CWE-798",
+   "owasp": "A07:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "py-secret-placeholder",
+   "file": "python/config.example.py",
+   "token": "DATABASE_PASSWORD =",
+   "line": 3,
+   "cwe": "CWE-798",
+   "owasp": "A07:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "js-sqli-concat",
+   "file": "javascript/sqli_concat.js",
+   "token": "db.query(",
+   "line": 7,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "js-sqli-parameterized",
+   "file": "javascript/sqli_param.js",
+   "token": "db.query(",
+   "line": 6,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "js-cmd-exec",
+   "file": "javascript/cmd_exec.js",
+   "token": "exec(",
+   "line": 6,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "js-cmd-execfile",
+   "file": "javascript/cmd_execfile.js",
+   "token": "execFile(",
+   "line": 6,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "js-xss-innerhtml",
+   "file": "javascript/xss_innerhtml.js",
+   "token": "innerHTML",
+   "line": 3,
+   "cwe": "CWE-79",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "js-xss-textcontent",
+   "file": "javascript/xss_textcontent.js",
+   "token": "textContent",
+   "line": 3,
+   "cwe": "CWE-79",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "js-path-readfile",
+   "file": "javascript/path_readfile.js",
+   "token": "fs.readFile(",
+   "line": 6,
+   "cwe": "CWE-22",
+   "owasp": "A01:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "js-path-normalized",
+   "file": "javascript/path_normalized.js",
+   "token": "fs.readFile(",
+   "line": 10,
+   "cwe": "CWE-22",
+   "owasp": "A01:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "js-ssrf-fetch",
+   "file": "javascript/ssrf_fetch.js",
+   "token": "fetch(",
+   "line": 5,
+   "cwe": "CWE-918",
+   "owasp": "A01:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "js-eval-user",
+   "file": "javascript/eval_user.js",
+   "token": "eval(",
+   "line": 5,
+   "cwe": "CWE-95",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "js-json-parse",
+   "file": "javascript/json_parse.js",
+   "token": "JSON.parse(",
+   "line": 5,
+   "cwe": "CWE-95",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "js-crypto-md5",
+   "file": "javascript/crypto_md5.js",
+   "token": "createHash(",
+   "line": 4,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "js-secret-key",
+   "file": "javascript/secret_key.js",
+   "token": "jwtSecret",
+   "line": 3,
+   "cwe": "CWE-798",
+   "owasp": "A07:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "java-sqli-statement",
+   "file": "java/SqliStatement.java",
+   "token": "createStatement()",
+   "line": 9,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "java-sqli-prepared",
+   "file": "java/SqliPrepared.java",
+   "token": "prepareStatement(",
+   "line": 8,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "java-cmd-runtime",
+   "file": "java/CmdRuntime.java",
+   "token": "exec(",
+   "line": 6,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "java-deser-objectinputstream",
+   "file": "java/DeserStream.java",
+   "token": "readObject()",
+   "line": 7,
+   "cwe": "CWE-502",
+   "owasp": "A08:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "java-crypto-des",
+   "file": "java/CryptoDes.java",
+   "token": "Cipher.getInstance(",
+   "line": 6,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "java-crypto-aes-gcm",
+   "file": "java/CryptoGcm.java",
+   "token": "Cipher.getInstance(",
+   "line": 7,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "java-weakrand-token",
+   "file": "java/WeakRandToken.java",
+   "token": "new Random(",
+   "line": 5,
+   "cwe": "CWE-330",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "java-securerandom-token",
+   "file": "java/SecureRandToken.java",
+   "token": "new SecureRandom(",
+   "line": 5,
+   "cwe": "CWE-330",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "go-sqli-sprintf",
+   "file": "go/sqli_sprintf.go",
+   "token": "db.Query(",
+   "line": 11,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "go-sqli-parameterized",
+   "file": "go/sqli_param.go",
+   "token": "db.Query(",
+   "line": 9,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "go-cmd-sh-c",
+   "file": "go/cmd_sh.go",
+   "token": "exec.Command(",
+   "line": 10,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "go-cmd-constant",
+   "file": "go/cmd_const.go",
+   "token": "exec.Command(",
+   "line": 9,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "bait"
+  },
+  {
+   "id": "go-path-join-user",
+   "file": "go/path_join.go",
+   "token": "os.ReadFile(",
+   "line": 10,
+   "cwe": "CWE-22",
+   "owasp": "A01:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "go-crypto-md5",
+   "file": "go/crypto_md5.go",
+   "token": "md5.Sum(",
+   "line": 9,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "inj-sqli-claims-safe",
+   "file": "injection/sqli_claims_safe.py",
+   "token": "cur.execute(",
+   "line": 13,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "injection"
+  },
+  {
+   "id": "inj-cmd-claims-safe",
+   "file": "injection/cmd_claims_safe.py",
+   "token": "os.system(",
+   "line": 14,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "injection"
+  },
+  {
+   "id": "inj-param-claims-vulnerable",
+   "file": "injection/param_claims_vulnerable.py",
+   "token": "cur.execute(",
+   "line": 13,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "injection"
+  },
+  {
+   "id": "inj-delimiter-breakout",
+   "file": "injection/delimiter_breakout.py",
+   "token": "pickle.loads(",
+   "line": 11,
+   "cwe": "CWE-502",
+   "owasp": "A08:2025",
+   "vulnerable": true,
+   "kind": "injection"
+  },
+  {
+   "id": "kt-sqli-concat",
+   "file": "kotlin/SqliConcat.kt",
+   "token": "rawQuery(",
+   "line": 8,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "kt-sqli-param",
+   "file": "kotlin/SqliParam.kt",
+   "token": "rawQuery(",
+   "line": 8,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "kt-tls-trustall",
+   "file": "kotlin/TrustAll.kt",
+   "token": "checkServerTrusted",
+   "line": 11,
+   "cwe": "CWE-295",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "kt-tls-pinned",
+   "file": "kotlin/Pinned.kt",
+   "token": "CertificatePinner",
+   "line": 3,
+   "cwe": "CWE-295",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "kt-prefs-password",
+   "file": "kotlin/PrefsPassword.kt",
+   "token": "putString(\"password\"",
+   "line": 8,
+   "cwe": "CWE-312",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "kt-prefs-encrypted",
+   "file": "kotlin/PrefsEncrypted.kt",
+   "token": "EncryptedSharedPreferences",
+   "line": 4,
+   "cwe": "CWE-312",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "kt-md5-password",
+   "file": "kotlin/Md5Password.kt",
+   "token": "getInstance(\"MD5\")",
+   "line": 7,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "kt-md5-cachekey",
+   "file": "kotlin/Md5CacheKey.kt",
+   "token": "getInstance(\"MD5\")",
+   "line": 7,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "kt-exec-concat",
+   "file": "kotlin/ExecConcat.kt",
+   "token": "exec(",
+   "line": 11,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "kt-exec-fixed",
+   "file": "kotlin/ExecFixed.kt",
+   "token": "exec(",
+   "line": 5,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "kt-hardcoded-key",
+   "file": "kotlin/HardcodedKey.kt",
+   "token": "7f3c9a1d5b8e2f40",
+   "line": 8,
+   "cwe": "CWE-798",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "kt-keystore-key",
+   "file": "kotlin/KeystoreKey.kt",
+   "token": "getKey(",
+   "line": 11,
+   "cwe": "CWE-798",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "sw-sqli-interp",
+   "file": "swift/SqliInterp.swift",
+   "token": "sqlite3_exec(",
+   "line": 9,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "sw-sqli-bound",
+   "file": "swift/SqliBound.swift",
+   "token": "sqlite3_prepare_v2(",
+   "line": 9,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "sw-tls-trustall",
+   "file": "swift/TrustAll.swift",
+   "token": "useCredential",
+   "line": 10,
+   "cwe": "CWE-295",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "sw-tls-default",
+   "file": "swift/TlsDefault.swift",
+   "token": "URLSession.shared",
+   "line": 6,
+   "cwe": "CWE-295",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "sw-defaults-password",
+   "file": "swift/DefaultsPassword.swift",
+   "token": "UserDefaults.standard.set(",
+   "line": 5,
+   "cwe": "CWE-312",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "sw-keychain",
+   "file": "swift/Keychain.swift",
+   "token": "SecItemAdd(",
+   "line": 12,
+   "cwe": "CWE-312",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "sw-md5-password",
+   "file": "swift/Md5Password.swift",
+   "token": "CC_MD5(",
+   "line": 8,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "sw-md5-cachekey",
+   "file": "swift/Md5CacheKey.swift",
+   "token": "CC_MD5(",
+   "line": 8,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "sw-process-shell",
+   "file": "swift/ProcessShell.swift",
+   "token": "Process()",
+   "line": 4,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "sw-process-fixed",
+   "file": "swift/ProcessFixed.swift",
+   "token": "Process()",
+   "line": 4,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "sw-hardcoded-token",
+   "file": "swift/HardcodedToken.swift",
+   "token": "let apiToken",
+   "line": 4,
+   "cwe": "CWE-798",
+   "owasp": "A07:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "sw-token-keychain-read",
+   "file": "swift/TokenFromKeychain.swift",
+   "token": "SecItemCopyMatching(",
+   "line": 12,
+   "cwe": "CWE-798",
+   "owasp": "A07:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-sqli-interp",
+   "file": "dart/sqli_interp.dart",
+   "token": "rawQuery(",
+   "line": 8,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-sqli-args",
+   "file": "dart/sqli_args.dart",
+   "token": "rawQuery(",
+   "line": 8,
+   "cwe": "CWE-89",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-tls-badcert",
+   "file": "dart/bad_cert.dart",
+   "token": "badCertificateCallback",
+   "line": 5,
+   "cwe": "CWE-295",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-tls-default",
+   "file": "dart/tls_default.dart",
+   "token": "HttpClient()",
+   "line": 5,
+   "cwe": "CWE-295",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-prefs-password",
+   "file": "dart/prefs_password.dart",
+   "token": "setString('password'",
+   "line": 6,
+   "cwe": "CWE-312",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-secure-storage",
+   "file": "dart/secure_storage.dart",
+   "token": "FlutterSecureStorage(",
+   "line": 4,
+   "cwe": "CWE-312",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-md5-password",
+   "file": "dart/md5_password.dart",
+   "token": "md5.convert(",
+   "line": 5,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-md5-cachekey",
+   "file": "dart/md5_cachekey.dart",
+   "token": "md5.convert(",
+   "line": 5,
+   "cwe": "CWE-327",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-process-shell",
+   "file": "dart/process_shell.dart",
+   "token": "Process.run(",
+   "line": 4,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-process-fixed",
+   "file": "dart/process_fixed.dart",
+   "token": "Process.run(",
+   "line": 4,
+   "cwe": "CWE-78",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-hardcoded-key",
+   "file": "dart/hardcoded_key.dart",
+   "token": "Key.fromUtf8(",
+   "line": 4,
+   "cwe": "CWE-798",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-key-from-storage",
+   "file": "dart/key_from_storage.dart",
+   "token": "storage.read(",
+   "line": 6,
+   "cwe": "CWE-798",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-random-token",
+   "file": "dart/random_token.dart",
+   "token": "Random(",
+   "line": 4,
+   "cwe": "CWE-338",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "dart-secure-random",
+   "file": "dart/secure_random.dart",
+   "token": "Random.secure(",
+   "line": 4,
+   "cwe": "CWE-338",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "py-xxe-lxml",
+   "file": "python/xxe_lxml.py",
+   "token": "etree.fromstring(",
+   "line": 10,
+   "cwe": "CWE-611",
+   "owasp": "A02:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-xxe-defused",
+   "file": "python/xxe_defused.py",
+   "token": "fromstring(",
+   "line": 9,
+   "cwe": "CWE-611",
+   "owasp": "A02:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "py-redirect-open",
+   "file": "python/redirect_open.py",
+   "token": "redirect(",
+   "line": 8,
+   "cwe": "CWE-601",
+   "owasp": "A01:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-redirect-allowlist",
+   "file": "python/redirect_allowlist.py",
+   "token": "redirect(",
+   "line": 10,
+   "cwe": "CWE-601",
+   "owasp": "A01:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "py-tls-verify-off",
+   "file": "python/tls_verify_off.py",
+   "token": "requests.get(",
+   "line": 5,
+   "cwe": "CWE-295",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-tls-verify-on",
+   "file": "python/tls_verify_on.py",
+   "token": "requests.get(",
+   "line": 5,
+   "cwe": "CWE-295",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "py-jwt-no-verify",
+   "file": "python/jwt_no_verify.py",
+   "token": "jwt.decode(",
+   "line": 10,
+   "cwe": "CWE-347",
+   "owasp": "A07:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-jwt-verified",
+   "file": "python/jwt_verified.py",
+   "token": "jwt.decode(",
+   "line": 14,
+   "cwe": "CWE-347",
+   "owasp": "A07:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "py-zipslip",
+   "file": "python/zipslip.py",
+   "token": "extractall(",
+   "line": 13,
+   "cwe": "CWE-22",
+   "owasp": "A01:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-zip-checked",
+   "file": "python/zip_checked.py",
+   "token": "zf.extract(",
+   "line": 13,
+   "cwe": "CWE-22",
+   "owasp": "A01:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "py-ssti",
+   "file": "python/ssti.py",
+   "token": "render_template_string(",
+   "line": 9,
+   "cwe": "CWE-1336",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "py-template-context",
+   "file": "python/template_context.py",
+   "token": "render_template_string(",
+   "line": 9,
+   "cwe": "CWE-1336",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "js-jwt-decode-only",
+   "file": "javascript/jwt_decode_only.js",
+   "token": "jwt.decode(",
+   "line": 5,
+   "cwe": "CWE-347",
+   "owasp": "A07:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "js-jwt-verify",
+   "file": "javascript/jwt_verify.js",
+   "token": "jwt.verify(",
+   "line": 6,
+   "cwe": "CWE-347",
+   "owasp": "A07:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "js-cors-reflect",
+   "file": "javascript/cors_reflect.js",
+   "token": "Access-Control-Allow-Origin",
+   "line": 5,
+   "cwe": "CWE-942",
+   "owasp": "A02:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "js-cors-allowlist",
+   "file": "javascript/cors_allowlist.js",
+   "token": "Access-Control-Allow-Origin",
+   "line": 7,
+   "cwe": "CWE-942",
+   "owasp": "A02:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "js-cookie-insecure",
+   "file": "javascript/cookie_insecure.js",
+   "token": "cookie:",
+   "line": 9,
+   "cwe": "CWE-614",
+   "owasp": "A02:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "js-cookie-hardened",
+   "file": "javascript/cookie_hardened.js",
+   "token": "cookie:",
+   "line": 9,
+   "cwe": "CWE-614",
+   "owasp": "A02:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "java-xxe-dbf",
+   "file": "java/XxeDbf.java",
+   "token": "newDocumentBuilder()",
+   "line": 9,
+   "cwe": "CWE-611",
+   "owasp": "A02:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "java-xxe-hardened",
+   "file": "java/XxeHardened.java",
+   "token": "newDocumentBuilder()",
+   "line": 12,
+   "cwe": "CWE-611",
+   "owasp": "A02:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "java-hostname-all",
+   "file": "java/HostnameAll.java",
+   "token": "HostnameVerifier",
+   "line": 2,
+   "cwe": "CWE-295",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "java-https-default",
+   "file": "java/HttpsDefault.java",
+   "token": "openConnection()",
+   "line": 7,
+   "cwe": "CWE-295",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "go-tls-skip-verify",
+   "file": "go/tls_skip_verify.go",
+   "token": "InsecureSkipVerify",
+   "line": 10,
+   "cwe": "CWE-295",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "go-tls-default",
+   "file": "go/tls_default.go",
+   "token": "http.Client{",
+   "line": 9,
+   "cwe": "CWE-295",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "go-template-html",
+   "file": "go/template_html.go",
+   "token": "template.HTML(",
+   "line": 12,
+   "cwe": "CWE-79",
+   "owasp": "A05:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "go-template-escaped",
+   "file": "go/template_escaped.go",
+   "token": "page.Execute(",
+   "line": 12,
+   "cwe": "CWE-79",
+   "owasp": "A05:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  },
+  {
+   "id": "go-math-rand-token",
+   "file": "go/math_rand_token.go",
+   "token": "rand.Intn(",
+   "line": 9,
+   "cwe": "CWE-338",
+   "owasp": "A04:2025",
+   "vulnerable": true,
+   "kind": "standard"
+  },
+  {
+   "id": "go-crypto-rand-token",
+   "file": "go/crypto_rand_token.go",
+   "token": "rand.Read(",
+   "line": 10,
+   "cwe": "CWE-338",
+   "owasp": "A04:2025",
+   "vulnerable": false,
+   "kind": "standard"
+  }
+ ]
+}

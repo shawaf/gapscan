@@ -1,0 +1,47 @@
+# Lint, import-boundary contracts, tests and GapScan's own rule tests on every push to main and
+# every pull request.
+#
+# Actions are pinned to commit SHAs (a moved tag cannot change what runs here); the tag is in the
+# comment. Semgrep is pinned to the version GapScan's scanner hardening was verified against
+# (docs/rules.md). Tests that need other scanners, offline data, Docker, a
+# browser or a built app skip themselves, as they do on a fresh checkout.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          version: "0.12.21"
+
+      - name: Install dependencies (dev group only; the desktop and build groups are not needed)
+        run: uv sync --group dev --frozen
+
+      - name: Lint (ruff, mypy, import-boundary contracts)
+        run: make lint
+
+      - name: Install Semgrep for the rule tests
+        run: |
+          uv tool install semgrep==1.176.0
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Tests (including every own rule's positive and negative cases)
+        run: make test

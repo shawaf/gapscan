@@ -1,0 +1,7 @@
+name = "java-servlet"
+languages = ["java"]
+requires = 'javax\.servlet|jakarta\.servlet|HttpServletRequest'
+
+[[source]]
+kind = "http_param"
+pattern = '\w+(\(\))?\.(getParameter|getParameterValues|getParameterMap|getParameterNames|getHeader|getHeaders|getHeaderNames|getQueryString|getCookies|getRequestURI|getRequestURL|getPathInfo|getPathTranslated|getInputStream|getReader|getPart|getParts|getRemoteUser|getServletPath)\('

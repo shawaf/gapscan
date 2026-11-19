@@ -1,0 +1,111 @@
+name = "javascript-core"
+languages = ["javascript", "typescript", "tsx"]
+
+[[source]]
+kind = "env"
+pattern = 'process\.(env|argv)\b'
+
+[[sink]]
+kind = "sql"
+cwe = "CWE-89"
+severity = "high"
+title = "SQL injection"
+callee = '\.(query|execute|raw|queryRaw|executeRaw|\$queryRawUnsafe|\$executeRawUnsafe|unsafe)$'
+args = [0]
+
+[[sink]]
+kind = "cmd"
+cwe = "CWE-78"
+severity = "critical"
+title = "OS command injection"
+callee = '(^|\.)(exec|execSync|execFile|execFileSync|spawn|spawnSync|fork)$'
+args = [0]
+
+[[sink]]
+kind = "code"
+cwe = "CWE-94"
+severity = "critical"
+title = "Code injection"
+callee = '^(eval|Function|new Function)$|(^|\.)vm\.(runIn\w+|compileFunction)$|^new Function$'
+
+[[sink]]
+kind = "path"
+cwe = "CWE-22"
+severity = "high"
+title = "Path traversal"
+callee = '(^|\.)(fs|fsp|fs\.promises)\.(readFile|readFileSync|writeFile|writeFileSync|appendFile|createReadStream|createWriteStream|unlink|unlinkSync|readdir|readdirSync|rm|rmSync|stat|statSync|access|open)$|\.(sendFile|download)$'
+args = [0]
+# Express refuses a path that leaves `root` (403), so sendFile/download with a root option is safe
+unless = '\broot\s*:'
+
+[[sink]]
+kind = "ssrf"
+cwe = "CWE-918"
+severity = "high"
+title = "Server-side request forgery"
+callee = '^(fetch|request|got)$|(^|\.)(axios\.(get|post|put|delete|request|head|patch)|axios|http\.(get|request)|https\.(get|request)|got\.(get|post)|needle\.(get|post)|superagent\.(get|post)|request\.(get|post))$'
+args = [0]
+
+[[sink]]
+kind = "xss"
+cwe = "CWE-79"
+severity = "medium"
+title = "Cross-site scripting"
+callee = '\.(send|write|end|render|write|html|append|prepend|after|before|insertAdjacentHTML)$|^document\.write(ln)?$'
+
+[[sink]]
+kind = "redirect"
+cwe = "CWE-601"
+severity = "medium"
+title = "Open redirect"
+callee = '\.(redirect)$'
+
+[[sink]]
+kind = "nosql"
+cwe = "CWE-943"
+severity = "high"
+title = "NoSQL injection"
+callee = '\.(find|findOne|findOneAndUpdate|updateOne|updateMany|deleteOne|deleteMany|aggregate|countDocuments)$'
+args = [0]
+
+[[sink]]
+kind = "deserialization"
+cwe = "CWE-502"
+severity = "critical"
+title = "Insecure deserialization"
+callee = '(^|\.)(serialize\.unserialize|unserialize|yaml\.load|node-serialize\.unserialize)$'
+
+[[assign_sink]]
+kind = "xss"
+cwe = "CWE-79"
+severity = "medium"
+title = "Cross-site scripting"
+target = '\.(innerHTML|outerHTML)$'
+
+[[sanitizer]]
+callee = '^(parseInt|parseFloat|Number|Boolean|BigInt)$|(^|\.)(Number\.parseInt|Number\.parseFloat|Number\.isInteger)$'
+cleans = ["*"]
+
+[[sanitizer]]
+callee = '(^|\.)(escape|escapeHtml|escapeHTML|DOMPurify\.sanitize|sanitize|sanitizeHtml|xss|encodeURI|he\.encode|validator\.escape)$'
+cleans = ["xss", "redirect"]
+
+# An encoded component cannot add a host, scheme or path segment to the URL it is placed in.
+[[sanitizer]]
+callee = '(^|\.)encodeURIComponent$'
+cleans = ["xss", "redirect", "ssrf", "path"]
+
+[[sanitizer]]
+callee = '(^|\.)(path\.basename|shellEscape|shell-escape|shellescape|escapeShell)$'
+cleans = ["path", "cmd"]
+
+[[deny]]
+callee = '\.(startsWith|endsWith|includes|test|indexOf|hasOwnProperty|has|isArray)$'
+
+[[source]]
+kind = "browser"
+pattern = '(window\.|document\.)?(location\.(search|hash|href|pathname)|document\.(URL|referrer|cookie|documentURI)|window\.name)\b'
+
+[[source]]
+kind = "browser"
+pattern = '(event|e|msg|message)\.data\b'

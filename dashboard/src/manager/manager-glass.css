@@ -1,0 +1,113 @@
+/* Control Center, "glassy" edition: translucent frosted surfaces, hairline borders, pill controls.
+   Every rule is scoped to [data-ui="glassy"], so the other looks are untouched. Tokens and the gradient
+   field come from ../styles-glass.css; this sheet adds the backdrop blur to the manager's own surfaces. */
+:root[data-ui="glassy"] {
+  --r: var(--radius); --rs: var(--radius-sm);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* sidebar */
+:root[data-ui="glassy"] .cc-side { background: var(--bg); border-right: 0; padding: 18px 14px; }
+:root[data-ui="glassy"] .cc-switch > button { border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-sm); }
+:root[data-ui="glassy"] .cc-nav a { border-radius: var(--rs); color: var(--text-2); transition: background-color 0.15s, color 0.15s; }
+:root[data-ui="glassy"] .cc-nav a:hover { color: var(--text); }
+:root[data-ui="glassy"] .cc-nav a[aria-current="page"] { background: var(--surface); color: var(--accent); box-shadow: var(--shadow); }
+:root[data-ui="glassy"] .cc-key { border-radius: 999px; border-color: transparent; background: var(--sunken); }
+:root[data-ui="glassy"] .cc-nav a[aria-current="page"] .cc-key { background: var(--accent-weak); color: var(--accent); }
+:root[data-ui="glassy"] .cc-offline { border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+:root[data-ui="glassy"] .cc-sep { background: transparent; border-top: 1px dashed var(--line); height: 0; }
+
+/* top bar */
+:root[data-ui="glassy"] .cc-top { background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+:root[data-ui="glassy"] .cc-search { border-radius: 999px; border-color: var(--line); background: var(--surface); box-shadow: var(--shadow-sm); }
+:root[data-ui="glassy"] .cc-pill { border-color: var(--line); box-shadow: var(--shadow-sm); }
+:root[data-ui="glassy"] .cc-pill .mini, :root[data-ui="glassy"] .cc-pill .mini i { border-radius: 999px; }
+:root[data-ui="glassy"] .cc-seg { border: 1px solid var(--line); border-radius: 999px; background: var(--sunken); padding: 2px; gap: 2px; }
+:root[data-ui="glassy"] .cc-seg button { border-left: 0; border-radius: 999px; min-height: 28px; color: var(--text-2); transition: background-color 0.15s, color 0.15s; }
+:root[data-ui="glassy"] .cc-seg button[aria-pressed="true"], :root[data-ui="glassy"] .cc-seg button[aria-checked="true"] { background: var(--surface); color: var(--accent); box-shadow: var(--shadow-sm); }
+
+/* surfaces */
+:root[data-ui="glassy"] .cc-card, :root[data-ui="glassy"] .cc-strip, :root[data-ui="glassy"] .fx-filters, :root[data-ui="glassy"] .fx-table,
+:root[data-ui="glassy"] .tbl-wrap, :root[data-ui="glassy"] .state3 > div, :root[data-ui="glassy"] .skel, :root[data-ui="glassy"] .treemap {
+  border-radius: var(--r); border-color: var(--line); box-shadow: var(--shadow);
+}
+:root[data-ui="glassy"] .cc-card { padding: 20px; }
+:root[data-ui="glassy"] .cc-card.dom { --cp: 20px; }
+:root[data-ui="glassy"] .cc-card .tbl-wrap, :root[data-ui="glassy"] .cc-card .cc-card { box-shadow: none; border-radius: 12px; }
+:root[data-ui="glassy"] .cc-card.live { border-width: 1px; border-color: var(--accent); box-shadow: var(--ring), var(--shadow); }
+:root[data-ui="glassy"] .fx-bulk { border-radius: var(--r) var(--r) 0 0; }
+:root[data-ui="glassy"] .fx-bulk + .fx-table { border-radius: 0 0 var(--r) var(--r); }
+:root[data-ui="glassy"] .stat3 > div, :root[data-ui="glassy"] .fd-decide, :root[data-ui="glassy"] .fd-box, :root[data-ui="glassy"] .fd-code,
+:root[data-ui="glassy"] .logbox, :root[data-ui="glassy"] .cc-scanners, :root[data-ui="glassy"] .fd-banner, :root[data-ui="glassy"] .cc-err { border-radius: 12px; }
+:root[data-ui="glassy"] .stat3 > div { background: var(--bg); border-color: transparent; }
+:root[data-ui="glassy"] .fd-banner.warn, :root[data-ui="glassy"] .fd-banner.bad, :root[data-ui="glassy"] .cc-err { border-color: color-mix(in srgb, currentColor 18%, transparent); }
+:root[data-ui="glassy"] .fd-ai { border-radius: 14px; border-style: solid; border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--accent-weak) 55%, transparent); }
+
+/* popovers, drawers, dialogs */
+:root[data-ui="glassy"] .cc-menu, :root[data-ui="glassy"] .dd-panel, :root[data-ui="glassy"] .cc-cmd, :root[data-ui="glassy"] .dlg { border-radius: var(--r); border-color: var(--line); }
+:root[data-ui="glassy"] .cc-menu button, :root[data-ui="glassy"] .cc-menu a, :root[data-ui="glassy"] .cc-cmd li, :root[data-ui="glassy"] .dd-list label { border-radius: 10px; }
+:root[data-ui="glassy"] .cc-drawer-bg { background: rgba(20, 22, 40, 0.28); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+:root[data-ui="glassy"] .cc-drawer { top: 8px; right: 8px; bottom: 8px; width: min(720px, calc(100vw - 16px)); border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
+:root[data-ui="glassy"] .cc-drawer.fd { width: min(780px, calc(100vw - 16px)); }
+
+/* controls */
+:root[data-ui="glassy"] .cc-input, :root[data-ui="glassy"] .cc-select, :root[data-ui="glassy"] .fx-search, :root[data-ui="glassy"] .dd-btn,
+:root[data-ui="glassy"] .dlg textarea { border-radius: var(--rs); border-color: var(--line); box-shadow: var(--shadow-sm); transition: border-color 0.15s, box-shadow 0.15s; }
+:root[data-ui="glassy"] .cc-input:focus, :root[data-ui="glassy"] .cc-select:focus, :root[data-ui="glassy"] .fx-search:focus-within, :root[data-ui="glassy"] .dlg textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+:root[data-ui="glassy"] .dd-btn.on { border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
+:root[data-ui="glassy"] .cc-chip { border-color: var(--line); }
+:root[data-ui="glassy"] .cc-chip[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
+:root[data-ui="glassy"] .cc-toggle { border-color: var(--line); }
+:root[data-ui="glassy"] .kbd { border-radius: 6px; border-color: var(--line); background: var(--sunken); }
+
+/* badges and pills */
+:root[data-ui="glassy"] .badge2, :root[data-ui="glassy"] .sev2, :root[data-ui="glassy"] .chip2, :root[data-ui="glassy"] .fx-chip, :root[data-ui="glassy"] .ai-tag { border-radius: 999px; padding-left: 10px; padding-right: 10px; }
+:root[data-ui="glassy"] .fx-chip { padding-right: 6px; }
+:root[data-ui="glassy"] .vpill { border-color: var(--line); }
+:root[data-ui="glassy"] .chip2 { border-color: var(--line); }
+:root[data-ui="glassy"] .ai-tag { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+
+/* tables and lists */
+:root[data-ui="glassy"] .tbl th, :root[data-ui="glassy"] .fx-head { background: color-mix(in srgb, var(--sunken) 60%, var(--surface)); }
+:root[data-ui="glassy"] .tbl td { transition: background-color 0.12s; }
+:root[data-ui="glassy"] .fx-item.cur { outline: 0; box-shadow: inset 3px 0 var(--accent); background: var(--accent-weak); }
+
+/* meters and charts */
+:root[data-ui="glassy"] .bar2, :root[data-ui="glassy"] .bar2 > i, :root[data-ui="glassy"] .stack, :root[data-ui="glassy"] .seg3,
+:root[data-ui="glassy"] .verd .t, :root[data-ui="glassy"] .verd .t i, :root[data-ui="glassy"] .scale i, :root[data-ui="glassy"] .conf i { border-radius: 999px; }
+:root[data-ui="glassy"] .bar2 > i { background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--sev-critical-fill))); }
+:root[data-ui="glassy"] .stack, :root[data-ui="glassy"] .seg3 { gap: 2px; }
+:root[data-ui="glassy"] .verd .t i { background: color-mix(in srgb, var(--accent) 55%, var(--line-strong)); }
+:root[data-ui="glassy"] .scale { gap: 4px; } :root[data-ui="glassy"] .scale i.on { background: var(--accent); }
+:root[data-ui="glassy"] .grade-box { border: 0; border-radius: 16px; background: var(--sunken); }
+:root[data-ui="glassy"] .pipe .st.done .dot { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+:root[data-ui="glassy"] .pipe .st.done::before { background: color-mix(in srgb, var(--accent) 55%, transparent); }
+:root[data-ui="glassy"] .pipe .st::before { border-radius: 999px; }
+
+/* standards heat tiles and the hotspot treemap */
+:root[data-ui="glassy"] .tile { border-left-width: 1px; border-radius: var(--r); box-shadow: var(--shadow-sm); transition: box-shadow 0.15s, transform 0.15s; }
+:root[data-ui="glassy"] .tile:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+:root[data-ui="glassy"] .tile.critical { border-color: color-mix(in srgb, var(--sev-critical-fill) 40%, transparent); }
+:root[data-ui="glassy"] .tile.high { border-color: color-mix(in srgb, var(--sev-high-fill) 40%, transparent); }
+:root[data-ui="glassy"] .tile.medium { border-color: color-mix(in srgb, var(--sev-medium-fill) 45%, transparent); }
+:root[data-ui="glassy"] .tile.low { border-color: color-mix(in srgb, var(--sev-low-fill) 45%, transparent); }
+:root[data-ui="glassy"] .tile.info { border-color: color-mix(in srgb, var(--sev-info-fill) 45%, transparent); }
+:root[data-ui="glassy"] .tile.none { border-color: var(--line); }
+:root[data-ui="glassy"] .treemap { background: var(--bg); }
+:root[data-ui="glassy"] .tm { border: 3px solid var(--bg); border-radius: 12px; }
+@media (prefers-reduced-motion: reduce) { :root[data-ui="glassy"] .tile:hover { transform: none; } }
+
+/* --- frosted-glass materials: blur the surfaces so the gradient field shows through --- */
+:root[data-ui="glassy"] .cc-card, :root[data-ui="glassy"] .cc-top, :root[data-ui="glassy"] .cc-side,
+:root[data-ui="glassy"] .tbl-wrap, :root[data-ui="glassy"] .cc-drawer, :root[data-ui="glassy"] .cc-menu,
+:root[data-ui="glassy"] .dd-panel, :root[data-ui="glassy"] .cc-cmd, :root[data-ui="glassy"] .dlg,
+:root[data-ui="glassy"] .cc-input, :root[data-ui="glassy"] .cc-select, :root[data-ui="glassy"] .fx-search,
+:root[data-ui="glassy"] .cc-search, :root[data-ui="glassy"] .cc-seg, :root[data-ui="glassy"] .cc-scanners,
+:root[data-ui="glassy"] .fx-table, :root[data-ui="glassy"] .fx-filters, :root[data-ui="glassy"] .cc-offline,
+:root[data-ui="glassy"] .cc-pill, :root[data-ui="glassy"] .tbl th, :root[data-ui="glassy"] .fx-head {
+  -webkit-backdrop-filter: blur(22px) saturate(170%); backdrop-filter: blur(22px) saturate(170%);
+}
+:root[data-ui="glassy"] .cc-card, :root[data-ui="glassy"] .cc-drawer { box-shadow: var(--shadow), inset 0 1px 0 var(--sheen); }
+:root[data-ui="glassy"] .cc-top { background: color-mix(in srgb, var(--surface) 72%, transparent); border-bottom: 1px solid var(--line); }
+:root[data-ui="glassy"] .stat3 > div { background: color-mix(in srgb, var(--surface) 55%, transparent); }
+:root[data-ui="glassy"] .cc-drawer { border-left: 1px solid var(--line); }

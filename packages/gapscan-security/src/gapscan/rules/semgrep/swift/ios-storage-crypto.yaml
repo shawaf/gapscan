@@ -1,0 +1,172 @@
+# GapScan Rules: Swift / iOS, fourth set (Keychain, local authentication, keys and IVs, logging, TLS settings of
+# libraries, cookies). Licensed Apache-2.0. Every rule has a vulnerable and a safe case in
+# tests/rules/swift/ios-storage-crypto.swift (run: make rules-test). Text rules (the `generic` language).
+rules:
+  - id: gapscan.swift.keychain-accessible-after-first-unlock
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      The Keychain item stays readable from the first unlock after a reboot until the next reboot, also while the
+      device is locked. That is only needed for background work. For tokens and passwords use
+      `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` (or `WhenPasscodeSetThisDeviceOnly`), and add an access control
+      (`SecAccessControlCreateWithFlags`) for secrets that need the user present.
+    metadata:
+      cwe: ["CWE-922: Insecure Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: LOW
+    pattern-regex: '\bkSecAttrAccessibleAfterFirstUnlock(?:ThisDeviceOnly)?\b'
+
+  - id: gapscan.swift.biometric-boolean-gate
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      Face ID / Touch ID is checked with `LAContext.evaluatePolicy` and the result is used as a yes/no answer, with no
+      Keychain item bound to it in this file. On a jailbroken device the answer can be flipped with a hook, so the
+      check protects nothing. Keep the secret in the Keychain with an access control
+      (`SecAccessControlCreateWithFlags(..., .biometryCurrentSet, ...)`) so the system releases it only after a real
+      authentication. The check looks only below the call, so a helper defined above it is missed.
+    metadata:
+      cwe: ["CWE-287: Improper Authentication", "CWE-603: Use of Client-Side Authentication"]
+      masvs: ["MASVS-AUTH-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '\.evaluatePolicy\s*\((?![\s\S]*(?:SecAccessControlCreateWithFlags|kSecAttrAccessControl|kSecUseAuthenticationContext))'
+
+  - id: gapscan.swift.hardcoded-symmetric-key
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      An encryption key is made from a string or byte literal in the source. Anyone with the app binary can read it and
+      decrypt the data. Generate the key on the device (`SymmetricKey(size: .bits256)`, `SecRandomCopyBytes`) and keep
+      it in the Keychain or the Secure Enclave.
+    metadata:
+      cwe: ["CWE-321: Use of Hard-coded Cryptographic Key"]
+      masvs: ["MASVS-CRYPTO-2"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern-regex: '\bSymmetricKey\(\s*data:\s*(?:Data\(\s*)?"[^"\n]*"'
+      - pattern-regex: '\bSymmetricKey\(\s*data:\s*(?:Data\(\s*)?\[\s*(?:0x)?[0-9A-Fa-f]+\s*,'
+      - pattern-regex: '\bCCCrypt\((?:[^,()]*(?:\([^()]*\))?[^,()]*,){3}\s*"[^"\n]+"'
+
+  - id: gapscan.swift.static-iv
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      The IV or nonce is fixed (a literal, or all zeros). Reusing an IV with the same key reveals patterns in CBC and
+      breaks AES-GCM and ChaCha20 completely. Make a fresh random IV for every message (`AES.GCM.Nonce()`,
+      `SecRandomCopyBytes`) and store it next to the ciphertext.
+    metadata:
+      cwe: ["CWE-329: Generation of Predictable IV with CBC Mode", "CWE-1204: Generation of Weak Initialization Vector (IV)"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '\b(?:let|var)\s+(?:iv|IV|nonce|initVector|initializationVector|\w+IV|\w+Iv|\w+Nonce|iv[A-Z_]\w*|nonce[A-Z_]\w*)\s*(?::\s*[\w\[\]]+)?\s*=\s*(?:"[^"\n]{4,}"|\[\s*(?:0x)?[0-9A-Fa-f]+\s*(?:,\s*(?:0x)?[0-9A-Fa-f]+\s*){7,}\]|(?:Data|\[UInt8\])\(\s*repeating:)'
+      - pattern-regex: '\b(?:iv|nonce)\s*:\s*(?:Data|\[UInt8\])\(\s*repeating:'
+      - pattern-regex: '\b(?:AES\.GCM|ChaChaPoly)\.Nonce\(\s*data:\s*(?:Data\(\s*)?(?:"|\[|Data\(\s*repeating:|repeating:)'
+
+  - id: gapscan.swift.seeded-random-source
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      A GameplayKit random source with a fixed or chosen seed gives the same numbers every time; these sources are made
+      for games, not for secrets. For keys, tokens and codes use `SecRandomCopyBytes` or `SystemRandomNumberGenerator`.
+    metadata:
+      cwe: ["CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator", "CWE-336: Same Seed in Pseudo-Random Number Generator (PRNG)"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: LOW
+    pattern-regex: '\b(?:GKMersenneTwister|GKLinearCongruential|GKARC4)RandomSource\(\s*seed:'
+
+  - id: gapscan.swift.predictable-key-material
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      A key, salt, IV, PIN or secret is made from something an attacker can know or guess: the time, the device name
+      or model, or the vendor identifier. Such values have little or no secret entropy. Generate key material with
+      `SecRandomCopyBytes` or `SymmetricKey(size:)`, and derive keys from passwords with PBKDF2 and a random salt.
+      (`arc4random` and `Int.random(in:)` are fine on Apple platforms: both use the system's secure generator.)
+    metadata:
+      cwe: ["CWE-330: Use of Insufficiently Random Values", "CWE-331: Insufficient Entropy"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: MEDIUM
+    # named like key material (not cache or dictionary keys), assigned from a guessable value
+    pattern-regex: '\b(?:let|var)\s+(?:key|keyData|keyBytes|\w*(?:[Ee]ncryptionKey|[Cc]ryptoKey|[Aa]esKey|AESKey|[Ss]ecretKey|[Mm]asterKey|[Ss]igningKey|[Hh]macKey|HMACKey|[Ss]alt|SALT|IV|[Nn]once|[Ss]ecret|[Pp]assphrase|[Pp]assword|[Pp]in[A-Z]|[Oo]tp)\w*|salt\w*|iv[A-Z_]\w*|iv|otp\w*|pin)\s*(?::\s*[\w\[\]]+)?\s*=\s*[^\n]*?(?:identifierForVendor|UIDevice\.current\.(?:name|model|systemVersion)|Date\(\)\.timeIntervalSince(?:1970|ReferenceDate)|CFAbsoluteTimeGetCurrent\(\)|\btime\(\s*nil\s*\))'
+
+  - id: gapscan.swift.log-public-secret
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      A secret-named value is logged and explicitly marked public, so the unified log keeps it in clear text where
+      sysdiagnose and attached Macs can read it. Do not log secrets; if you must log something, leave it private (the
+      default) or log a hash (`privacy: .private(mask: .hash)`).
+    metadata:
+      cwe: ["CWE-532: Insertion of Sensitive Information into Log File"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-either:
+      - pattern-regex: '\bos_log\(\s*"[^"\n]*%\{public\}[^\n]*?"[^\n]*,\s*[\w.]*(?i:password|passwd|token|secret|apikey|api_key|pin|cvv|ssn|credential)\w*\s*\)'
+      - pattern-regex: '\\\(\s*[\w.]*(?i:password|passwd|token|secret|apikey|api_key|cvv|ssn|credential)\w*\s*,\s*privacy:\s*\.public\b'
+
+  - id: gapscan.swift.tls-validation-disabled-config
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: ERROR
+    message: >-
+      Server certificate checks are switched off in the networking library's settings (a disabled trust evaluator, no
+      chain or host validation, or trust exceptions). Anyone on the network can then read and change the traffic. Use the
+      default evaluation, or pin with a trust evaluator that also performs default validation.
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    pattern-either:
+      - pattern-regex: '\bDisabled(?:Trust)?Evaluator\(\s*\)'
+      - pattern-regex: '\.disableEvaluation\b'
+      - pattern-regex: '\bkCFStreamSSLValidatesCertificateChain(?:\s+as\s+String)?\s*:\s*(?:false|kCFBooleanFalse)\b'
+      - pattern-regex: '\b(?:allowsExpiredCertificates|allowInvalidCertificates)\s*[:=]\s*true\b'
+      - pattern-regex: '\bvalidateHost\s*:\s*false\b'
+      - pattern-regex: '\bSecTrustSetExceptions\('
+
+  - id: gapscan.swift.webview-html-file-base-url
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: WARNING
+    message: >-
+      HTML is loaded from a string with a local folder as its base URL, so any script in it runs with a file:// origin
+      and can read local files the web view may access. Load string HTML with `baseURL: nil` (or an https origin you
+      own), and keep untrusted values out of it.
+    metadata:
+      cwe: ["CWE-200: Exposure of Sensitive Information to an Unauthorized Actor", "CWE-79: Improper Neutralization of Input During Web Page Generation"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: 'loadHTMLString\([^\n]*,\s*baseURL:\s*(?:Bundle\.main\.(?:bundleURL|resourceURL)|URL\(\s*fileURLWithPath|[\w.]*(?:documentDirectory|docDir|documentsURL|bundleURL)\b)'
+
+  - id: gapscan.swift.persistent-session-cookie
+    languages: [generic]
+    paths: {include: ["*.swift"]}
+    severity: INFO
+    message: >-
+      A session or token cookie is created with an expiry date, so it is written to the app's cookie file
+      (Cookies.binarycookies) in clear text, where backups and jailbroken devices can read it. Leave session cookies
+      without an expiry (or set `.discard`), and keep long-lived tokens in the Keychain. The finding points at the
+      start of the cookie.
+    metadata:
+      cwe: ["CWE-539: Use of Persistent Cookies Containing Sensitive Information", "CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: LOW
+    pattern-regex: '\bHTTPCookie\(\s*properties:(?=[^\]]*?(?i:session|token|auth|jwt|sid\b))(?=[^\]]*?\.expires\b)(?![^\]]*?\.discard\b)'

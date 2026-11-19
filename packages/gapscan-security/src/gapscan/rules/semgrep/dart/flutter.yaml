@@ -1,0 +1,149 @@
+# GapScan Rules: Dart / Flutter. Licensed Apache-2.0 with the rest of GapScan.
+# Dart has almost no public SAST rules; these cover the common mobile weaknesses.
+# Every rule has a vulnerable and a safe case in tests/rules/dart/flutter.dart (run: make rules-test).
+# Most rules are regular expressions over the source, because they are robust to Dart's syntax.
+rules:
+  - id: gapscan.dart.sqli-string-built
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: ERROR
+    message: >-
+      An SQL statement is built with string interpolation or concatenation. Pass values as
+      arguments (`rawQuery('... WHERE id = ?', [id])`, or `where:` with `whereArgs:`).
+    metadata:
+      cwe: ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: HIGH
+    pattern-regex: '\.(?:rawQuery|rawInsert|rawUpdate|rawDelete|execute)\(\s*(?:"[^"\n]*(?:\$[{A-Za-z_]|"\s*\+)|''[^''\n]*(?:\$[{A-Za-z_]|''\s*\+))'
+
+  - id: gapscan.dart.tls-bad-certificate-callback
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: ERROR
+    message: >-
+      `badCertificateCallback` returns true for every certificate, so TLS validation is switched
+      off and anyone on the network can read and change the traffic. Remove it, or compare the
+      certificate against a pinned one.
+    metadata:
+      cwe: ["CWE-295: Improper Certificate Validation"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: 'badCertificateCallback\s*=\s*\([^)]*\)\s*(?:=>\s*true\b|\{\s*return\s+true\s*;\s*\})'
+
+  - id: gapscan.dart.prefs-sensitive-value
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: WARNING
+    message: >-
+      A credential-like value is saved with shared_preferences, which stores it unencrypted. Use
+      flutter_secure_storage (Keychain and Android Keystore).
+    metadata:
+      cwe: ["CWE-312: Cleartext Storage of Sensitive Information"]
+      masvs: ["MASVS-STORAGE-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?i)\.set(?:String|StringList)\(\s*["''][^"'']*(?:password|passwd|pwd|secret|token|apikey|api_key|credential|pin)[^"'']*["'']'
+
+  - id: gapscan.dart.weak-crypto
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: ERROR
+    message: >-
+      MD5 and SHA-1 are broken for security purposes, and AES in ECB mode leaks patterns. Use
+      SHA-256 or stronger, AES-GCM, and a password hash (PBKDF2, bcrypt, Argon2) for passwords.
+    metadata:
+      cwe: ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm", "CWE-328: Use of Weak Hash"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: HIGH
+    pattern-regex: '\b(?:md5|sha1)\.(?:convert|startChunkedConversion|bind)\(|\bHmac\(\s*(?:md5|sha1)\b|\bAESMode\.ecb\b'
+
+  - id: gapscan.dart.command-string-built
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: ERROR
+    message: >-
+      A shell is started with a command built from a string (or `runInShell: true` is used with a
+      built string). Anything user-controlled in it runs as a command. Call the program directly
+      with an argument list.
+    metadata:
+      cwe: ["CWE-78: Improper Neutralization of Special Elements used in an OS Command"]
+      masvs: ["MASVS-CODE-4"]
+      category: security
+      confidence: HIGH
+    pattern-regex: 'Process\.(?:run|start|runSync)\(\s*["''](?:sh|bash|zsh|/bin/sh|/bin/bash|cmd|cmd\.exe|powershell)["'']\s*,\s*\[\s*["''](?:-c|/c|-Command)["'']\s*,[^\]\n]*(?:\$|\+)'
+
+  - id: gapscan.dart.hardcoded-crypto-key
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: ERROR
+    message: >-
+      An encryption key or IV is a literal in the source, so anyone with the app has it. Generate
+      keys at runtime and store them with flutter_secure_storage; use a fresh random IV per
+      message.
+    metadata:
+      cwe: ["CWE-321: Use of Hard-coded Cryptographic Key", "CWE-798: Use of Hard-coded Credentials"]
+      masvs: ["MASVS-CRYPTO-2"]
+      category: security
+      confidence: HIGH
+    pattern-regex: '\b(?:Key|IV)\.from(?:Utf8|Base64|Base16)\(\s*["''][^"'']{8,}["'']\s*\)'
+
+  - id: gapscan.dart.insecure-random-for-secret
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: WARNING
+    message: >-
+      `Random()` is predictable (and seeding it with the clock makes it worse). For tokens, session
+      ids, nonces and passwords use `Random.secure()`. The finding points at the start of the
+      function.
+    metadata:
+      cwe: ["CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator"]
+      masvs: ["MASVS-CRYPTO-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: '(?is)\b[\w<>?]+\s+\w*(?:token|password|secret|session|otp|nonce|csrf|salt|pin)\w*\s*\([^)]*\)\s*(?:async\s*)?\{[^}]*?\bRandom\((?!\s*\)\s*\.secure)(?!\.secure)'
+
+  - id: gapscan.dart.cleartext-http-url
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: WARNING
+    message: >-
+      A request goes to an http:// URL, so it travels unencrypted. Use https://.
+    metadata:
+      cwe: ["CWE-319: Cleartext Transmission of Sensitive Information"]
+      masvs: ["MASVS-NETWORK-1"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: 'Uri\.(?:parse|https?)\(\s*["'']http://(?!localhost|127\.0\.0\.1|10\.0\.2\.2)[^"''\s]+["'']'
+
+  - id: gapscan.dart.log-sensitive-value
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: WARNING
+    message: >-
+      A credential-like value is printed or logged. Release builds keep these in device logs and
+      crash reports. Do not log secrets.
+    metadata:
+      cwe: ["CWE-532: Insertion of Sensitive Information into Log File"]
+      masvs: ["MASVS-STORAGE-2"]
+      category: security
+      confidence: MEDIUM
+    # a secret-named value interpolated with $x / ${x} or passed bare; the words in the message text are not values
+    pattern-regex: '(?i)\b(?:print|debugPrint|log|logger\.\w+)\((?:[^\n]*?\$\{?\s*|\s*)[\w.]*(?:password|passwd|pwd|token|secret|apikey|api_key|authorization|bearer)'
+
+  - id: gapscan.dart.webview-unrestricted-javascript
+    languages: [generic]
+    paths: {include: ["*.dart"]}
+    severity: WARNING
+    message: >-
+      A WebView runs JavaScript from any page, or JavaScript is assembled with string interpolation.
+      Load only trusted https content, keep JavaScript off when it is not needed, and pass data as
+      JSON.
+    metadata:
+      cwe: ["CWE-79: Improper Neutralization of Input During Web Page Generation", "CWE-749: Exposed Dangerous Method or Function"]
+      masvs: ["MASVS-PLATFORM-2"]
+      category: security
+      confidence: MEDIUM
+    pattern-regex: 'JavascriptMode\.unrestricted|(?:runJavaScript|evaluateJavascript|runJavaScriptReturningResult)\(\s*(?:"[^"\n]*\$|''[^''\n]*\$)'

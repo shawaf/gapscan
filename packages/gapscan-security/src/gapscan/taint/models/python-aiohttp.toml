@@ -1,0 +1,7 @@
+name = "python-aiohttp"
+languages = ["python"]
+requires = 'aiohttp'
+
+[[source]]
+kind = "http_param"
+pattern = '(?:\w+\.)?request\.(match_info|query|rel_url|post|json|text|read|content|cookies|headers|multipart|query_string|path|raw_path)\b'

@@ -102,7 +102,7 @@ export interface PlanStep { step: string; pack?: string; label: string; size: nu
 
 export interface ComplianceFramework { id: string; name: string; group: string; region: string; wave: 0 | 1 | 2 | 3; status: "available" | "planned"; text: "open" | "restricted"; evidence: string }
 export interface ComplianceGroup { id: string; label: string; name: string; text: string; planned: number; wave_1: number }
-export interface ComplianceCatalog { note: string; groups: ComplianceGroup[]; frameworks: ComplianceFramework[]; counts: { available: number; planned: number; wave_1: number; wave_2: number; wave_3: number } }
+export interface ComplianceCatalog { available?: boolean; note: string; groups: ComplianceGroup[]; frameworks: ComplianceFramework[]; counts: { available: number; planned: number; wave_1: number; wave_2: number; wave_3: number } }
 
 /** The team workspace this install sends signed "local run" reports to (never carries the token). */
 export interface WorkspaceLink {

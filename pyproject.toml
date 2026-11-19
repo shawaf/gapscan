@@ -64,11 +64,13 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
 "packages/*/src/gapscan/manifests.py" = ["E501"]  # manifest regexes
 "packages/*/src/gapscan/malware.py" = ["E501"]  # advisory prose
 "packages/*/src/gapscan/autofix.py" = ["E501"]  # prompts and messages
+"packages/*/src/gapscan/depfix.py" = ["E501"]  # messages
 "packages/*/src/gapscan/flywheel.py" = ["E501"]  # prompts and messages
 "packages/*/src/gapscan/diffscan.py" = ["E501"]  # error and pattern strings
 "packages/*/src/gapscan/ci.py" = ["E501"]  # comment text
 "packages/*/src/gapscan/mcp_server.py" = ["E501"]  # tool descriptions
 "packages/*/src/gapscan/scm.py" = ["E501"]  # API paths
+"packages/*/src/gapscan/pullrequest.py" = ["E501"]  # API paths and messages
 "packages/*/src/gapscan/reachability.py" = ["E501"]  # evidence strings
 "packages/*/src/gapscan/context/flow.py" = ["E501"]  # long regexes and explanatory result lines
 "packages/*/src/gapscan/evaluation/*" = ["E501"]  # dense metric/label tables
@@ -90,11 +92,11 @@ containers = ["gapscan"]
 layers = [
     "cli",
     "mcp_server : desktop : server",
-    "ci : evaluation : autofix : flywheel : doctor : runtime",
-    "report | offline | security_pack",
+    "ci : evaluation : autofix : flywheel : doctor : runtime : pullrequest",
+    "report | offline | security_pack | watch | depfix",
     "agent",
     "pipeline | services | scanners | enrich | reachability | owasp | kb | secret_facts",
-    "normalize | taint | malware | llm | memory | diffscan | policy | compliance | scm | compare",
+    "normalize | taint | malware | llm | memory | diffscan | policy | scm | compare | notify",
     "context | manifests | fingerprint",
     "redact | registry | stages | controls | versions",
     "models | config | paths | store",
@@ -116,8 +118,8 @@ source_modules = [
 ]
 forbidden_modules = [
     "gapscan.security_pack", "gapscan.scanners", "gapscan.taint", "gapscan.malware", "gapscan.manifests", "gapscan.reachability",
-    "gapscan.enrich", "gapscan.secret_facts", "gapscan.owasp", "gapscan.kb", "gapscan.compliance", "gapscan.agent",
-    "gapscan.report", "gapscan.autofix", "gapscan.flywheel", "gapscan.evaluation", "gapscan.cli", "gapscan.desktop",
+    "gapscan.enrich", "gapscan.secret_facts", "gapscan.owasp", "gapscan.kb", "gapscan.agent",
+    "gapscan.report", "gapscan.autofix", "gapscan.flywheel", "gapscan.evaluation", "gapscan.watch", "gapscan.depfix", "gapscan.cli", "gapscan.desktop",
     "gapscan.server", "gapscan.runtime", "gapscan.offline", "gapscan.doctor", "gapscan.ci", "gapscan.scm",
     "gapscan.mcp_server",
 ]
@@ -128,8 +130,8 @@ name = "The security pack (gapscan-security) imports no app"
 type = "forbidden"
 source_modules = [
     "gapscan.security_pack", "gapscan.scanners", "gapscan.taint", "gapscan.malware", "gapscan.manifests", "gapscan.reachability",
-    "gapscan.enrich", "gapscan.secret_facts", "gapscan.owasp", "gapscan.kb", "gapscan.compliance", "gapscan.agent",
-    "gapscan.report", "gapscan.autofix", "gapscan.flywheel", "gapscan.evaluation",
+    "gapscan.enrich", "gapscan.secret_facts", "gapscan.owasp", "gapscan.kb", "gapscan.agent",
+    "gapscan.report", "gapscan.autofix", "gapscan.flywheel", "gapscan.evaluation", "gapscan.watch", "gapscan.depfix",
 ]
 forbidden_modules = [
     "gapscan.cli", "gapscan.desktop", "gapscan.server", "gapscan.runtime", "gapscan.offline", "gapscan.doctor",
@@ -159,6 +161,7 @@ ignore_imports = [
     "gapscan.offline.fetch -> httpx",  # `gapscan bundle`, run on a connected machine
     "gapscan.offline.versions -> httpx",  # OWASP edition check during `gapscan bundle`
     "gapscan.scm -> httpx",  # CI mode: posts the PR comment the user asked for
+    "gapscan.pullrequest -> httpx",  # `gapscan pr`: opens the pull request the user asked for
     "gapscan.server.workspace -> httpx",  # "Send to workspace": the team server the user saved, on request
 ]
 

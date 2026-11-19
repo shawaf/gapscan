@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import contextlib
 import getpass
+import importlib
+import importlib.util
 import json
 import logging
 import re
@@ -18,10 +20,9 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import parse_qs, urlparse
 
-from ..compliance.catalog import catalog_payload
 from ..config import Config
 from ..core.version import __version__
 from ..diffscan import branches as git_branches
@@ -67,6 +68,18 @@ EXPORT_NAMES = {
     "report.cdx.json",
 }
 DECISIONS = {"accepted_risk", "false_positive", "fixed"}
+
+
+NO_CATALOG: dict[str, Any] = {"available": False, "groups": [], "frameworks": [], "counts": {}}
+
+
+def compliance_catalog() -> dict[str, Any] | None:
+    """The planned compliance framework catalog, or None in GapScan Open, which ships without it
+    (it is part of GapScan Platform)."""
+    if importlib.util.find_spec("gapscan.compliance") is None:
+        return None
+    module = importlib.import_module("gapscan.compliance.catalog")
+    return cast(dict[str, Any], module.catalog_payload())
 
 
 class ApiError(Exception):
@@ -662,7 +675,10 @@ def _make_handler(srv: GapScanServer) -> type[BaseHTTPRequestHandler]:
             )
 
         def compliance(self) -> None:
-            self._json(200, catalog_payload())
+            # GapScan Open ships without the catalog: answer "not available" rather than 404, so
+            # the page can hide it without a failed request in the browser console.
+            payload = compliance_catalog()
+            self._json(200, payload if payload is not None else NO_CATALOG)
 
         def doctor(self) -> None:
             items = health.rows(cfg, run_all_checks(cfg))

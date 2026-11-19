@@ -57,6 +57,18 @@ For the top confirmed issues the model writes an audit-style investigation, and 
 `file:line` must have been shown to it. `gapscan fix` proposes a patch and offers it only if a
 rescan shows the finding gone. Nothing is applied automatically.
 
+### Zero-day watch, fixes and pull requests
+- `gapscan watch` re-checks every saved project's dependency list against freshly updated
+  vulnerability data, without rescanning the code, and reports only what is new: exploited (CISA
+  KEV) and reachable first. `--notify` shows a desktop notification.
+- `gapscan fix-deps` proposes the nearest safe version where the project declares the package and
+  verifies it with an offline rescan. It never runs a package manager.
+- `gapscan pr` turns a reviewed fix into a branch and a pull request on GitHub or GitLab, with your
+  own credentials, when you ask for it ([`docs/zero-day-watch.md`](docs/zero-day-watch.md)).
+
+GapScan cannot see a vulnerability nobody has disclosed yet in someone else's package. It closes
+the time between disclosure and a fix, and it looks for unknown flaws in your own code.
+
 ### Report
 One offline HTML dashboard plus SARIF, CSV, Markdown, CycloneDX SBOM, JSON and PDF exports. All
 numbers are computed in Python; the dashboard only renders them.
@@ -136,6 +148,7 @@ most of it comes from deterministic reasoning in the data-flow tracer, not from 
 |---|---|
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | the layers, packages and rules for new code |
 | [`docs/rules.md`](docs/rules.md), [`docs/taint.md`](docs/taint.md), [`docs/supply-chain.md`](docs/supply-chain.md) | the rule library, the data-flow engine, reachability and malicious packages |
+| [`docs/zero-day-watch.md`](docs/zero-day-watch.md) | re-checking saved projects, dependency fixes and fix pull requests |
 | [`docs/ci.md`](docs/ci.md), [`docs/github-action.md`](docs/github-action.md) | CI, pull requests, IDE and MCP |
 | [`docs/manager.md`](docs/manager.md) | the local web UI and its security design |
 | [`docs/ai-upgrades.md`](docs/ai-upgrades.md), [`docs/memories.md`](docs/memories.md) | model tiers, autofix, and how your notes guide the reviewer |

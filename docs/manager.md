@@ -24,7 +24,6 @@ uv run python tools/demo_manager.py --seed 3   # the same UI on recorded data, n
 | Finding drawer | decision panel (a note is required), code with flagged lines, scanner evidence, the AI review in a labeled box with confidence, tools used and team memories, callers, untrusted sources, cheat sheets, history across runs, a held-for-review notice for prompt-injection attempts |
 | OWASP Top 10 | heat view of the ten categories (color is the worst open severity) and a table with cheat sheets |
 | ASVS coverage | the three states with a warning about what "no finding" means, a chapter matrix that expands to requirements |
-| Compliance frameworks | per project, every planned compliance and legal framework by group and build wave, from `gapscan/compliance/catalog.json`; only OWASP is built, so it shows no coverage for the others and never says "compliant" |
 | Dependencies | tabs for vulnerable packages (KEV, EPSS, fixed in), the upgrade plan, and the SBOM |
 | Secrets and Config | locations only, never values, with a notice when a scanner was unavailable |
 | Hotspots | treemap of files (size is lines, color is worst severity) and the riskiest files |

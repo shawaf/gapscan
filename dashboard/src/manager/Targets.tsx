@@ -76,6 +76,12 @@ function GapModel() {
   );
 }
 
+/** False when the server has no compliance catalog (GapScan Open ships without it): the planned
+ * compliance domains and their links are then not shown. Set by App from GET /api/compliance. */
+let complianceAvailable = true;
+export const setComplianceAvailable = (v: boolean): void => { complianceAvailable = v; };
+export const isComplianceAvailable = (): boolean => complianceAvailable;
+
 /** Start page: choose what to measure the software against, then go to that domain's projects. */
 const SHOWN = 5;
 
@@ -84,7 +90,9 @@ export function TargetsPage({ projects, domains, loading }: { projects: Project[
   return (
     <>
       <div class="cc-h"><div><h1>What do you want to close gaps against?</h1>
-        <p>Choose a domain to see its projects and dashboards. Application security is built. The compliance and legal domains are planned: they will map the same evidence to each framework's controls.</p></div></div>
+        <p>{complianceAvailable
+          ? "Choose a domain to see its projects and dashboards. Application security is built. The compliance and legal domains are planned: they will map the same evidence to each framework's controls."
+          : "Choose a domain to see its projects and dashboards."}</p></div></div>
       <GapModel />
       <div class="dom-grid">
         {domains.map((d) => {
@@ -159,7 +167,7 @@ export function ProjectTargetsPage() {
             <td style="white-space:nowrap;text-align:right"><span class={`badge2 ${STATE_CLASS[t.state]}`}>{STATE_LABEL[t.state]}</span></td>
           </tr>
         ))}</tbody></table></div></section>
-      <p class="cc-note">Compliance frameworks and legal regulations will map the same evidence once their packs exist. <a href="#" onClick={(e) => { e.preventDefault(); navigate("compliance"); }}>See the planned frameworks</a> · <a href="#/" onClick={(e) => { e.preventDefault(); navigate("home", null, null); }}>See all domains</a></p>
+      {complianceAvailable && <p class="cc-note">Compliance frameworks and legal regulations will map the same evidence once their packs exist. <a href="#" onClick={(e) => { e.preventDefault(); navigate("compliance"); }}>See the planned frameworks</a> · <a href="#/" onClick={(e) => { e.preventDefault(); navigate("home", null, null); }}>See all domains</a></p>}
     </>
   );
 }

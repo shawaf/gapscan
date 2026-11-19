@@ -158,9 +158,7 @@ class OSVScanner(CommandScanner):
         """Each lockfile is passed explicitly, and only when its ecosystem's database is installed:
         one missing database (say RubyGems for a fastlane Gemfile.lock) must not hide the rest."""
         self.note = ""
-        installed = {
-            p.name for p in (self.db_dir / OSV_LAYOUT).glob("*") if (p / "all.zip").is_file()
-        }
+        installed = self.installed_ecosystems()
         lockfiles = find_lockfiles(target)
         gradle_files = (".gradle", ".gradle.kts", ".versions.toml")
         gradle = [
@@ -182,6 +180,23 @@ class OSVScanner(CommandScanner):
             )
         if not usable:
             return []
+        findings = self.scan_files(usable, target, workdir)
+        if synthetic is not None:  # point findings at the line that declares the library
+            where = {d.name: d for d in gradle}
+            for f in findings:  # parse_osv keeps the absolute path of a file outside the target
+                if f.file and Path(f.file) == synthetic:
+                    dep = where.get(f.package or "")
+                    if dep:
+                        f.file, f.start_line = dep.file, dep.line
+                        f.raw["declared_only"] = True  # direct dependency: transitive ones unseen
+        return findings
+
+    def installed_ecosystems(self) -> set[str]:
+        """OSV ecosystems whose offline database is installed."""
+        return {p.name for p in (self.db_dir / OSV_LAYOUT).glob("*") if (p / "all.zip").is_file()}
+
+    def scan_files(self, files: list[Path], target: Path, workdir: Path) -> list[Finding]:
+        """Run osv-scanner offline over explicit lockfiles or CycloneDX SBOMs (`*.cdx.json`)."""
         out = workdir / "osv.json"
         # GapScan's own (empty) config overrides any `osv-scanner.toml` in the scanned project,
         # whose [[IgnoredVulns]] would otherwise hide advisories (verified on osv-scanner 2.6.0).
@@ -199,7 +214,7 @@ class OSVScanner(CommandScanner):
             "--output",
             str(out),
         ]
-        for p in usable:
+        for p in files:
             args += ["-L", str(p)]
         proc = self._exec(args)
         if proc.returncode == 128 and "No package sources found" in (proc.stdout + proc.stderr):
@@ -207,13 +222,4 @@ class OSVScanner(CommandScanner):
         self.check(proc)
         if not out.is_file():
             raise ScannerError("osv-scanner produced no output")
-        findings = parse_osv(json.loads(out.read_text()), target)
-        if synthetic is not None:  # point findings at the line that declares the library
-            where = {d.name: d for d in gradle}
-            for f in findings:  # parse_osv keeps the absolute path of a file outside the target
-                if f.file and Path(f.file) == synthetic:
-                    dep = where.get(f.package or "")
-                    if dep:
-                        f.file, f.start_line = dep.file, dep.line
-                        f.raw["declared_only"] = True  # direct dependency: transitive ones unseen
-        return findings
+        return parse_osv(json.loads(out.read_text()), target)

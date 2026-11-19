@@ -35,7 +35,7 @@ from .memory import (
     remove_memory,
     save_memories,
 )
-from .models import Investigation, ScanResult, Verdict
+from .models import Finding, Investigation, ScanResult, Verdict
 from .offline.bundle import BundleError, BundleOptions, build_bundle
 from .offline.fetch import fetch_kb_sources, fetch_owasp
 from .offline.refresh import download_wheels, refresh_all
@@ -163,6 +163,218 @@ def fix(
     if apply:
         apply_offer(target, offer)
         console.print(f"[green]Applied to[/green] {offer.file}")
+
+
+@app.command()
+def watch(
+    scans: Annotated[
+        list[Path] | None,
+        typer.Argument(help="Findings JSON files from `gapscan scan` to re-check."),
+    ] = None,
+    all_projects: Annotated[
+        bool, typer.Option("--all", help="Re-check every project saved in the local manager.")
+    ] = False,
+    target: Annotated[
+        Path | None,
+        typer.Option(
+            "--target",
+            "-t",
+            help="The scanned project's folder (one scan only): read to tell whether the "
+            "vulnerable function is called.",
+        ),
+    ] = None,
+    out: Annotated[
+        Path | None, typer.Option("--out", "-o", help="Write the alerts as JSON.")
+    ] = None,
+    notify: Annotated[
+        bool, typer.Option("--notify", help="Show a desktop notification when there are alerts.")
+    ] = False,
+    fail_on_alert: Annotated[
+        bool, typer.Option("--fail-on-alert", help="Exit with code 3 when there are alerts.")
+    ] = False,
+    config: ConfigOption = None,
+) -> None:
+    """Zero-day watch: re-check saved scans' dependencies against the vulnerability data installed
+    now (after `gapscan update` or `gapscan data fetch`), without scanning the code again. Reports
+    every advisory the saved scan did not know about, exploited (KEV) and reachable ones first.
+    Makes no network call."""
+    from .enrich import load_enrichment
+    from .notify import desktop_notify
+    from .scanners.osv import OSVScanner
+    from .server.watch import watch_saved_projects
+    from .watch import WatchReport, alert_line, watch_scan
+
+    cfg = _load(config)
+    if not scans and not all_projects:
+        console.print("[red]Give one or more scan JSON files, or --all.[/red]")
+        raise typer.Exit(code=2)
+    if target is not None and (all_projects or len(scans or []) != 1):
+        console.print("[red]--target goes with exactly one scan file.[/red]")
+        raise typer.Exit(code=2)
+    scanner = OSVScanner(cfg.scanners.osv.db_dir, cfg.scanners.timeout_s)
+    if not scanner.is_available():
+        console.print(
+            "[red]osv-scanner or its offline database is missing.[/red] Run `gapscan doctor`."
+        )
+        raise typer.Exit(code=2)
+    enrichment = load_enrichment(cfg.data.enrichment_dir)
+    work = cfg.data.dir / "watch"
+    reports: list[WatchReport] = []
+    for i, path in enumerate(scans or []):
+        scan = ScanResult.model_validate_json(path.read_text(encoding="utf-8"))
+        name = Path(scan.target).name or path.stem
+        reports.append(
+            watch_scan(
+                scan, name, scanner, work / f"file-{i}", enrichment=enrichment, target=target
+            )
+        )
+    if all_projects:
+        reports += watch_saved_projects(cfg, scanner, work / "projects", enrichment=enrichment)
+    alerts = sorted(
+        (a for r in reports for a in r.alerts), key=lambda a: (-a.priority, a.project, a.package)
+    )
+    for r in reports:
+        line = f"{r.project}: {r.components} dependencies checked, {len(r.alerts)} new advisories"
+        console.print(line + (f" ({r.note})" if r.note else ""), markup=False)
+        if r.skipped_ecosystems:
+            console.print(
+                f"  no offline database for {', '.join(r.skipped_ecosystems)}", markup=False
+            )
+    for a in alerts:
+        console.print(f"  [{a.severity.value}] {alert_line(a)}", markup=False)
+    if out is not None:
+        out.write_text(
+            json.dumps([r.model_dump(mode="json") for r in reports], indent=2), encoding="utf-8"
+        )
+    if notify and alerts:
+        top = alerts[0]
+        title = f"GapScan: {len(alerts)} new advisor{'y' if len(alerts) == 1 else 'ies'}"
+        desktop_notify(title, alert_line(top))
+    if fail_on_alert and alerts:
+        raise typer.Exit(code=3)
+
+
+@app.command("fix-deps")
+def fix_deps(
+    scan_json: Annotated[Path, typer.Argument(help="Findings JSON from `gapscan scan`.")],
+    target: Annotated[
+        Path, typer.Option("--target", "-t", help="The project that was scanned.")
+    ] = Path("."),
+    patch: Annotated[
+        Path | None, typer.Option("--patch", "-p", help="Write all edits as one unified diff.")
+    ] = None,
+    out: Annotated[
+        Path | None, typer.Option("--out", "-o", help="Write the fixes as JSON.")
+    ] = None,
+    verify: Annotated[
+        bool, typer.Option(help="Rescan a copy with each edit applied (offline, osv-scanner).")
+    ] = True,
+    config: ConfigOption = None,
+) -> None:
+    """Propose upgrades for vulnerable dependencies: the nearest version that fixes every advisory
+    of a package, edited where the project declares it. Nothing in the project is changed; review
+    the diff, then apply it or open a pull request with `gapscan pr`. Package managers are never
+    run, so lockfiles are flagged for you to regenerate."""
+    from .depfix import propose_dependency_fixes
+    from .scanners.osv import OSVScanner
+
+    cfg = _load(config)
+    result = ScanResult.model_validate_json(scan_json.read_text(encoding="utf-8"))
+    rescan = None
+    if verify:
+        scanner = OSVScanner(cfg.scanners.osv.db_dir, cfg.scanners.timeout_s)
+        if scanner.is_available():
+            work = cfg.data.dir / "depfix"
+
+            def rescan(copy: Path) -> list[Finding]:
+                work.mkdir(parents=True, exist_ok=True)
+                return scanner.run(copy, work)
+        else:
+            console.print("[yellow]osv-scanner is not available: fixes are not verified.[/yellow]")
+    fixes = propose_dependency_fixes(target, result.findings, rescan=rescan)
+    if not fixes:
+        console.print("No vulnerable dependency with a known fixed version.")
+        return
+    for fx in fixes:
+        state = {True: "verified by rescan", False: "NOT fixed by the edit", None: "not verified"}[
+            fx.verified
+        ]
+        head = (
+            f"{fx.package} {fx.from_version or '?'} -> {fx.to_version} ({', '.join(fx.advisories)})"
+        )
+        console.print(f"{head}: {len(fx.edits)} edit(s), {state}", markup=False)
+        for note in fx.notes:
+            console.print(f"  {note}", markup=False)
+    diff = "".join(fx.diff for fx in fixes if fx.verified is not False)
+    if patch is not None:
+        patch.write_text(diff, encoding="utf-8")
+        console.print(f"patch written to {patch}", markup=False)
+    elif diff:
+        console.print(diff, markup=False)
+    if out is not None:
+        out.write_text(
+            json.dumps([fx.model_dump(mode="json") for fx in fixes], indent=2), encoding="utf-8"
+        )
+
+
+@app.command("pr")
+def pull_request(
+    patch: Annotated[
+        Path, typer.Argument(help="Unified diff to propose (from `gapscan fix-deps`).")
+    ],
+    title: Annotated[str, typer.Option(help="Pull request title and commit subject.")],
+    target: Annotated[Path, typer.Option("--target", "-t", help="The git repository.")] = Path("."),
+    body: Annotated[str, typer.Option(help="Pull request description.")] = "",
+    base: Annotated[
+        str, typer.Option(help="Branch to merge into (default: the current one).")
+    ] = "",
+    branch: Annotated[
+        str, typer.Option(help="New branch name (default: gapscan/fix-<hash>).")
+    ] = "",
+    provider: Annotated[str, typer.Option(help="github | gitlab")] = "github",
+    url: Annotated[
+        str,
+        typer.Option(
+            help="API root, e.g. https://ghe.example.com/api/v3 (default: the public one)."
+        ),
+    ] = "",
+    repo: Annotated[str, typer.Option(help="owner/name (default: from the remote URL).")] = "",
+    remote: Annotated[str, typer.Option(help="Git remote to push the branch to.")] = "origin",
+    token_env: Annotated[
+        str, typer.Option(help="Environment variable that holds the API token.")
+    ] = "GITHUB_TOKEN",
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask for confirmation.")] = False,
+) -> None:
+    """Open a pull request with a reviewed patch: new branch, commit, push with your git
+    credentials, then the SCM API with your token. You run it; GapScan never opens one on its own.
+    Git hooks are disabled for these git calls, so no project code runs."""
+    from .pullrequest import PRError, PullRequestPlan, open_pull_request, prepare, push_branch
+    from .scm import SCMError
+
+    plan = PullRequestPlan(
+        target=target, patch=patch.read_text(encoding="utf-8"), title=title,
+        body=body or "Proposed by GapScan at the maintainer's request. Review before merging.",
+        provider=provider, api_url=url, repo=repo, base=base, branch=branch, remote=remote,
+    )  # fmt: skip
+    try:
+        prepare(plan)
+    except (PRError, SCMError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    console.print(
+        f"Will push branch {plan.branch} to {plan.remote} and open a pull request into "
+        f"{plan.base} on {plan.repo} ({plan.api_url}), changing {', '.join(plan.files)}.",
+        markup=False,
+    )
+    if not yes and not typer.confirm("Go ahead?", default=False):
+        raise typer.Exit(code=1)
+    try:
+        push_branch(plan)
+        where = open_pull_request(plan, token_env)
+    except (PRError, SCMError) as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=1) from exc
+    console.print(f"pull request opened: {where}", markup=False)
 
 
 ci_app = typer.Typer(

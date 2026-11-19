@@ -18,7 +18,7 @@ import { RunDrawer, Runs } from "./Runs";
 import { HealthPage } from "./Health";
 import { SetupPage } from "./Setup";
 import { WelcomePage } from "./Welcome";
-import { PlannedDomain, ProjectTargetsPage, TargetsPage, allDomains } from "./Targets";
+import { PlannedDomain, ProjectTargetsPage, TargetsPage, allDomains, isComplianceAvailable, setComplianceAvailable } from "./Targets";
 import type { Domain } from "./Targets";
 import { SettingsPage } from "./Settings";
 import { fetchProject, fetchReport, latestDone, useLoad } from "./useApi";
@@ -44,6 +44,10 @@ export function App() {
   // Polled slowly so the sidebar stops saying "no remote requests" once a workspace is connected.
   const workspace = useLoad(() => api<WorkspaceLink>("GET", "/api/workspace"), [], () => true, 30000);
   const domains = useMemo(() => allDomains(catalog.data), [catalog.data]);
+  // GapScan Open has no compliance catalog: the endpoint says `available: false` and the page is hidden.
+  const hasCatalog = catalog.loading || (!!catalog.data && catalog.data.available !== false);
+  setComplianceAvailable(hasCatalog);
+  const mainNav = hasCatalog ? MAIN_NAV : MAIN_NAV.filter((n) => n.id !== "compliance");
   const domainOf = (id: string): Domain | undefined => domains.find((d) => d.id === id);
   const conn = useStore(connection);
   const [menu, setMenu] = useState(false);
@@ -78,7 +82,7 @@ export function App() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette((v) => !v); return; }
       if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
       const n = Number(e.key);
-      const target = MAIN_NAV.find((m) => m.key === n);
+      const target = mainNav.find((m) => m.key === n);
       if (pid && target) navigate(target.id);
       if (e.key === "t") cycleTheme();
       if (e.key === "u") toggleUi();
@@ -103,7 +107,7 @@ export function App() {
   else if (page === "health") body = <HealthPage />;
   else if (page === "setup") body = <SetupPage />;
   else if (page === "welcome") body = <WelcomePage />;
-  else if (page === "compliance" && pid) body = <CompliancePage />;
+  else if (page === "compliance" && pid && hasCatalog) body = <CompliancePage />;
   else if (!pid && page === "security") body = <Home projects={projects.data} error={projects.error} reload={reloadAll} />;
   else if (!pid && domain) body = <PlannedDomain domain={domain} />;
   else if (!pid || page === "home") body = <TargetsPage projects={projects.data} domains={domains} loading={catalog.loading} />;
@@ -144,7 +148,7 @@ export function App() {
             </div>
           )}
         </div>
-        {pid ? <div class="cc-nav"><span class="cc-group">Application security</span>{MAIN_NAV.map((n, i) => (n.group && n.group !== MAIN_NAV[i - 1]?.group ? [<span key={`g-${n.group}`} class="cc-group sub">{n.group}</span>, navLink(n)] : navLink(n)))}</div> : (
+        {pid ? <div class="cc-nav"><span class="cc-group">Application security</span>{mainNav.map((n, i) => (n.group && n.group !== mainNav[i - 1]?.group ? [<span key={`g-${n.group}`} class="cc-group sub">{n.group}</span>, navLink(n)] : navLink(n)))}</div> : (
           <div class="cc-nav">
             <a href="#/" aria-current={page === "home" ? "page" : undefined} onClick={(e) => { e.preventDefault(); navigate("home", null, null); }}><Icon name="overview" /><span class="grow">All domains</span></a>
             <span class="cc-group">Domains</span>
@@ -227,7 +231,7 @@ function Palette({ onClose, pid, projects, domains }: { onClose: () => void; pid
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
   const commands = useMemo(() => [
-    ...(pid ? ALL_NAV.map((n) => ({ label: `Go to ${n.label}`, hint: n.key ? String(n.key) : "", run: () => navigate(n.id) })) : []),
+    ...(pid ? ALL_NAV.filter((n) => isComplianceAvailable() || n.id !== "compliance").map((n) => ({ label: `Go to ${n.label}`, hint: n.key ? String(n.key) : "", run: () => navigate(n.id) })) : []),
     ...(pid ? [{ label: "Start a new scan", hint: "", run: () => navigate("runs") }] : []),
     { label: "Switch theme", hint: "t", run: cycleTheme },
     { label: "Switch look (classic / soft / glassy)", hint: "u", run: toggleUi },

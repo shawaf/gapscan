@@ -1178,14 +1178,6 @@ def test_rebuilding_a_report_keeps_its_investigations(env):
     assert stages[Stage.TRIAGE].inputs["normalize"] == stages[Stage.NORMALIZE].sha256
 
 
-def test_compliance_catalog_is_served(env):
-    r = env.req("GET", "/api/compliance")
-    assert r.status_code == 200
-    body = r.json()
-    assert body["counts"]["available"] == 1
-    assert any(f["id"] == "nist-ssdf" and f["status"] == "planned" for f in body["frameworks"])
-
-
 def test_an_allowlisted_packs_scanner_is_offered_and_can_be_chosen(tmp_path, monkeypatch):
     """The picker comes from the server's packs: a second pack's scanner is listed with its own
     description (it used to raise KeyError) and a run may choose it."""
@@ -1357,3 +1349,15 @@ def test_fs_listing_carries_the_folders_own_head(env):
     _make_repo(env.project_dir)
     r = env.get(f"/api/fs?path={env.project_dir}").json()
     assert r["head"]["git"] is True and r["head"]["branch"] == "main"
+
+
+def test_without_the_compliance_catalog_the_endpoint_is_absent(env, monkeypatch):
+    """GapScan Open ships without gapscan.compliance: the manager says so and hides the page."""
+    import importlib.util as iu
+
+    real = iu.find_spec
+    monkeypatch.setattr(
+        iu, "find_spec", lambda name, *a: None if name == "gapscan.compliance" else real(name, *a)
+    )
+    r = env.req("GET", "/api/compliance")
+    assert r.status_code == 200 and r.json()["available"] is False

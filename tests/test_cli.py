@@ -58,3 +58,27 @@ def test_serve_explains_a_busy_port(tmp_path, monkeypatch):
         res = CliRunner().invoke(app, ["serve", "--no-open", "--port", str(port)])
     out = " ".join(res.output.split())
     assert res.exit_code == 1 and "already in use" in out and f"--port {port + 1}" in out
+
+
+def test_data_fetch_vulns_gets_what_a_scan_checks_dependencies_against(tmp_path, monkeypatch):
+    """The README's first-run step: one command for the OSV and Trivy databases and KEV/EPSS
+    (`data fetch` alone only stores the OWASP sources). The downloaders are replaced here."""
+    import gapscan.cli as cli
+
+    monkeypatch.setenv("GAPSCAN_HOME", str(tmp_path))
+    calls: list[str] = []
+    monkeypatch.setattr(
+        cli, "fetch_enrichment",
+        lambda store: calls.append("kev") or {"cisa_kev": "2026-11-19", "epss": "2026-11-20"},
+    )  # fmt: skip
+    monkeypatch.setattr(
+        cli, "fetch_osv_db", lambda d: calls.append(f"osv:{d.name}") or "2026-11-20"
+    )
+    monkeypatch.setattr(
+        cli, "fetch_trivy_db",
+        lambda d, java_db=False: calls.append(f"trivy:{d.name}:{java_db}") or "2026-11-20",
+    )  # fmt: skip
+    res = runner.invoke(app, ["data", "fetch-vulns"])
+    assert res.exit_code == 0, res.output
+    assert calls == ["kev", "osv:osv-db", "trivy:trivy-cache:False"]
+    assert "OSV 2026-11-20" in res.output and "KEV 2026-11-19" in res.output

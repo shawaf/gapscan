@@ -19,13 +19,22 @@ never leaves the machine.
 
 *The report dashboard: one self-contained HTML file, no CDN, no network.*
 
-[Quick start](#quick-start) · [Screenshots](#screenshots) · [Zero-day watch](#zero-day-watch-fixes-and-pull-requests) · [Trust](#built-to-be-trusted) · [Evaluation](#evaluation-read-this-before-trusting-any-number) · [Docs](#docs)
+[Demo](#see-it-run) · [Quick start](#quick-start) · [Screenshots](#screenshots) · [Zero-day watch](#zero-day-watch-fixes-and-pull-requests) · [Trust](#built-to-be-trusted) · [Evaluation](#evaluation-read-this-before-trusting-any-number) · [Docs](#docs)
 
 </div>
 
 > **Status: early alpha.** Install from source (below); there is no PyPI package or signed
 > desktop installer yet. The numbers in the [evaluation](#evaluation-read-this-before-trusting-any-number)
 > are measured and published with their weaknesses. Read them before relying on the tool.
+
+## See it run
+
+[![GapScan from install to results](docs/images/demo.gif)](https://gapscan.dev/#demo)
+
+*Real output on the sample app in `eval/fixtures/vuln-app`: scan, report, a zero-day watch alert and
+dependency fixes verified by a rescan. The full 3-minute video, from `git clone` to the local web UI,
+is on [gapscan.dev](https://gapscan.dev/#demo). Recorded with scanners only; the optional AI review is
+not shown, and the watch step uses an older data snapshot so a new advisory can arrive.*
 
 ## At a glance
 

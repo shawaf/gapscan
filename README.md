@@ -19,10 +19,24 @@ never leaves the machine.
 
 *The report dashboard: one self-contained HTML file, no CDN, no network.*
 
+[Quick start](#quick-start) · [Screenshots](#screenshots) · [Zero-day watch](#zero-day-watch-fixes-and-pull-requests) · [Trust](#built-to-be-trusted) · [Evaluation](#evaluation-read-this-before-trusting-any-number) · [Docs](#docs)
+
 </div>
 
-> **Status: early alpha.** The numbers in the [evaluation](#evaluation-read-this-before-trusting-any-number)
+> **Status: early alpha.** Install from source (below); there is no PyPI package or signed
+> desktop installer yet. The numbers in the [evaluation](#evaluation-read-this-before-trusting-any-number)
 > are measured and published with their weaknesses. Read them before relying on the tool.
+
+## At a glance
+
+| You get | How |
+|---|---|
+| Every finding mapped to the standard | OWASP Top 10:2025, ASVS 5.0, API Security Top 10 2023, MASVS, GenAI LLM Top 10 2026 |
+| Proof, not a list of warnings | each gap links to a scanner result, a data-flow path or the quoted code |
+| Fewer false alarms | optional local AI review: *confirmed / likely / false positive / needs review*, labeled as AI-generated |
+| Alerts when a new CVE hits code you already scanned | `gapscan watch`, exploited and reachable first |
+| Fixes you can check | `gapscan fix` and `gapscan fix-deps` keep a patch only if an offline rescan shows the gap gone; `gapscan pr` opens the pull request when you ask |
+| Nothing leaves your machine | no network calls during `scan`; the model runs locally |
 
 ## What it does
 
@@ -66,6 +80,13 @@ rescan shows the finding gone. Nothing is applied automatically.
 - `gapscan pr` turns a reviewed fix into a branch and a pull request on GitHub or GitLab, with your
   own credentials, when you ask for it ([`docs/zero-day-watch.md`](docs/zero-day-watch.md)).
 
+```bash
+gapscan watch --all --notify                       # every saved project, desktop alert when something is new
+gapscan watch --all -o alerts.json --fail-on-alert # for cron or CI: exit code 3 on new alerts
+gapscan fix-deps scan.json -t ./my-project -p fix.diff
+gapscan pr fix.diff -t ./my-project --title "Upgrade requests to 2.32.4"
+```
+
 GapScan cannot see a vulnerability nobody has disclosed yet in someone else's package. It closes
 the time between disclosure and a fix, and it looks for unknown flaws in your own code.
 
@@ -84,6 +105,61 @@ numbers are computed in Python; the dashboard only renders them.
   ([`docs/offline.md`](docs/offline.md)).
 
 ![Flow](docs/flow.png)
+
+## Screenshots
+
+All screenshots are from the sample app in `eval/fixtures/vuln-app` and are regenerated with
+`uv run python tools/readme_screenshots.py`.
+
+<table>
+  <tr>
+    <td width="50%">
+      <a href="docs/images/report-coverage.png"><img src="docs/images/report-coverage.png" alt="Coverage by standard"></a>
+      <br><b>Coverage by standard.</b> Every control in three honest states: evidence of failure, checked with no finding, or manual review. Never "passed".
+    </td>
+    <td width="50%">
+      <a href="docs/images/report-gap-detail.png"><img src="docs/images/report-gap-detail.png" alt="One gap with its evidence"></a>
+      <br><b>One gap, with proof.</b> The scanner result, the code around it, the controls it fails and the AI review, labeled as AI-generated.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <a href="docs/images/report-findings.png"><img src="docs/images/report-findings.png" alt="Findings table with filters"></a>
+      <br><b>Findings.</b> Filter by severity, verdict, CWE, scanner and evidence. Keyboard driven (<kbd>/</kbd>, <kbd>j</kbd>, <kbd>k</kbd>, <kbd>Enter</kbd>).
+    </td>
+    <td width="50%">
+      <a href="docs/images/report-dependencies.png"><img src="docs/images/report-dependencies.png" alt="Dependencies page"></a>
+      <br><b>Dependencies.</b> Known-vulnerable packages from offline vulnerability data, with KEV, EPSS and reachability.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <a href="docs/images/report-owasp.png"><img src="docs/images/report-owasp.png" alt="OWASP Top 10 page"></a>
+      <br><b>OWASP Top 10:2025.</b> Gaps grouped by category.
+    </td>
+    <td width="50%">
+      <a href="docs/images/report-hotspots.png"><img src="docs/images/report-hotspots.png" alt="Hotspots page"></a>
+      <br><b>Hotspots.</b> Files where gaps concentrate, so you know where to start.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <a href="docs/images/manager-overview.png"><img src="docs/images/manager-overview.png" alt="Local web UI overview"></a>
+      <br><b>Local web UI</b> (<code>gapscan serve</code>). Projects, scan history, risk score and the gaps to close first.
+    </td>
+    <td width="50%">
+      <a href="docs/images/manager-gaps.png"><img src="docs/images/manager-gaps.png" alt="Gaps in the local web UI"></a>
+      <br><b>Gaps across runs.</b> What is new since the last scan, saved views, and your decisions carried across scans.
+    </td>
+  </tr>
+</table>
+
+<details>
+<summary>Light theme</summary>
+
+[![Light theme overview](docs/images/report-overview-light.png)](docs/images/report-overview-light.png)
+
+</details>
 
 ## Built to be trusted
 
@@ -107,6 +183,7 @@ Requirements: [uv](https://docs.astral.sh/uv/) and the scanners on your `PATH`
 AI review. The Docker image bundles the scanners.
 
 ```bash
+git clone https://github.com/shawaf/gapscan && cd gapscan
 make setup                       # Python deps via uv
 cp config/gapscan.example.toml gapscan.toml
 uv run gapscan doctor            # what is installed, what is missing

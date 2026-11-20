@@ -75,12 +75,18 @@ class SemgrepScanner(CommandScanner):
     name = "semgrep"
     binary = "semgrep"
     ok_returncodes = frozenset({0, 1})
+    # A bare `semgrep --version` asks semgrep.dev for the latest release (and waits up to minutes
+    # for it on a machine without network). GapScan's probes and scans stay offline.
+    version_args = ("--version", "--disable-version-check")
     note = ""  # shown on the run when the scan could not be fully hardened
 
     def __init__(self, rules_path: Path, timeout_s: int = 300, own_rules: Path = OWN_RULES) -> None:
         super().__init__(timeout_s)
         self.rules_path = rules_path.resolve()  # absolute: tools run from GapScan's work folder
         self.own_rules = own_rules.resolve()
+
+    def env(self) -> dict[str, str]:
+        return {"SEMGREP_ENABLE_VERSION_CHECK": "0", "SEMGREP_SEND_METRICS": "off"}
 
     def is_available(self) -> bool:
         return super().is_available() and (

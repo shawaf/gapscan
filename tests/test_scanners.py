@@ -441,3 +441,22 @@ def test_gitleaks_binary_still_finds_secrets_a_target_config_tries_to_hide(tmp_p
     )
     findings = GitleaksScanner().run(target, work)
     assert findings and all(fake not in (f.snippet or "") for f in findings)
+
+
+def test_the_semgrep_version_probe_never_asks_the_network(tmp_path, monkeypatch):
+    """`semgrep --version` checks semgrep.dev for a newer release unless told not to."""
+    from gapscan.scanners.semgrep import SemgrepScanner
+
+    seen: list[tuple[list[str], dict[str, str]]] = []
+    scanner = SemgrepScanner(tmp_path)
+
+    def fake(argv, timeout_s=None):
+        seen.append((argv, scanner.env()))
+        return subprocess.CompletedProcess(argv, 0, "1.176.0\n", "")
+
+    monkeypatch.setattr(scanner, "_exec", fake)
+    assert scanner.version() == "1.176.0"
+    argv, env = seen[0]
+    assert "--disable-version-check" in argv
+    assert env["SEMGREP_ENABLE_VERSION_CHECK"] == "0"
+    assert env["SEMGREP_SEND_METRICS"] == "off"

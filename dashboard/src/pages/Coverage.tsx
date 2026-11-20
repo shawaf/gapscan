@@ -69,8 +69,8 @@ export function Coverage() {
           <tbody>{shown.slice(0, 500).map((c) => (
             <tr key={c.id}><td class="mono">{c.id}</td><td><span class={`badge st-${c.status}`}>{GLYPH[c.status]} {LABEL[c.status]}</span></td><td>{c.title}</td>
               <td>{c.finding_ids.length ? <>
-                {c.finding_ids.slice(0, 3).map((f) => <a key={f} href={`#/findings/${encodeURIComponent(f)}`} onClick={(e) => { e.preventDefault(); navigate("findings", f); }}>open </a>)}
-                {c.finding_ids.length > 3 ? `+${c.finding_ids.length - 3}` : ""}</> : ""}</td></tr>
+                {c.finding_ids.slice(0, 3).map((f, i) => <span key={f}>{i ? " · " : ""}<a href={`#/findings/${encodeURIComponent(f)}`} aria-label={`Open gap ${i + 1} of ${c.finding_ids.length} for ${c.id}`} onClick={(e) => { e.preventDefault(); navigate("findings", f); }}>Gap {i + 1}</a></span>)}
+                {c.finding_ids.length > 3 ? ` +${c.finding_ids.length - 3} more` : ""}</> : ""}</td></tr>
           ))}</tbody></table>
       </div>
     </div>

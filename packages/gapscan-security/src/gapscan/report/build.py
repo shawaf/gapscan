@@ -176,7 +176,7 @@ def _freshness(
         bundle=bundle_built,
         vuln_data=dates, vuln_data_age_days=age,
         stale=age is not None and age > config.general.vuln_data_max_age_days,
-        owasp=versions, model=next((v.model for v in verdicts if v.model), config.llm.model),
+        owasp=versions, model=next((v.model for v in verdicts if v.model), ""),  # only a model that ran
         prompt_versions=sorted({v.prompt_version for v in verdicts if v.prompt_version}),
         embedding_model=emb,
     )  # fmt: skip

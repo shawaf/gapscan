@@ -275,7 +275,7 @@ def fix_deps(
     of a package, edited where the project declares it. Nothing in the project is changed; review
     the diff, then apply it or open a pull request with `gapscan pr`. Package managers are never
     run, so lockfiles are flagged for you to regenerate."""
-    from .depfix import propose_dependency_fixes
+    from .depfix import combined_diff, propose_dependency_fixes
     from .scanners.osv import OSVScanner
 
     cfg = _load(config)
@@ -305,7 +305,7 @@ def fix_deps(
         console.print(f"{head}: {len(fx.edits)} edit(s), {state}", markup=False)
         for note in fx.notes:
             console.print(f"  {note}", markup=False)
-    diff = "".join(fx.diff for fx in fixes if fx.verified is not False)
+    diff = combined_diff(target, fixes)
     if patch is not None:
         patch.write_text(diff, encoding="utf-8")
         console.print(f"patch written to {patch}", markup=False)

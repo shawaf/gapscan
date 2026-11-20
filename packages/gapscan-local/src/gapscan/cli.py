@@ -37,7 +37,13 @@ from .memory import (
 )
 from .models import Finding, Investigation, ScanResult, Verdict
 from .offline.bundle import BundleError, BundleOptions, build_bundle
-from .offline.fetch import fetch_kb_sources, fetch_owasp
+from .offline.fetch import (
+    fetch_enrichment,
+    fetch_kb_sources,
+    fetch_osv_db,
+    fetch_owasp,
+    fetch_trivy_db,
+)
 from .offline.refresh import download_wheels, refresh_all
 from .offline.update import UpdateError, import_bundle, verify_bundle
 from .pipeline import run_scan
@@ -541,7 +547,8 @@ def doctor(config: ConfigOption = None) -> None:
     if missing:
         console.print(
             f"\n[red]{len(missing)} component(s) missing.[/red] "
-            "Run `gapscan bundle` on a connected machine, then `gapscan update`."
+            "With network: `gapscan data fetch-vulns` for the vulnerability databases. "
+            "Air-gapped: `gapscan bundle` on a connected machine, then `gapscan update`."
         )
         raise typer.Exit(code=1)
     console.print("\n[green]All checks passed.[/green]")
@@ -1079,7 +1086,7 @@ def memory_export_dataset(
     )
 
 
-data_app = typer.Typer(name="data", help="Raw OWASP data store (download, list, show, verify).",
+data_app = typer.Typer(name="data", help="Offline data: OWASP sources and vulnerability databases.",
                        no_args_is_help=True)  # fmt: skip
 app.add_typer(data_app)
 
@@ -1096,6 +1103,29 @@ def data_fetch(config: ConfigOption = None) -> None:
     for name, n in counts.items():
         console.print(f"{name}: {n} files")
     console.print(f"Saved raw files + manifest under {cfg.data.dir / 'owasp'}")
+
+
+@data_app.command("fetch-vulns")
+def data_fetch_vulns(
+    java_db: Annotated[
+        bool, typer.Option("--java-db", help="Also Trivy's Java DB (about 2.6 GB).")
+    ] = False,
+    config: ConfigOption = None,
+) -> None:
+    """Download the vulnerability data a scan checks dependencies against: the OSV and Trivy
+    databases, CISA KEV and EPSS (needs network once; the scan itself stays offline)."""
+    cfg = _load(config)
+    console.print("downloading CISA KEV and EPSS ...")
+    dates = fetch_enrichment(RawStore(cfg.data.dir / "enrichment"))
+    console.print("downloading the OSV database (about 260 MB) ...")
+    osv_date = fetch_osv_db(cfg.scanners.osv.db_dir)
+    console.print("downloading the Trivy database ...")
+    trivy_date = fetch_trivy_db(cfg.scanners.trivy.cache_dir, java_db=java_db)
+    console.print(
+        f"OSV {osv_date}, Trivy {trivy_date}, KEV {dates.get('cisa_kev', '?')}, "
+        f"EPSS {dates.get('epss', '?')}. Check with `gapscan doctor`.",
+        markup=False,
+    )
 
 
 @data_app.command("fetch-kb")

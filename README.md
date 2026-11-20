@@ -232,7 +232,7 @@ most of it comes from deterministic reasoning in the data-flow tracer, not from 
 | [`docs/offline.md`](docs/offline.md), [`docs/packaging.md`](docs/packaging.md) | bundles, verified updates, the Docker image, the desktop app |
 | [`docs/evaluation.md`](docs/evaluation.md) | method, results and failures |
 | [`docs/licenses.md`](docs/licenses.md) | licenses of everything GapScan runs, bundles or measures against |
-| [`SECURITY.md`](SECURITY.md), [`CONTRIBUTING.md`](CONTRIBUTING.md) | reporting vulnerabilities, contributing |
+| [`SECURITY.md`](SECURITY.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), [`CHANGELOG.md`](CHANGELOG.md) | reporting vulnerabilities, contributing, what changed in each release |
 
 ## Development
 

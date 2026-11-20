@@ -1,0 +1,73 @@
+# Changelog
+
+All notable changes to GapScan are listed here. Versions follow [semantic versioning](https://semver.org).
+
+## [1.0.0] - 2026-11-20
+
+The first public release of GapScan: a free, offline security scanner that maps every finding to
+OWASP and backs each one with evidence. **Early alpha**: read the
+[evaluation](https://github.com/shawaf/gapscan/blob/main/docs/evaluation.md) before relying on any number.
+
+### Highlights
+
+- **Scan.** Runs Semgrep, OSV-Scanner, Trivy, Gitleaks, Checkov and Bandit (plus any SARIF file)
+  and merges the results into one finding schema with stable IDs. Secret values are redacted.
+- **Own rule library.** 371 Apache-2.0 Semgrep rules in 9 languages, each with tests, a CWE and a
+  fix-oriented message.
+- **Cross-file data flow.** GapScan's own taint engine follows attacker data through helpers and
+  across files in Java, Python and JavaScript/TypeScript, and shows the whole path as evidence.
+- **Mapped to the standard.** Every finding carries the controls it breaks in OWASP Top 10:2025,
+  ASVS 5.0, API Security Top 10 2023, MASVS and GenAI LLM Top 10 2026. Coverage is shown in three
+  honest states: evidence of failure, checked with no finding, or manual review. Never "passed".
+- **Supply chain.** Dependency reachability, CISA KEV and EPSS enrichment, known-malicious and
+  typosquat packages, container images and infrastructure as code.
+- **Optional local AI review.** A local model (Ollama by default) triages each finding as
+  confirmed, likely, false positive or needs review, explains it and proposes a fix. Output is
+  schema-validated and labeled as AI-generated. Everything works without a model.
+- **Zero-day watch.** `gapscan watch` re-checks saved projects against freshly updated
+  vulnerability data without rescanning, exploited and reachable first, with an optional desktop
+  notification.
+- **Fixes you can check.** `gapscan fix` and `gapscan fix-deps` keep a patch only if an offline
+  rescan shows the gap gone. `gapscan pr` opens the pull request on GitHub or GitLab when you ask.
+- **Report.** One self-contained offline HTML dashboard, plus SARIF, CSV, Markdown, CycloneDX SBOM,
+  JSON and PDF exports.
+- **Local web UI.** `gapscan serve` (loopback only) for projects, scan history and your decisions,
+  in a new GapScan look with dark and light themes.
+- **In your workflow.** `gapscan ci run`, a GitHub Action, a pre-commit hook, GitLab, Jenkins and
+  Azure templates, a VS Code extension and an MCP server for AI coding assistants.
+- **Air-gapped.** Verified offline bundles carry vulnerability data and rules to machines with no
+  network.
+
+### Trust
+
+- No network calls during `scan`. The model endpoint must be localhost or an explicitly configured
+  internal host.
+- The scanned code is read, never executed, built, installed or imported.
+- The scanned project cannot silence the scanners: its ignore files are ignored and inline
+  suppressions are still reported, marked as suppressed.
+
+### Install
+
+GapScan is installed from source for now; there is no PyPI package or signed desktop installer yet.
+
+```bash
+git clone https://github.com/shawaf/gapscan && cd gapscan
+make setup
+uv run gapscan doctor
+uv run gapscan scan ./my-project -o scan.json
+uv run gapscan report scan.json -t ./my-project
+```
+
+Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/) and the scanners on your `PATH`.
+[Ollama](https://ollama.com) only for AI review. See the [README](https://github.com/shawaf/gapscan#quick-start).
+
+### Known limitations
+
+- Cross-file data flow covers Java, Python and JavaScript/TypeScript only; Dart/Flutter detection
+  is still weak.
+- AI verdicts are advisory: the measured gain over a confirm-everything baseline is real but
+  modest. Method and results are in [`docs/evaluation.md`](https://github.com/shawaf/gapscan/blob/main/docs/evaluation.md).
+- GapScan cannot see a vulnerability nobody has disclosed yet in someone else's package. It closes
+  the time between disclosure and a fix, and looks for unknown flaws in your own code.
+
+[1.0.0]: https://github.com/shawaf/gapscan/releases/tag/v1.0.0

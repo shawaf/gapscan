@@ -5,9 +5,13 @@ rescan on a copy decides whether a fix is verified."""
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 from pathlib import Path
 
-from gapscan.depfix import plan_upgrades, propose_dependency_fixes
+import pytest
+
+from gapscan.depfix import combined_diff, plan_upgrades, propose_dependency_fixes
 from gapscan.models import Category, Finding, Severity
 
 
@@ -104,3 +108,39 @@ def test_an_unpinned_requirement_asks_for_a_manual_bump(tmp_path: Path) -> None:
     (tmp_path / "requirements.txt").write_text("requests\n")
     (fix,) = propose_dependency_fixes(tmp_path, [dep("requests", "2.25.1", "2.32.4", "PyPI", "1")])
     assert fix.edits == [] and "without a literal version" in fix.notes[0]
+
+
+def test_two_fixes_in_one_file_make_one_patch_that_applies(tmp_path: Path) -> None:
+    """Each fix's own diff is against the original file; concatenated, the second hunk no longer
+    applies. The combined patch applies every kept edit to the same file."""
+    (tmp_path / "requirements.txt").write_text("django==3.0.0\nrequests==2.19.0\nflask==1.0\n")
+    fixes = propose_dependency_fixes(tmp_path, [
+        dep("django", "3.0.0", "5.2.17", "PyPI", "1"),
+        dep("requests", "2.19.0", "2.33.0", "PyPI", "2"),
+        dep("flask", "1.0", "3.1.3", "PyPI", "3"),
+    ], rescan=lambda copy: [])  # fmt: skip
+    patch = combined_diff(tmp_path, fixes)
+    assert patch.count("+++ b/requirements.txt") == 1
+    for line in ("+django==5.2.17", "+requests==2.33.0", "+flask==3.1.3"):
+        assert line in patch
+    if shutil.which("git") is None:
+        pytest.skip("git not installed")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True, timeout=30)
+    subprocess.run(
+        ["git", "apply", "-"], cwd=tmp_path, input=patch, text=True, check=True, timeout=30
+    )
+    assert (
+        tmp_path / "requirements.txt"
+    ).read_text() == "django==5.2.17\nrequests==2.33.0\nflask==3.1.3\n"
+
+
+def test_combined_patch_leaves_out_fixes_a_rescan_rejected(tmp_path: Path) -> None:
+    (tmp_path / "requirements.txt").write_text("django==3.0.0\nrequests==2.19.0\n")
+    still = dep("requests", "2.19.0", "2.33.0", "PyPI", "2")
+    fixes = propose_dependency_fixes(
+        tmp_path,
+        [dep("django", "3.0.0", "5.2.17", "PyPI", "1"), still],
+        rescan=lambda copy: [still],
+    )
+    patch = combined_diff(tmp_path, fixes)
+    assert "+django==5.2.17" in patch and "+requests" not in patch

@@ -114,7 +114,7 @@ export function Overview({ project, run, reload }: { project: ProjectDetail; run
         <section class="cc-card" style="padding:0" aria-label="Top risks">
           <div style="padding:16px 16px 8px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;align-items:baseline">
             <div><h2 style="margin:0 0 2px">Top {data.top_risks.length} gaps to close first</h2><span class="cc-note">Ranked by severity, verdict confidence and reachability</span></div>
-            <span style="display:flex;gap:10px;align-items:center"><span class="ai-tag">“Why it matters” is AI-generated{data.freshness.model ? ` · ${data.freshness.model}` : ""}</span>
+            <span style="display:flex;gap:10px;align-items:center">{data.freshness.model && <span class="ai-tag">“Why it matters” is AI-generated · {data.freshness.model}</span>}
               <a href="#/findings" onClick={(e) => { e.preventDefault(); navigate("findings"); }}>View all {open}</a></span>
           </div>
           <div class="tbl-wrap" style="border:0;border-top:1px solid var(--line);border-radius:0 0 8px 8px">

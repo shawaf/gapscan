@@ -152,6 +152,26 @@ def test_trivy():
     )
 
 
+def test_trivy_never_phones_home(tmp_path, monkeypatch):
+    """Trivy's version check and telemetry (check.trivy.dev) are a network call: every Trivy run
+    GapScan makes must switch both off."""
+    from gapscan.scanners.trivy import TrivyImageScanner, TrivyScanner
+
+    seen: list[dict[str, str]] = []
+
+    def fake_run(argv, **kw):
+        seen.append(kw["env"])
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    for s in (TrivyScanner(tmp_path), TrivyImageScanner(tmp_path)):
+        s._exec(["trivy", "fs", "."])
+    assert len(seen) == 2
+    for env in seen:
+        assert env["TRIVY_SKIP_VERSION_CHECK"] == "true"
+        assert env["TRIVY_DISABLE_TELEMETRY"] == "true"
+
+
 def test_pick_fix():
     assert pick_fix("3.0.0", "1.11.27, 2.2.9, 3.0.1") == "3.0.1"
     assert pick_fix("4.17.10", ">=4.17.11") == "4.17.11"

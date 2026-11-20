@@ -160,6 +160,15 @@ def unified_diff(changes: dict[str, tuple[str, str]]) -> str:
     return "".join(parts)
 
 
+def combined_diff(root: Path, fixes: list[DependencyFix]) -> str:
+    """One patch for several fixes. Each fix's own `diff` is against the original files, so two
+    fixes in the same manifest would conflict if concatenated (`git apply` rejects the second hunk);
+    here every kept edit is applied to the same copy of each file and diffed once. Fixes a rescan
+    showed do not work are left out."""
+    edits = [e for fx in fixes if fx.verified is not False for e in fx.edits]
+    return unified_diff(_apply(root, edits))
+
+
 def _lockfiles_near(root: Path, manifest: str, ecosystem: str) -> list[str]:
     names = _LOCKS_BY_ECOSYSTEM.get(ecosystem, set())
     folder = (root / manifest).parent

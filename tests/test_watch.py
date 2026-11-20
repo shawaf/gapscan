@@ -82,9 +82,16 @@ def osv_answer(sbom_path: str) -> dict[str, Any]:
                     pkg(
                         "requests", "2.25.1", "PyPI", [vuln("GHSA-new", "CVE-2026-1111", "2.32.4")]
                     ),
-                    # new, and the project calls the vulnerable function
+                    # new, and the project calls the vulnerable function; OSV has it twice
+                    # (PYSEC and GHSA, same CVE): one alert, the GitHub advisory
                     pkg(
-                        "yamlparse", "1.0.0", "PyPI", [vuln("GHSA-yaml", "CVE-2026-2222", "1.0.3")]
+                        "yamlparse",
+                        "1.0.0",
+                        "PyPI",
+                        [
+                            vuln("PYSEC-2026-9", "CVE-2026-2222", "1.0.3"),
+                            vuln("GHSA-yaml", "CVE-2026-2222", "1.0.3"),
+                        ],
                     ),
                 ],
             }

@@ -364,15 +364,20 @@ def fetch_trivy_db(cache_dir: Path, *, java_db: bool = False, timeout_s: int = 1
     """Download Trivy's vulnerability DB (and optionally the large Java DB) with the trivy binary.
     Returns the DB's UpdatedAt date."""
     import json
+    import os
     import subprocess
 
+    from gapscan.scanners.trivy import NO_PHONE_HOME
+
     base = ["trivy", "--cache-dir", str(cache_dir), "image", "--quiet"]
+    env = {**os.environ, **NO_PHONE_HOME}  # download the DB only, no version check or telemetry
     subprocess.run(
-        [*base, "--download-db-only"], check=True, capture_output=True, timeout=timeout_s
+        [*base, "--download-db-only"], check=True, capture_output=True, timeout=timeout_s, env=env
     )  # noqa: S603
     if java_db:
         subprocess.run(
-            [*base, "--download-java-db-only"], check=True, capture_output=True, timeout=timeout_s
-        )  # noqa: S603
+            [*base, "--download-java-db-only"],
+            check=True, capture_output=True, timeout=timeout_s, env=env,
+        )  # noqa: S603  # fmt: skip
     meta = json.loads((cache_dir / "db" / "metadata.json").read_text(encoding="utf-8"))
     return str(meta.get("UpdatedAt", ""))[:10]

@@ -88,9 +88,7 @@ def test_leave_one_out_memories_exclude_the_findings_own_label_and_short_notes()
     from gapscan.evaluation.local import leave_one_out_memories
     from gapscan.memory import retrieve
 
-    own = LocalLabel(
-        "src/a/x.ts", 10, "fs-filename", True, "userId comes from a request header"
-    )
+    own = LocalLabel("src/a/x.ts", 10, "fs-filename", True, "userId comes from a request header")
     sibling = LocalLabel(
         "src/a/y.ts", 20, "fs-filename", True, "userId comes from a request header, unchecked"
     )

@@ -1,6 +1,6 @@
 export interface NavItem { id: string; label: string; icon: string; key?: number; group?: string }
 
-// Grouped by the gap model (ROADMAP 1.2): the gaps themselves, the targets they are measured
+// Grouped by the gap model: the gaps themselves, the targets they are measured
 // against, and the evidence behind them. Route ids stay as they were; a gap is a finding in the engine.
 export const MAIN_NAV: NavItem[] = [
   { id: "overview", label: "Overview", icon: "overview", key: 1, group: "Gaps" },

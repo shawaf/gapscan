@@ -1,4 +1,4 @@
-# AI upgrades (Stage 2)
+# AI upgrades
 
 ## Hardware tiers
 

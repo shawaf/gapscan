@@ -58,6 +58,12 @@ def parse_trivy(data: dict[str, Any]) -> list[Finding]:
     return out
 
 
+# Trivy (0.50+) calls check.trivy.dev on every run for a version check and anonymous telemetry,
+# even with --offline-scan. A scan must make no network call, so both are switched off. Set as
+# environment variables rather than flags so an older Trivy without the flags still runs.
+NO_PHONE_HOME = {"TRIVY_SKIP_VERSION_CHECK": "true", "TRIVY_DISABLE_TELEMETRY": "true"}
+
+
 class TrivyScanner(CommandScanner):
     name = "trivy"
     binary = "trivy"
@@ -68,6 +74,9 @@ class TrivyScanner(CommandScanner):
 
     def is_available(self) -> bool:
         return super().is_available() and self.cache_dir.exists()
+
+    def env(self) -> dict[str, str]:
+        return dict(NO_PHONE_HOME)
 
     def _base(self, target: Path, out: Path, fmt: str) -> list[str]:
         return [
@@ -107,6 +116,9 @@ class TrivyImageScanner(CommandScanner):
 
     def is_available(self) -> bool:
         return super().is_available() and self.cache_dir.exists()
+
+    def env(self) -> dict[str, str]:
+        return dict(NO_PHONE_HOME)
 
     def run(self, target: Path, workdir: Path) -> list[Finding]:
         """`target` is the image archive."""

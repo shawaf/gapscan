@@ -134,6 +134,21 @@ def _known(scan: ScanResult) -> tuple[set[tuple[str, str]], int]:
     return keys, len(advisories)
 
 
+def _one_per_cve(findings: list[Finding]) -> list[Finding]:
+    """OSV often has two advisories for one vulnerability (a GHSA and a PYSEC record with the same
+    CVE): report it once, preferring the GitHub advisory, so one disclosure is one alert."""
+    ordered = sorted(findings, key=lambda f: not f.rule_id.startswith("GHSA-"))
+    seen: set[tuple[str, str]] = set()
+    kept: list[Finding] = []
+    for f in ordered:
+        keys = {(f.package or "", c) for c in f.cve} or {(f.package or "", f.rule_id)}
+        if keys & seen:
+            continue
+        seen |= keys
+        kept.append(f)
+    return kept
+
+
 def _declared_in(scan: ScanResult, components: list[dict[str, Any]]) -> dict[str, str]:
     """package -> the file the saved scan saw it in (its own dependency findings, or the SBOM's
     `gapscan:declared_in` property for libraries declared in Gradle build files)."""
@@ -213,6 +228,7 @@ def watch_scan(
         and (f.package, f.rule_id) not in known
         and not any((f.package, c) in known for c in f.cve)
     ]
+    fresh = _one_per_cve(fresh)
     if enrichment:
         for f in fresh:
             if f.cve:

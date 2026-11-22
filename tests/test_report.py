@@ -294,6 +294,9 @@ def test_report_without_triage_still_builds():
     r = build_report(scan, [], None, config=Config(), target=TARGET)
     assert r.counts.llm_triaged == 0 and r.counts.not_triaged == 67 and r.narrative is None
     assert all(x.verdict == "not_triaged" for x in r.findings)
+    # No model ran, so the report names none (it used to name the configured model, and the UI then
+    # labeled scanner text as "AI-generated" by that model).
+    assert r.freshness.model == ""
 
 
 # --- embedding -------------------------------------------------------------------------

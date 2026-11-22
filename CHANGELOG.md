@@ -2,6 +2,26 @@
 
 All notable changes to GapScan are listed here. Versions follow [semantic versioning](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+
+- **No network call during a scan.** Trivy contacted `check.trivy.dev` (version check and
+  telemetry) on every run, even offline. GapScan now switches both off for every Trivy call.
+- **`gapscan pr` with dependency fixes.** When two fixes changed the same manifest, `fix-deps`
+  wrote a patch whose second hunk did not apply, so `gapscan pr` rejected it. The patch is now one
+  diff per file with every fix applied.
+- **One watch alert per vulnerability.** A CVE that OSV lists as both a GHSA and a PYSEC advisory
+  was reported twice; it is now reported once.
+- **No model named when none ran.** Without AI review, the report named the configured model and
+  the web UI labeled the top gaps "AI-generated". Both now name a model only when one reviewed
+  the findings.
+
+### Added
+
+- `gapscan data fetch-vulns`: downloads the OSV and Trivy databases, CISA KEV and EPSS in one step
+  (the README's Quick start used to leave dependency scanning without data).
+
 ## [1.0.0] - 2026-11-20
 
 The first public release of GapScan: a free, offline security scanner that maps every finding to

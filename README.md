@@ -195,8 +195,8 @@ AI review. The Docker image bundles the scanners.
 git clone https://github.com/shawaf/gapscan && cd gapscan
 make setup                       # Python deps via uv
 cp config/gapscan.example.toml gapscan.toml
+uv run gapscan data fetch-vulns  # needs network once: OSV and Trivy databases, KEV, EPSS
 uv run gapscan doctor            # what is installed, what is missing
-uv run gapscan data fetch        # needs network once: OWASP data into data/
 
 uv run gapscan scan ./my-project -o scan.json
 uv run gapscan report scan.json -t ./my-project

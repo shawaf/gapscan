@@ -157,7 +157,7 @@ Hand-written by the same team that wrote the prompts and rules, so it is biased 
 
 `gapscan eval run --targets local` evaluates GapScan on your own projects using verdicts a person confirmed by reading the code. Setup: copy `eval/local.example/` to `eval/local/` (gitignored) and list each project and a labels file (`file`, `line`, `rule`, `vulnerable`, `note`). **No code is copied**; the paths, labels and notes never enter the repository. Findings without a label are reported as unlabeled and never counted right or wrong.
 
-First use: two internal projects (a Nest.js backend, `src/`, 28 findings; an Android app, `app/src/main`, 5 findings), 27 findings labeled by reading the code. Scanner precision on the labeled findings: 59% (backend) and 20% (Android; most hits were a launcher activity and code-quality rules in a data-analysis script).
+First use: two private projects (a web backend, 28 findings; an Android app, 5 findings), 27 findings labeled by reading the code. Scanner precision on the labeled findings: 59% (backend) and 20% (Android; most hits were a launcher activity and code-quality rules in a data-analysis script).
 
 | Model review (qwen3-coder:30b) | Prompts v2 (before) | Prompts v3 (after) |
 |---|---|---|
@@ -167,7 +167,7 @@ First use: two internal projects (a Nest.js backend, `src/`, 28 findings; an And
 | Android: false alarms removed | 100% | 50% |
 
 **What went wrong with v2 (a failure the labeled fixtures did not show):**
-- Eight path-traversal findings were dismissed at 95-100% confidence. The model asserted that validation existed ("the key is parsed", "the request is authenticated", "`join` is a safe function") without having seen any. In fact the URL parameter was only validated as a non-empty string and flowed into `join`, `readFile`, `writeFile` and `rm`.
+- Eight path-traversal findings were dismissed at 95-100% confidence. The model asserted that validation existed ("the key is parsed", "the request is authenticated", "`join` is a safe function") without having seen any. In fact the input was never validated for this use and reached file-system calls unchanged.
 - It trusted a comment over the code: a network config whose comment says cleartext is disallowed actually permits it, and the model dismissed the finding as "intentional for development".
 
 **Prompts v3** require naming the specific neutralizing code that was seen (parsing, authentication and standard-library calls do not count), tell the model to trace a parameter back to the code that receives the input with `find_callers`, say that comments describe intent and the code is what runs, and say that an unreachable origin means `needs_review`.
@@ -207,7 +207,7 @@ On the Benchmark, the weak-algorithm categories are now exact (crypto, hash, wea
 
 `context/flow.py` traces, by name, where the values used at the flagged call come from: backwards through assignments, destructuring, same-file helpers (a helper that only returns literals counts as a constant), closures and object spreads, then through callers (up to 8 hops) until a literal, a sanitizing call, or request input (route-handler parameters, `@Param`-style decorators, `req.query`, `getRequest()`, headers). The model sees it as a "DATA FLOW" section; a status (`request`, `sanitized`, `constant`, `unknown`) is computed in Python. It only parses text, never raises, and says it is heuristic.
 
-**It works on real code, and it corrected me.** On a private Nest.js backend the tracer reached the request through 9 hops (a logging interceptor reads the user id from `request.body.user` or the `x-user-id` header, and that value ends up in `join(bufferDir, userId, ...)` followed by `writeFile`). My own hand label had named a different source (the `:userId` URL parameter), which was wrong: the finding is real, but the source is a client-controlled header or body field, which is worse. The labels were corrected.
+**It works on real code, and it corrected me.** On a private backend the tracer followed a value back to the request through 9 hops, across an interceptor. My own hand label had named a different source, which was wrong: the finding is real, but the actual source was more directly client-controlled than the one I had labeled. The labels were corrected.
 
 **Two policies were tried; one was removed.**
 - Kept: if the model confirms a finding but every value traces to a literal, the trace overrules it (never triggered on our data).

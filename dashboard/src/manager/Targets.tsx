@@ -41,7 +41,7 @@ const GROUP_ICON: Record<string, IconName> = { standards: "doc", industry: "hots
 export function catalogDomains(cat: ComplianceCatalog): Domain[] {
   return cat.groups.map((g) => ({
     id: g.id, label: g.label, icon: GROUP_ICON[g.id] ?? "compliance", ready: false, text: g.text,
-    source: `ROADMAP 5.2 · ${g.planned} frameworks${g.wave_1 ? `, ${g.wave_1} in the first wave` : ""}`,
+    source: `Planned · ${g.planned} frameworks${g.wave_1 ? `, ${g.wave_1} in the first wave` : ""}`,
     targets: cat.frameworks.filter((f) => f.group === g.id && f.status === "planned").map((f) => ({
       id: f.id, name: f.name, edition: "", state: "planned" as const, note: f.evidence, region: f.region, wave: f.wave, restricted: f.text === "restricted",
     })),

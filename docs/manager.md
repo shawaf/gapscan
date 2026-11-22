@@ -84,7 +84,7 @@ only when you press Connect, open the project picker or press Send, never during
 follows a redirect, and goes only to the address you saved. The sidebar says when a workspace is
 connected. **Disconnect** deletes the token.
 
-## Limits (Stage 2 work)
+## Limits
 Single user, single machine, no accounts or roles, one scan at a time, SQLite. "Build a bundle" from the design is not built: a bundle is made on a connected machine with `gapscan bundle`. Run provenance ("started by") is not recorded because there are no users. The
 engine, data model and dashboard stay separate so a multi-user server can replace this layer.
 

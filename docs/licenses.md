@@ -4,8 +4,7 @@ GapScan itself is licensed under the Apache License 2.0 (see `LICENSE`). Everyth
 
 **Verified** means checked against the project's own
 license file, package metadata or model card on 2026-10-01; **unverified** means not yet
-confirmed. This is an engineering register, not legal advice: a legal review is still
-required before Stage 2 (see ROADMAP).
+confirmed. This is an engineering register, not legal advice.
 
 ## Tools GapScan runs (separate processes, not linked)
 
@@ -94,8 +93,7 @@ The knowledge-base index (`data/kb/`, not committed) is adapted from CC BY-SA ma
 `packages/gapscan-security/src/gapscan/owasp/mappings/` contains data derived from OWASP material; see the `NOTICE.md`
 there. Reports must credit OWASP as the source of category and requirement text.
 
-## Still to do (ROADMAP section 3)
-- [ ] Legal review of the whole register before Stage 2.
+## Still to do
 - [ ] Generate and publish an SBOM of GapScan itself in CI. `make sbom` writes a CycloneDX file locally (40 components from `uv.lock`), but its license fields are empty because Trivy reads the lockfile only, so licenses still come from this register.
 - [ ] Replace Semgrep-community-rule dependencies with GapScan's own rules; until then the
       recorded Semgrep output in `tests/data/semgrep.sarif` carries only rule ids, short

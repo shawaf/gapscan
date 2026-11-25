@@ -1,4 +1,4 @@
-/* GapScan design system: the default look. Dark first, one accent, three coverage states (gap,
+/* GapScan design system (light and dark). Dark first, one accent, three coverage states (gap,
    checked with no finding, needs a person) and a label beside every color. The brand fonts (Space
    Grotesk, Inter, JetBrains Mono) are used only when installed; nothing is loaded from the network. */
 :root {

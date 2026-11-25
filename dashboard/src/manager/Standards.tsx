@@ -94,7 +94,7 @@ export function AsvsPage() {
                   <tr class="chapter-row click" onClick={() => setOpenChapter(openChapter === name ? "" : name)} aria-expanded={openChapter === name}>
                     <td><b>{openChapter === name ? "▾" : "▸"} {name}</b></td><td class="num">{c.total}</td>
                     <td><div class="seg3" role="img" aria-label={`${c.fail} failure, ${c.ok} no finding, ${c.manual} manual`}><i class="s-fail" style={`flex:${c.fail}`} /><i class="s-ok" style={`flex:${c.ok}`} /><i class="s-man" style={`flex:${c.manual}`} /></div></td>
-                    <td class="num" style={c.fail ? "color:var(--sev-high);font-weight:700" : "color:var(--text-3)"}>{c.fail}</td><td class="num">{c.ok}</td><td class="num">{c.manual}</td>
+                    <td class="num" style={c.fail ? "color:var(--fail-text, var(--sev-high));font-weight:700" : "color:var(--text-3)"}>{c.fail}</td><td class="num">{c.ok}</td><td class="num">{c.manual}</td>
                   </tr>
                   {openChapter === name && inChapter(name).map((r) => (
                     <tr class="req" key={r.id}>

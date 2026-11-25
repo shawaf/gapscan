@@ -21,6 +21,13 @@ All notable changes to GapScan are listed here. Versions follow [semantic versio
 
 - `gapscan data fetch-vulns`: downloads the OSV and Trivy databases, CISA KEV and EPSS in one step
   (the README's Quick start used to leave dependency scanning without data).
+- **Midnight look**, now the default for the report and the web UI: a dark-only control-room style
+  with glass-edged cards, a floating sidebar, green status dots and monospace logs. The GapScan,
+  Soft and Glassy looks stay one click away on the Look switch (or press `u`).
+
+### Removed
+
+- The **Classic** look. Anyone who had it saved now gets the default look.
 
 ## [1.0.0] - 2026-11-20
 

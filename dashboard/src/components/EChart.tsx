@@ -14,10 +14,10 @@ const PALETTES = {
     sev: { critical: "#e8603c", high: "#e9a23b", medium: "#7d8fe8", low: "#8a97a8", info: "#6a7889" },
     accent: "#7d8fe8", neutral: "#8a97a8", bad: "#e8803c", good: "#5f86b0", treemapBorder: "transparent",
   },
-  // Okabe-Ito based, as in the original design.
-  classic: {
-    sev: { critical: "#d55e00", high: "#e69f00", medium: "#c8b900", low: "#56b4e9", info: "#8a94a6" },
-    accent: "#4b7bd8", neutral: "#aab4c4", bad: "#d55e00", good: "#1b7a46", treemapBorder: "#fff",
+  // Midnight: the dark-only look. Severities from its tokens; healthy is green, as in its status dots.
+  midnight: {
+    sev: { critical: "#ff8a65", high: "#ffc266", medium: "#b7c5ff", low: "#8b95a3", info: "#4a5361" },
+    accent: "#9db0ff", neutral: "#8b95a3", bad: "#ff8a65", good: "#6fd39b", treemapBorder: "transparent",
   },
   // Soft pastel tones that read on both the light and the dark surface; every chart also labels its values.
   soft: {
@@ -99,7 +99,7 @@ export function EChart({ option, height, label, tall = false }: { option: EChart
     if (!c) return;
     const apply = () => c.setOption({
       backgroundColor: "transparent", textStyle: { color: cssVar("--text", "#22263a"), fontFamily: "inherit" },
-      animation: false, ...(uiStore.get() === "soft" ? soften : uiStore.get() === "gapscan" ? tone : (o: Opt) => o)(option as Opt, cssVar("--line", "#e4e7f0"), cssVar("--muted", "#5f6580"), cssVar("--text", "#22263a")),
+      animation: false, ...(uiStore.get() === "soft" ? soften : (uiStore.get() === "gapscan" || uiStore.get() === "midnight") ? tone : (o: Opt) => o)(option as Opt, cssVar("--line", "#e4e7f0"), cssVar("--muted", "#5f6580"), cssVar("--text", "#22263a")),
     } as EChartsCoreOption, true);
     apply();
     const mq = window.matchMedia("(prefers-color-scheme: dark)");

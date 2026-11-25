@@ -1,0 +1,108 @@
+/* Control Center, Midnight edition: a floating sidebar and glass-edged cards on dark ink.
+   Every rule is scoped to [data-ui="midnight"]. Tokens come from ../styles-midnight.css. */
+:root[data-ui="midnight"] { --r: 22px; --rs: 10px; --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+:root[data-ui="midnight"] .cc { gap: 12px; padding: 12px; background: var(--bg); }
+
+/* sidebar */
+:root[data-ui="midnight"] .cc-side { background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r); box-shadow: inset 0 1px 0 var(--sheen); top: 12px; height: calc(100vh - 24px); padding: 14px; }
+:root[data-ui="midnight"] .cc-brand .wordmark { font-family: var(--display); font-size: 20px; }
+:root[data-ui="midnight"] .cc-switch > button { background: var(--sunken); border: 1px solid var(--hair); border-radius: 14px; }
+:root[data-ui="midnight"] .cc-nav a { border-radius: 12px; min-height: 40px; color: var(--text-2); font-size: 14px; }
+:root[data-ui="midnight"] .cc-nav a:hover { background: var(--sunken); color: var(--text); }
+:root[data-ui="midnight"] .cc-nav a[aria-current="page"] { background: var(--raised); color: var(--text); }
+:root[data-ui="midnight"] .cc-nav a[aria-current="page"] svg { color: var(--text); }
+:root[data-ui="midnight"] .cc-group { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--text-3); padding: 16px 10px 6px; }
+:root[data-ui="midnight"] .cc-key { border-radius: 6px; border-color: transparent; background: var(--sunken); }
+:root[data-ui="midnight"] .cc-sep { background: var(--hair); }
+:root[data-ui="midnight"] .cc-offline { border-radius: 14px; background: var(--sunken); }
+
+/* top bar */
+:root[data-ui="midnight"] .cc-top { background: var(--bg); border-bottom: 0; padding: 0 12px; }
+:root[data-ui="midnight"] .cc-search { background: var(--sunken); border-color: var(--hair); border-radius: 12px; min-height: 38px; }
+:root[data-ui="midnight"] .cc-pill { background: var(--surface); border-color: var(--hair); }
+:root[data-ui="midnight"] .cc-pill .mini { background: var(--line-strong); } :root[data-ui="midnight"] .cc-pill .mini i { background: var(--text); }
+:root[data-ui="midnight"] .cc-seg { border: 0; border-radius: 999px; background: var(--sunken); padding: 3px; gap: 2px; }
+:root[data-ui="midnight"] .cc-seg button { border-left: 0; border-radius: 999px; min-height: 28px; color: var(--text-2); }
+:root[data-ui="midnight"] .cc-seg button[aria-pressed="true"], :root[data-ui="midnight"] .cc-seg button[aria-checked="true"] { background: var(--raised); color: var(--text); }
+:root[data-ui="midnight"] .cc-body { padding: 16px 12px 24px; }
+:root[data-ui="midnight"] .cc-h h1 { font-family: var(--display); font-size: 28px; line-height: 34px; letter-spacing: -0.01em; }
+
+/* surfaces */
+:root[data-ui="midnight"] .cc-card, :root[data-ui="midnight"] .cc-strip, :root[data-ui="midnight"] .fx-filters, :root[data-ui="midnight"] .fx-table,
+:root[data-ui="midnight"] .tbl-wrap, :root[data-ui="midnight"] .state3 > div, :root[data-ui="midnight"] .skel, :root[data-ui="midnight"] .treemap {
+  background: var(--surface); border-color: var(--hair); border-radius: var(--r); box-shadow: inset 0 1px 0 var(--sheen);
+}
+:root[data-ui="midnight"] .cc-card { padding: 20px; }
+:root[data-ui="midnight"] .cc-card.dom { --cp: 20px; }
+:root[data-ui="midnight"] .cc-card .tbl-wrap, :root[data-ui="midnight"] .cc-card .cc-card { background: var(--sunken); box-shadow: none; border-radius: 16px; }
+:root[data-ui="midnight"] .cc-card.live { border-width: 1px; border-color: var(--accent); box-shadow: var(--ring); }
+:root[data-ui="midnight"] .cc-card > h2, :root[data-ui="midnight"] .cc-ch { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text-2); }
+:root[data-ui="midnight"] .stat3 > div { background: var(--sunken); border-color: transparent; border-radius: 16px; }
+:root[data-ui="midnight"] .fd-decide, :root[data-ui="midnight"] .fd-box, :root[data-ui="midnight"] .fd-code, :root[data-ui="midnight"] .cc-scanners,
+:root[data-ui="midnight"] .fd-banner, :root[data-ui="midnight"] .cc-err { border-radius: 14px; border-color: var(--hair); }
+:root[data-ui="midnight"] .logbox { background: var(--sunken); border: 0; border-radius: 16px; padding: 14px 18px; font-size: 13px; line-height: 1.9; }
+:root[data-ui="midnight"] .fd-ai { border-radius: 14px; border-style: solid; border-color: transparent; background: var(--accent-weak); }
+
+/* popovers, drawers, dialogs */
+:root[data-ui="midnight"] .cc-menu, :root[data-ui="midnight"] .dd-panel, :root[data-ui="midnight"] .cc-cmd, :root[data-ui="midnight"] .dlg { background: var(--surface); border-color: var(--hair); border-radius: 18px; }
+:root[data-ui="midnight"] .cc-menu button, :root[data-ui="midnight"] .cc-menu a, :root[data-ui="midnight"] .cc-cmd li, :root[data-ui="midnight"] .dd-list label { border-radius: 10px; }
+:root[data-ui="midnight"] .cc-drawer-bg { background: rgba(5, 7, 10, 0.55); }
+:root[data-ui="midnight"] .cc-drawer { top: 12px; right: 12px; bottom: 12px; width: min(720px, calc(100vw - 24px)); background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r); overflow: hidden; box-shadow: var(--drawer-shadow), inset 0 1px 0 var(--sheen); }
+:root[data-ui="midnight"] .cc-drawer.fd { width: min(780px, calc(100vw - 24px)); }
+
+/* controls */
+:root[data-ui="midnight"] .cc-input, :root[data-ui="midnight"] .cc-select, :root[data-ui="midnight"] .fx-search, :root[data-ui="midnight"] .dd-btn,
+:root[data-ui="midnight"] .dlg textarea { background: var(--sunken); border-color: var(--hair); border-radius: var(--rs); min-height: 36px; }
+:root[data-ui="midnight"] .cc-input:focus, :root[data-ui="midnight"] .cc-select:focus, :root[data-ui="midnight"] .fx-search:focus-within, :root[data-ui="midnight"] .dlg textarea:focus { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+:root[data-ui="midnight"] .btn { background: var(--sunken); border-color: rgba(255, 255, 255, 0.10); border-radius: var(--rs); }
+:root[data-ui="midnight"] .btn:hover { background: var(--raised); }
+:root[data-ui="midnight"] .btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+:root[data-ui="midnight"] .btn.ghost { background: none; border-color: transparent; }
+:root[data-ui="midnight"] .cc-chip, :root[data-ui="midnight"] .chip2 { border-color: var(--hair); background: var(--sunken); }
+:root[data-ui="midnight"] .cc-chip[aria-pressed="true"] { background: var(--raised); color: var(--text); border-color: transparent; }
+:root[data-ui="midnight"] .cc-toggle { border-color: var(--hair); }
+:root[data-ui="midnight"] .kbd { border-radius: 6px; border-color: var(--hair); background: var(--sunken); }
+
+/* badges and pills */
+:root[data-ui="midnight"] .badge2, :root[data-ui="midnight"] .sev2, :root[data-ui="midnight"] .chip2, :root[data-ui="midnight"] .fx-chip, :root[data-ui="midnight"] .ai-tag { border-radius: 999px; padding-left: 10px; padding-right: 10px; }
+:root[data-ui="midnight"] .fx-chip { padding-right: 6px; }
+:root[data-ui="midnight"] .vpill { border-color: var(--hair); background: var(--sunken); }
+:root[data-ui="midnight"] .ai-tag { border-style: solid; border-color: transparent; }
+
+/* tables and lists */
+:root[data-ui="midnight"] .tbl th, :root[data-ui="midnight"] .fx-head { background: var(--sunken); text-transform: none; letter-spacing: 0; font-size: 12px; }
+:root[data-ui="midnight"] .tbl td { border-color: var(--hair); }
+:root[data-ui="midnight"] .tbl tr:hover td { background: var(--sunken); }
+:root[data-ui="midnight"] .fx-item.cur { outline: 0; background: var(--raised); box-shadow: none; }
+
+/* meters: grey tracks with a white lead, as in the stat tiles */
+:root[data-ui="midnight"] .bar2, :root[data-ui="midnight"] .bar2 > i, :root[data-ui="midnight"] .stack, :root[data-ui="midnight"] .seg3,
+:root[data-ui="midnight"] .verd .t, :root[data-ui="midnight"] .verd .t i, :root[data-ui="midnight"] .scale i, :root[data-ui="midnight"] .conf i { border-radius: 999px; }
+:root[data-ui="midnight"] .bar2 { background: var(--line-strong); } :root[data-ui="midnight"] .bar2 > i { background: var(--text); }
+:root[data-ui="midnight"] .stack, :root[data-ui="midnight"] .seg3 { gap: 2px; }
+:root[data-ui="midnight"] .scale { gap: 4px; } :root[data-ui="midnight"] .scale i.on { background: var(--text); }
+:root[data-ui="midnight"] .grade-box { border: 0; border-radius: 16px; background: var(--sunken); }
+:root[data-ui="midnight"] .pipe .st.done .dot { background: var(--ok); border-color: var(--ok); color: var(--on-accent); }
+
+/* standards heat tiles and the hotspot treemap */
+:root[data-ui="midnight"] .tile { border-top-color: var(--hair); border-right-color: var(--hair); border-bottom-color: var(--hair); border-radius: 16px; }
+:root[data-ui="midnight"] .tile.none { background: var(--sunken); }
+:root[data-ui="midnight"] .tm { border: 3px solid var(--surface); border-radius: 12px; }
+
+@media (max-width: 860px) {
+  :root[data-ui="midnight"] .cc { padding: 0; gap: 0; }
+  :root[data-ui="midnight"] .cc-side { position: static; height: auto; border-radius: 0; border: 0; border-bottom: 1px solid var(--hair); }
+}
+
+/* match the design boards: coverage in gap coral, no-issue steel blue and needs-a-person purple;
+   big numbers in the display face; counts in the sidebar as plain text */
+:root[data-ui="midnight"] .s-fail { background: var(--gap); }
+:root[data-ui="midnight"] .s-ok { background: var(--bar-clear); }
+:root[data-ui="midnight"] .s-man { background: var(--bar-review); }
+:root[data-ui="midnight"] .score .n, :root[data-ui="midnight"] .grade-box, :root[data-ui="midnight"] .stat3 .v,
+:root[data-ui="midnight"] .tile .n, :root[data-ui="midnight"] .state3 .v { font-family: var(--display); font-weight: 600; letter-spacing: -0.02em; }
+:root[data-ui="midnight"] .score .n { font-size: 52px; }
+:root[data-ui="midnight"] .stat3 .v, :root[data-ui="midnight"] .state3 .v { font-size: 30px; line-height: 36px; }
+:root[data-ui="midnight"] .cc-nav .cc-key { background: none; border: 0; color: var(--text-3); font-family: var(--font); font-size: 13px; }
+:root[data-ui="midnight"] .tbl td a:not(.btn) { color: var(--text); text-decoration: none; font-weight: 500; }
+:root[data-ui="midnight"] .tbl td a:not(.btn):hover { text-decoration: underline; }

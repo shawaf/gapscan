@@ -5,6 +5,7 @@ import "./manager.css";
 import "./manager-soft.css";
 import "./manager-glass.css";
 import "./manager-gapscan.css";
+import "./manager-midnight.css";
 
 initUi();
 

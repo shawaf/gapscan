@@ -4,6 +4,7 @@ import { api, ApiError } from "./api";
 import type { FsListing, GitHead, Project } from "./api";
 import { ConfirmDialog, Err, Grade, Segmented, StatusBadge } from "./common";
 import { Icon } from "./icons";
+import { projectPage } from "./Targets";
 import { useLoad, when } from "./useApi";
 import { navigate } from "../store";
 
@@ -35,7 +36,7 @@ export function Home({ projects, error, reload }: { projects: Project[] | null; 
     <>
       <div class="cc-h patch-tip" style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
         {empty && <Patch state="greet" size={96} />}<div style="flex:1"><h1>{empty ? "Welcome to GapScan" : "Projects"}</h1>
-          <p>{empty ? "Add the folder of a project to measure it against its target standards and find its gaps. In local mode everything stays on this computer and nothing in the folder is executed." : "Pick a project to open its features and scans, or add a new one. Each project is measured against OWASP ASVS 5.0 and Top 10:2025. Only folders registered here are ever scanned."}</p></div>
+          <p>{empty ? "Add the folder of a project to measure it against its target standards and find its gaps. In local mode everything stays on this computer and nothing in the folder is executed." : "Pick a project to see its gaps. Only folders you add here are ever scanned."}</p></div>
         {!empty && <button class="btn primary" onClick={() => setCreating(true)} aria-label="Add a new project"><Icon name="plus" size={14} /> New project</button>}
       </div>
       <Err text={error || msg} />
@@ -51,7 +52,7 @@ export function Home({ projects, error, reload }: { projects: Project[] | null; 
           {view === "table" && active.length > 0 && (
             <section class="cc-card" style="padding:0;margin-bottom:16px"><div class="tbl-wrap" style="border:0"><table class="tbl"><thead><tr><th>Project</th><th>Folder</th><th>Grade</th><th class="num">Open gaps</th><th>Last run</th><th /></tr></thead><tbody>
               {active.map((p) => (
-                <tr key={p.id} class="click" onClick={() => navigate("features", null, String(p.id))}>
+                <tr key={p.id} class="click" onClick={() => navigate(projectPage(), null, String(p.id))}>
                   <td><b>{p.name}</b></td><td class="mono" style="font-size:12px">{p.path}</td>
                   <td>{p.active ? <StatusBadge s="running" /> : <Grade g={p.latest_done?.grade ?? null} n={p.latest_done?.score ?? null} />}</td>
                   <td class="num">{p.latest_done?.open_findings ?? "-"}</td><td>{p.latest ? when(p.latest.finished_at) : "Never scanned"}</td>
@@ -63,10 +64,10 @@ export function Home({ projects, error, reload }: { projects: Project[] | null; 
           {view === "cards" && (
             <div class="cc-grid g2">
               {active.map((p) => (
-                <a key={p.id} class="cc-card" href={`#/p/${p.id}/features`} style="text-decoration:none;color:inherit;display:block">
+                <a key={p.id} class="cc-card" href={`#/p/${p.id}/${projectPage()}`} style="text-decoration:none;color:inherit;display:block">
                   <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
                     <div><b style="font-size:15px">{p.name}</b><div class="mono cc-note" style="word-break:break-all">{p.path}</div></div>
-                    {p.active ? <StatusBadge s="running" /> : <span style="font-size:18px"><Grade g={p.latest_done?.grade ?? null} n={p.latest_done?.score ?? null} /></span>}
+                    {p.active ? <StatusBadge s="running" /> : <span style="font-size:18px;white-space:nowrap"><Grade g={p.latest_done?.grade ?? null} n={p.latest_done?.score ?? null} /></span>}
                   </div>
                   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px"><p class="cc-note" style="margin:0">{p.latest_done ? `${p.latest_done.open_findings} open gaps of ${p.latest_done.findings} found` : "Never scanned"}</p>
                     <span style="display:flex;gap:4px"><button class="btn ghost sm" onClick={(e) => { e.preventDefault(); e.stopPropagation(); void archive(p, true); }} aria-label={`Archive project ${p.name}`}>Archive</button>

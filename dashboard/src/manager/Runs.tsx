@@ -5,6 +5,7 @@ import type { GitRefs, Models, ProjectDetail, QueueRun, Scan, ScannerAvail, Sett
 import { ConfirmDialog, Drawer, Err, Grade, Pipeline, Segmented, StatusBadge, duration, elapsed, presetLabel, stepLabel, stepsFor } from "./common";
 import { Icon, Spinner } from "./icons";
 import { fetchScan, useLoad, when } from "./useApi";
+import { LogLines } from "./tiles";
 import { SendToWorkspace } from "./Workspace";
 import { VERDICT_LABEL } from "../format";
 import type { VerdictKey } from "../types";
@@ -102,6 +103,7 @@ export function Runs({ project, queue, reload }: { project: ProjectDetail; queue
               </select>
               <p class="cc-note" style="margin-top:6px">{base ? <>Scans everything, then keeps only findings on lines your branch changed since <code class="mono">{base}</code> (a read-only <code class="mono">git diff</code>).</> : "Reports every finding in the folder."}</p></label>
           )}
+          <details class="mx-opts"><summary>More options · {scanners.data ? `${chosen.size} scanners` : "checking scanners"}, ASVS level {asvs}</summary>
           <div class="cc-field"><span class="lbl" style="display:flex;justify-content:space-between">Scanners <span class="cc-note">{available.length} of {scanners.data?.length ?? 6} available</span></span>
             <div class="cc-scanners">
               {scanners.data?.map((s) => (
@@ -137,6 +139,7 @@ export function Runs({ project, queue, reload }: { project: ProjectDetail; queue
             </select></label>
           <div class="cc-field"><span class="lbl">ASVS level</span>
             <Segmented block label="ASVS level" value={String(asvs)} onChange={(v) => setAsvs(Number(v))} options={[{ id: "1", label: "L1" }, { id: "2", label: "L2" }, { id: "3", label: "L3" }]} /></div>
+          </details>
           <div style="border-top:1px solid var(--line);padding-top:12px">
             <p class="cc-note" style="display:flex;gap:8px;margin-bottom:10px"><Icon name="info" size={14} />{ahead ? `${live ? `Run #${live.id} is in progress` : "Runs are waiting"}, so this run joins the queue at position ${ahead + 1}.` : "Nothing is running, so this run starts now."}{doneRuns[0] ? ` The last run took ${duration(doneRuns[0].started_at, doneRuns[0].finished_at)}.` : ""}</p>
             <div style="display:flex;gap:8px"><button class="btn primary" style="flex:1" disabled={busy || project.archived || !scanners.data || chosen.size === 0} onClick={start}>{preset === "dry" ? "Show the plan" : ahead ? "Add to queue" : "Start run"}</button><button class="btn" onClick={reset}>Reset</button></div>
@@ -209,6 +212,7 @@ function LiveRun({ run, onOpen, onCancel }: { run: Scan; project: ProjectDetail;
   const [, tick] = useState(0);
   useEffect(() => { const t = window.setInterval(() => tick((n) => n + 1), 1000); return () => window.clearInterval(t); }, []);
   const v = run.stats.verdicts ?? {};
+  const log = useLoad(() => fetchScan(run.id), [run.id], (s) => ACTIVE.includes(s.status), 2000);
   const pct = run.progress_total ? Math.round((100 * run.progress_done) / run.progress_total) : 0;
   const triaging = run.phase === "triaging";
   return (
@@ -219,6 +223,8 @@ function LiveRun({ run, onOpen, onCancel }: { run: Scan; project: ProjectDetail;
         <b style="font-family:var(--mono)">{elapsed(run)}</b>
       </div>
       <Pipeline run={run} />
+      {run.stats.scanners && run.stats.scanners.length > 0 && <div class="mx-list" style="margin-bottom:12px">{run.stats.scanners.map((s) => (
+        <div class="mx-row" key={s.name}><span class="mx-dot" style={`background:var(${s.status === "ok" ? "--ok" : "--sev-high-fill"})`} /><span class="tx"><span>{s.name}</span></span><span class="end">{s.findings} · {s.seconds.toFixed(1)} s</span></div>))}</div>}
       {triaging && (
         <>
           <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><b>AI review · {run.progress_done} of {run.progress_total} findings</b>
@@ -228,8 +234,9 @@ function LiveRun({ run, onOpen, onCancel }: { run: Scan; project: ProjectDetail;
         </>
       )}
       {!triaging && <p class="cc-note" style="display:flex;gap:8px;align-items:center"><Spinner />{stepLabel(run)}</p>}
+      {log.data?.log && <div style="margin-top:12px"><LogLines text={log.data.log} tail={12} /></div>}
       <div style="display:flex;justify-content:space-between;margin-top:14px">
-        <button class="btn" onClick={onOpen}>Open details and live log</button><button class="btn warn" onClick={onCancel}>Cancel run</button>
+        <button class="btn" onClick={onOpen}>Open details</button><button class="btn warn" onClick={onCancel}>Cancel run</button>
       </div>
     </section>
   );

@@ -6,6 +6,8 @@ import { Icon } from "./icons";
 import { Memories } from "./Memories";
 import { useLoad } from "./useApi";
 import { WorkspaceCard } from "./Workspace";
+import { setTheme, setUi, themeStore, UI_LABEL, UI_ORDER, uiStore, useStore } from "../store";
+import type { Theme, Ui } from "../store";
 
 export function SettingsPage({ project }: { project: { id: number; name: string } | null }) {
   const models = useLoad(() => api<Models>("GET", "/api/models"), []);
@@ -16,6 +18,8 @@ export function SettingsPage({ project }: { project: { id: number; name: string 
     try { await api("PUT", "/api/settings", patch); settings.reload(); models.reload(); scanners.reload(); setMsg(""); }
     catch (x) { setMsg(x instanceof ApiError ? x.message : String(x)); }
   };
+  const ui = useStore(uiStore);
+  const theme = useStore(themeStore);
   const chosen = new Set(settings.data?.scanners ?? []);
   const toggle = (name: string) => {
     const next = new Set(chosen);
@@ -26,6 +30,10 @@ export function SettingsPage({ project }: { project: { id: number; name: string 
   return (
     <>
       <PageHead title="Settings" sub="Scanners, the review model and the defaults for every run. Each run can override them on the Runs page." />
+      <section class="cc-card" style="margin-bottom:16px" aria-label="Appearance"><h2 class="big">Appearance</h2>
+        <p class="cc-note" style="margin-top:-6px">{project ? `Saved for ${project.name}.` : "The default for every project."}</p>
+        <div style="display:flex;gap:12px;flex-wrap:wrap"><Segmented label="Look" value={ui} onChange={(v) => setUi(v as Ui)} options={UI_ORDER.map((u) => ({ id: u, label: UI_LABEL[u] }))} />
+          {ui !== "midnight" && <Segmented label="Theme" value={theme} onChange={(v) => setTheme(v as Theme)} options={[{ id: "light", label: "Light" }, { id: "dark", label: "Dark" }, { id: "system", label: "System" }]} />}</div></section>
       <Err text={msg || models.error || settings.error || scanners.error} />
       <div class="cc-grid g2">
         <section class="cc-card">

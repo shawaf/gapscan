@@ -69,6 +69,9 @@ let complianceAvailable = true;
 export const setComplianceAvailable = (v: boolean): void => { complianceAvailable = v; };
 export const isComplianceAvailable = (): boolean => complianceAvailable;
 
+/** Where a project opens: its Features page when there is a choice of features, else straight to Overview. */
+export const projectPage = (): string => (complianceAvailable ? "features" : "overview");
+
 const SHOWN = 5;
 
 /** The features home for one project: which features (domains) it is scanned for, each

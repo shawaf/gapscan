@@ -3,7 +3,7 @@ import { VirtualList } from "../components/VirtualList";
 import { useData } from "../context";
 import { download, findingsCsv, reportFilename } from "../download";
 import { emptyCriteria, filterRows, flatten, indexRows, sortRows, type Criteria, type SortKey } from "../filters";
-import { CATEGORY_LABEL, DECISION_LABEL, effectiveSeverity, location, num, SEV_LABEL, SEVERITIES, VERDICT_LABEL, VERDICTS } from "../format";
+import { CATEGORY_LABEL, DECISION_LABEL, effectiveSeverity, location, num, plainTitle, SEV_LABEL, SEVERITIES, VERDICT_LABEL, VERDICTS } from "../format";
 import { findingsUi } from "../pages/Findings";
 import { decisionStore, navigate, routeStore, setDecision, useStore } from "../store";
 import type { DecisionKind, FindingRow, Severity, VerdictKey } from "../types";
@@ -12,7 +12,7 @@ import { CheckList, Dropdown, PickList } from "./Dropdown";
 import { FindingDrawer } from "./FindingDrawer";
 import { Icon } from "./icons";
 
-const ROW = 44;
+const ROW = 56;
 type ColKey = "source" | "owasp" | "cwe" | "since" | "confidence";
 const ALL_COLS: { id: ColKey; label: string }[] = [
   { id: "confidence", label: "Confidence" }, { id: "source", label: "Source" }, { id: "owasp", label: "OWASP" },
@@ -43,10 +43,11 @@ export function FindingsExplorer() {
   const route = useStore(routeStore);
   const search = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [cols, setCols] = useState<Set<ColKey>>(new Set(ALL_COLS.map((c) => c.id)));
+  const [cols, setCols] = useState<Set<ColKey>>(new Set());
   const [views, setViews] = useState<SavedView[]>(readViews);
   const [bulk, setBulk] = useState<DecisionKind | null>(null);
   const [naming, setNaming] = useState(false);
+  const [more, setMore] = useState(false);
 
   const index = useMemo(() => indexRows(data.findings), [data]);
   const c = ui.criteria;
@@ -121,22 +122,27 @@ export function FindingsExplorer() {
     setSelected(new Set()); setBulk(null);
   };
   const toggleRow = (id: string) => { const n = new Set(selected); if (n.has(id)) n.delete(id); else n.add(id); setSelected(n); };
-  const grid = (cls: string) => `fx-grid ${cls}`;
-  const tableHeight = Math.min(760, Math.max(320, (typeof window === "undefined" ? 800 : window.innerHeight) - 440));
+  const lite = cols.size === 0;
+  const grid = (cls: string) => `fx-grid ${lite ? "lite " : ""}${cls}`;
+  const setSeverity = (s: Severity | null) => setCrit({ severities: s ? new Set([s]) : new Set() });
+  const tableHeight = Math.min(760, Math.max(320, (typeof window === "undefined" ? 800 : window.innerHeight) - (more ? 480 : 300)));
   const first = (r: FindingRow) => r.owasp[0]?.split(":")[0] ?? "-";
 
   return (
     <>
       <div class="cc-h">
-        <div><h1>Gaps</h1><p>{num(data.counts.open)} open · each one links to its evidence and the controls it fails · {data.baseline ? `${data.baseline.new} new since the previous run · ` : ""}decisions carry across scans</p></div>
+        <div><h1>Gaps</h1><p>{num(data.counts.open)} open in {data.meta.project}</p></div>
         <div class="cc-actions">
-          <Dropdown label="Columns">
-            <CheckList options={ALL_COLS.map((x) => ({ id: x.id, label: x.label }))} value={cols} onChange={setCols} />
-          </Dropdown>
-          <button class="btn" onClick={() => download(reportFilename(data, "csv"), findingsCsv(rows, decisions), "text/csv")}>Export this view</button>
+          <label class="fx-search"><Icon name="search" /><input ref={search} type="search" value={c.text} placeholder="Filter by file, rule or CWE" aria-label="Search findings" onInput={(e) => setCrit({ text: e.currentTarget.value })} /><span class="cc-key">/</span></label>
+          <button class="btn" onClick={() => download(reportFilename(data, "csv"), findingsCsv(rows, decisions), "text/csv")}>Export</button>
         </div>
       </div>
-
+      <div class="cc-chips mx-sevs" role="group" aria-label="Severity">
+        <button class="cc-chip" aria-pressed={c.severities.size === 0} onClick={() => setSeverity(null)}>All {data.counts.open}</button>
+        {SEVERITIES.filter((s) => data.counts.by_severity[s]).map((s) => <button key={s} class="cc-chip" aria-pressed={c.severities.size === 1 && c.severities.has(s)} onClick={() => setSeverity(s)}><i class="mx-dot" style={`background:var(--sev-${s}-fill)`} />{SEV_LABEL[s]} {data.counts.by_severity[s]}</button>)}
+        <button class="cc-chip" style="margin-left:auto" aria-expanded={more} onClick={() => setMore(!more)}>{more ? "Fewer filters" : "More filters"}</button>
+      </div>
+      {more && <>
       <div class="fx-tabs" role="tablist" aria-label="Saved views">
         {allViews.map((v) => (
           <button key={v.id} role="tab" class="tab" aria-selected={activeView === v.id} onClick={() => findingsUi.set((p) => ({ ...p, criteria: revive(serialize(v.criteria)), cursor: 0 }))}>
@@ -149,7 +155,7 @@ export function FindingsExplorer() {
 
       <div class="fx-filters">
         <div class="fx-row">
-          <label class="fx-search"><Icon name="search" /><input ref={search} type="search" value={c.text} placeholder="Search title, file, rule or CWE" aria-label="Search findings" onInput={(e) => setCrit({ text: e.currentTarget.value })} /><span class="cc-key">/</span></label>
+          <Dropdown label="Columns"><CheckList options={ALL_COLS.map((x) => ({ id: x.id, label: x.label }))} value={cols} onChange={setCols} /></Dropdown>
           <Dropdown label="Severity" active={c.severities.size}><CheckList options={SEVERITIES.map((s) => ({ id: s, label: <Sev level={s} /> }))} value={c.severities} onChange={(severities) => setCrit({ severities })} /></Dropdown>
           <Dropdown label="Category" active={c.categories.size}><CheckList options={Object.entries(CATEGORY_LABEL).map(([id, label]) => ({ id, label }))} value={c.categories} onChange={(categories) => setCrit({ categories })} /></Dropdown>
           <Dropdown label="Verdict" active={c.verdicts.size}><CheckList options={VERDICTS.map((v) => ({ id: v, label: VERDICT_LABEL[v] }))} value={c.verdicts} onChange={(verdicts) => setCrit({ verdicts })} /></Dropdown>
@@ -169,9 +175,6 @@ export function FindingsExplorer() {
           </Dropdown>
         </div>
         <div class="fx-row" style="justify-content:space-between">
-          <span class="fx-row" style="margin:0"><span class="cc-note">Active</span>
-            {chips.map((x) => <span class="fx-chip" key={x.key}>{x.label}<button aria-label={`Remove filter ${x.label}`} onClick={x.clear}><Icon name="x" size={10} /></button></span>)}
-            <button class="btn ghost sm" onClick={() => findingsUi.set((p) => ({ ...p, criteria: emptyCriteria(), cursor: 0 }))}>Clear all</button></span>
           <span class="fx-row" style="margin:0;font-size:13px">
             <label>Group by <select class="cc-select" style="width:auto" value={ui.group} onChange={(e) => findingsUi.set((p) => ({ ...p, group: e.currentTarget.value as typeof ui.group }))}>
               {["none", "file", "category", "owasp", "cwe", "scanner", "severity"].map((g) => <option key={g} value={g}>{g === "none" ? "None" : g[0]?.toUpperCase() + g.slice(1)}</option>)}</select></label>
@@ -181,6 +184,13 @@ export function FindingsExplorer() {
         </div>
       </div>
 
+      </>}
+      {(more || chips.length > 1 || c.showDismissed) && (
+        <div class="fx-row" style="margin:0 0 12px">
+          {chips.map((x) => <span class="fx-chip" key={x.key}>{x.label}<button aria-label={`Remove filter ${x.label}`} onClick={x.clear}><Icon name="x" size={10} /></button></span>)}
+          <button class="btn ghost sm" onClick={() => findingsUi.set((p) => ({ ...p, criteria: emptyCriteria(), cursor: 0 }))}>Clear all</button>
+        </div>
+      )}
       {selected.size > 0 && (
         <div class="fx-bulk" role="region" aria-label="Bulk decisions">
           <b>{selected.size} selected</b>
@@ -194,10 +204,10 @@ export function FindingsExplorer() {
         <div class={grid("fx-head")} role="row">
           <span><input type="checkbox" aria-label="Select all visible rows" checked={allSelected} ref={(el) => { if (el) el.indeterminate = someSelected; }} onChange={() => setSelected(allSelected ? new Set() : new Set(visibleRows.map((r) => r.id)))} style="accent-color:var(--accent)" /></span>
           <button onClick={() => sortBy("severity")} aria-label="Sort by severity">Severity{arrow("severity")}</button>
-          <button onClick={() => sortBy("title")}>Finding{arrow("title")}</button>
-          <button onClick={() => sortBy("verdict")}>AI verdict{arrow("verdict")}</button>
-          <span>{cols.has("confidence") ? <button onClick={() => sortBy("confidence")}>Confidence{arrow("confidence")}</button> : ""}</span>
-          <span>{cols.has("source") ? "Source" : ""}</span><span>{cols.has("owasp") ? "OWASP" : ""}</span><span>{cols.has("cwe") ? "CWE" : ""}</span><span>{cols.has("since") ? "Since previous" : ""}</span>
+          <button onClick={() => sortBy("title")}>Gap{arrow("title")}</button>
+          <button onClick={() => sortBy("verdict")}>Verdict{arrow("verdict")}</button>
+          {!lite && <><span>{cols.has("confidence") ? <button onClick={() => sortBy("confidence")}>Confidence{arrow("confidence")}</button> : ""}</span>
+          <span>{cols.has("source") ? "Source" : ""}</span><span>{cols.has("owasp") ? "OWASP" : ""}</span><span>{cols.has("cwe") ? "CWE" : ""}</span><span>{cols.has("since") ? "Since previous" : ""}</span></>}
         </div>
         {items.length === 0 ? (
           <div class="cc-empty" style="border:1px dashed var(--line-strong);border-radius:8px;margin:16px"><h2>No findings match these filters</h2><p>{chips.length - 1} filter{chips.length - 1 === 1 ? " is" : "s are"} active. {num(data.counts.open)} findings are open in this run.</p><button class="btn" onClick={() => findingsUi.set((p) => ({ ...p, criteria: emptyCriteria(), cursor: 0 }))}>Clear all filters</button></div>
@@ -216,17 +226,17 @@ export function FindingsExplorer() {
                   onClick={() => { findingsUi.set((p) => ({ ...p, cursor: i })); navigate("findings", r.id); }}>
                   <span onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${r.title}`} checked={selected.has(r.id)} onChange={() => toggleRow(r.id)} /></span>
                   <span><Sev level={effectiveSeverity(r)} /></span>
-                  <span class="cell"><span class="ttl" title={r.title}>{r.title}</span><span class="pth">{location(r)}</span></span>
+                  <span class="cell"><span class="ttl" title={r.title}>{plainTitle(r.title)}</span><span class="pth">{[location(r), r.scanners[0], r.cwe[0]].filter(Boolean).join(" · ")}</span></span>
                   <span><Verdict v={r.verdict} /></span>
-                  <span>{cols.has("confidence") && (r.confidence != null ? <span class="conf"><i><b style={`width:${r.confidence * 100}%`} /></i>{r.confidence.toFixed(2)}</span> : <span class="cc-note">-</span>)}</span>
+                  {!lite && <><span>{cols.has("confidence") && (r.confidence != null ? <span class="conf"><i><b style={`width:${r.confidence * 100}%`} /></i>{r.confidence.toFixed(2)}</span> : <span class="cc-note">-</span>)}</span>
                   <span class="cell">{cols.has("source") && <><span class="ttl" style="font-weight:500;font-size:12px">{r.llm_only ? "AI-only" : "Scanner-confirmed"}</span><span class="sub">{r.llm_only ? "No scanner match" : r.scanners.join(", ")}</span></>}</span>
                   <span class="mono">{cols.has("owasp") ? first(r) : ""}</span><span class="mono" style="font-size:12px">{cols.has("cwe") ? (r.cwe[0] ?? "-") : ""}</span>
-                  <span style={r.status === "new" ? "color:var(--accent);font-weight:600" : "color:var(--text-3)"}>{cols.has("since") ? (r.status === "new" ? "+ New" : r.status === "unchanged" ? "— Unchanged" : "") : ""}</span>
+                  <span style={r.status === "new" ? "color:var(--accent);font-weight:600" : "color:var(--text-3)"}>{cols.has("since") ? (r.status === "new" ? "+ New" : r.status === "unchanged" ? "— Unchanged" : "") : ""}</span></>}
                 </div>
               );
             }} />
         )}
-        <div class="fx-foot"><span>Rows {rows.length ? 1 : 0} to {Math.min(rows.length, 16)} of {num(rows.length)}. Only visible rows are rendered, {ROW} px each.</span>
+        <div class="fx-foot"><span>{num(rows.length)} shown</span>
           <span><span class="kbd">j</span><span class="kbd">k</span> next, previous <span class="kbd">Enter</span> open <span class="kbd">x</span> select <span class="kbd">Esc</span> close drawer</span></div>
       </div>
 

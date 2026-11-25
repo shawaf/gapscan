@@ -9,6 +9,7 @@ import { CompliancePage } from "./Compliance";
 import { FindingsExplorer } from "./Findings";
 import { HotspotsPage } from "./Hotspots";
 import { Home } from "./Home";
+import { initials } from "./tiles";
 import { Icon, Spinner } from "./icons";
 import { ALL_NAV, MAIN_NAV, SYSTEM_NAV } from "./nav";
 import { Overview } from "./Overview";
@@ -18,13 +19,12 @@ import { RunDrawer, Runs } from "./Runs";
 import { HealthPage } from "./Health";
 import { SetupPage } from "./Setup";
 import { WelcomePage } from "./Welcome";
-import { PlannedDomain, ProjectFeatures, ProjectTargetsPage, allDomains, isComplianceAvailable, setComplianceAvailable } from "./Targets";
+import { PlannedDomain, ProjectFeatures, ProjectTargetsPage, allDomains, isComplianceAvailable, projectPage, setComplianceAvailable } from "./Targets";
 import type { Domain } from "./Targets";
 import { SettingsPage } from "./Settings";
 import { fetchProject, fetchReport, latestDone, useLoad } from "./useApi";
 import { DataContext } from "../context";
-import { applyTheme, cycleTheme, initDecisions, initRouter, navigate, routeStore, setActiveProject, setServerBase, setTheme, setUi, themeStore, toggleUi, uiStore, useStore, UI_ORDER, UI_LABEL } from "../store";
-import type { Theme, Ui } from "../store";
+import { applyTheme, cycleTheme, initDecisions, initRouter, navigate, routeStore, setActiveProject, setServerBase, themeStore, toggleUi, uiStore, useStore } from "../store";
 import type { ReportData } from "../types";
 
 const RESULT_PAGES: Record<string, () => preact.JSX.Element> = {
@@ -33,8 +33,7 @@ const RESULT_PAGES: Record<string, () => preact.JSX.Element> = {
 
 export function App() {
   const route = useStore(routeStore);
-  const theme = useStore(themeStore);
-  const ui = useStore(uiStore);
+  useStore(uiStore);
   const projects = useLoad(() => api<Project[]>("GET", "/api/projects"), [], (ps) => ps.some((p) => p.active), 2000);
   const queue = useLoad(() => api<QueueRun[]>("GET", "/api/queue"), [], () => true, 2000);
   const health = useLoad(() => api<Doctor>("GET", "/api/doctor"), []);
@@ -50,7 +49,8 @@ export function App() {
   const mainNav = hasCatalog ? MAIN_NAV : MAIN_NAV.filter((n) => n.id !== "compliance");
   const domainOf = (id: string): Domain | undefined => domains.find((d) => d.id === id);
   const conn = useStore(connection);
-  const [menu, setMenu] = useState(false);
+  const [rail, setRail] = useState(() => { try { return localStorage.getItem("gapscan.rail") === "1"; } catch { return false; } });
+  const toggleRail = () => { setRail(!rail); try { localStorage.setItem("gapscan.rail", rail ? "0" : "1"); } catch { /* ignore */ } };
   const [palette, setPalette] = useState(false);
   const [pillRun, setPillRun] = useState<number | null>(null);
 
@@ -98,15 +98,14 @@ export function App() {
 
   const ctx = useMemo(() => (report.data ? { data: report.data, byId: new Map(report.data.findings.map((f) => [f.id, f])) } : null), [report.data]);
   const counts: Record<string, string> = {};
-  if (report.data) { counts.findings = String(report.data.counts.open); counts.deps = String(report.data.dependencies.packages.length); }
+  if (report.data) { counts.findings = String(report.data.counts.open); counts.deps = String(report.data.dependencies.packages.length);
+    counts.secrets = String(report.data.findings.filter((f) => f.open && (f.category === "secret" || f.category === "config")).length);
+    if (report.data.asvs) counts.asvs = `L${report.data.asvs.level}`;
+    counts.owasp = report.data.freshness.owasp["OWASP Top 10"] ?? "2025"; }
+  if (project.data?.scans.length) counts.runs = String(project.data.scans.length);
 
   const needsReport = page in RESULT_PAGES || page === "overview";
   const domain = domainOf(page);
-  const atPlanned = !!pid && !!domain && !domain.ready;  // a planned feature's page, inside a project
-  // The Application security feature menu shows for every project page except the features hub and a
-  // planned feature, so its pages (and Overview) stay reachable even from a system page.
-  const inSecurity = !!pid && page !== "features" && !atPlanned;
-  const sysPage = SYSTEM_NAV.some((n) => n.id === page);
   let body: ComponentChildren;
   if (page === "settings") body = <SettingsPage project={current ? { id: current.id, name: current.name } : null} />;
   else if (page === "health") body = <HealthPage />;
@@ -130,84 +129,59 @@ export function App() {
   } else body = <p class="cc-note">Unknown page.</p>;
 
   const navLink = (n: (typeof ALL_NAV)[number]) => (
-    <a key={n.id} href={pid ? `#/p/${pid}/${n.id}` : `#/${n.id}`} aria-current={page === n.id ? "page" : undefined}
-      onClick={(e) => { e.preventDefault(); navigate(n.id, null, n.id === "settings" || n.id === "health" ? pid : pid); }}>
-      <Icon name={n.icon as never} /><span class="grow">{n.label}</span>
-      {n.id === "health" && warn > 0 ? <span class="cc-warnct"><Icon name="warn" size={12} />{warn}</span>
-        : counts[n.id] ? <span class="cc-key" title="Open items">{counts[n.id]}</span> : n.key ? <span class="cc-key" title={`Shortcut: ${n.key}`}>{n.key}</span> : null}
+    <a key={n.id} href={pid ? `#/p/${pid}/${n.id}` : `#/${n.id}`} title={n.label} aria-current={page === n.id ? "page" : undefined}
+      onClick={(e) => { e.preventDefault(); navigate(n.id, null, pid); }}>
+      <Icon name={n.icon as never} size={18} /><span class="grow">{n.label}</span>
+      {n.id === "health" ? (warn > 0 ? <span class="cc-warnct"><Icon name="warn" size={12} />{warn}</span> : health.data ? <span class="cc-key ok">all ok</span> : null)
+        : counts[n.id] ? <span class="cc-key">{counts[n.id]}</span> : null}
     </a>
   );
+  // The projects on the sidebar: the open one always, then the rest, up to five.
+  const listed = (projects.data ?? []).filter((p) => !p.archived || String(p.id) === pid);
+  const shownProjects = [...listed.slice(0, 5), ...listed.slice(5).filter((p) => String(p.id) === pid)].slice(-5);
 
   return (
-    <div class="cc">
+    <div class={rail ? "cc rail" : "cc"}>
       <nav class="cc-side" aria-label="Main">
-        <a class="cc-brand" href="#/" onClick={(e) => { e.preventDefault(); navigate("home", null, null); }}><Logo size={18} /><span class="wordmark">GapScan</span></a>
-        <div class="cc-switch">
-          <button aria-haspopup="listbox" aria-expanded={menu} onClick={() => setMenu(!menu)}>
-            <span>{current ? <><span class="nm">{current.name}</span><span class="pth">{current.path}</span></> : <span class="nm">Choose a project</span>}</span><Icon name="chevron" />
-          </button>
-          {menu && (
-            <div class="cc-menu" role="listbox" aria-label="Projects">
-              {projects.data?.filter((p) => !p.archived || String(p.id) === pid).map((p) => <button key={p.id} role="option" aria-selected={String(p.id) === pid} onClick={() => { setMenu(false); navigate(page === "home" || page === "welcome" ? "features" : page, null, String(p.id)); }}><b>{p.name}</b><span class="cc-note mono" style="display:block">{p.path}</span></button>)}
-              <button onClick={() => { setMenu(false); navigate("home", null, null); }}>All projects and add a project…</button>
-            </div>
-          )}
+        <div class="mx-brand"><a class="cc-brand" href="#/" onClick={(e) => { e.preventDefault(); navigate("home", null, null); }}><Logo size={22} /><span class="wordmark">GapScan</span></a>
+          <button class="mx-iconbtn" aria-label={rail ? "Expand sidebar" : "Collapse sidebar"} title={rail ? "Expand sidebar" : "Collapse sidebar"} onClick={toggleRail}><Icon name="sidebar" size={18} /></button></div>
+        <button class="mx-search" onClick={() => setPalette(true)} aria-label="Search or run a command (Ctrl K)" title="Search"><Icon name="search" size={17} /><span class="grow">Search</span><span class="mono">⌘K</span></button>
+        <div class="cc-nav">
+          {pid && report.data && <a href={`#/p/${pid}/findings`} title="AI triage" onClick={(e) => { e.preventDefault(); navigate("findings"); }}><Icon name="triage" size={18} /><span class="grow">AI triage</span><span class="cc-key ok">{report.data.counts.llm_triaged} reviewed</span></a>}
+          {SYSTEM_NAV.filter((n) => n.id === "health").map(navLink)}
         </div>
-        {!pid ? (
+        <div class="mx-projects" role="group" aria-label="Projects">
+          {shownProjects.map((p) => (
+            <a key={p.id} href={`#/p/${p.id}/${projectPage()}`} title={p.name} aria-label={`Open ${p.name}`} aria-current={String(p.id) === pid ? "true" : undefined}
+              onClick={(e) => { e.preventDefault(); navigate(pid && page !== "home" && page !== "welcome" ? page : projectPage(), null, String(p.id)); }}>{initials(p.name)}{p.latest_done && <i class="mx-dot" style={`background:var(${p.active ? "--sev-high-fill" : "--ok"})`} />}</a>
+          ))}
+          <a href="#/" title="All projects" aria-label="All projects" aria-current={!pid && page === "home" ? "true" : undefined} onClick={(e) => { e.preventDefault(); navigate("home", null, null); }}><Icon name={shownProjects.length ? "folder" : "plus"} size={18} /></a>
+        </div>
+        {pid && (
           <div class="cc-nav">
-            <a href="#/" aria-current="page" onClick={(e) => { e.preventDefault(); navigate("home", null, null); }}><Icon name="overview" /><span class="grow">Projects</span></a>
-          </div>
-        ) : inSecurity ? (
-          <div class="cc-nav">
-            <a href={`#/p/${pid}/features`} onClick={(e) => { e.preventDefault(); navigate("features"); }}><Icon name="chevron" /><span class="grow">All features</span></a>
-            <span class="cc-group">Application security</span>
-            {mainNav.map((n, i) => (n.group && n.group !== mainNav[i - 1]?.group ? [<span key={`g-${n.group}`} class="cc-group sub">{n.group}</span>, navLink(n)] : navLink(n)))}
-          </div>
-        ) : (
-          <div class="cc-nav">
-            <span class="cc-group">Features</span>
-            {domains.map((d) => <a key={d.id} href={d.ready ? `#/p/${pid}/overview` : `#/p/${pid}/${d.id}`} aria-current={page === d.id ? "page" : undefined} onClick={(e) => { e.preventDefault(); navigate(d.ready ? "overview" : d.id); }}><Icon name={d.icon} /><span class="grow">{d.label}</span><span class="cc-key">{d.ready ? "On" : "Planned"}</span></a>)}
+            {hasCatalog && !catalog.loading && <a href={`#/p/${pid}/features`} title="Features" aria-current={page === "features" ? "page" : undefined} onClick={(e) => { e.preventDefault(); navigate("features"); }}><Icon name="compliance" size={18} /><span class="grow">Features</span></a>}
+            {mainNav.filter((n) => !n.hidden).map((n, i, all) => (n.group !== all[i - 1]?.group ? [<span key={`g-${n.group}`} class="cc-group">{n.group}</span>, navLink(n)] : navLink(n)))}
           </div>
         )}
-        <div class="cc-sep" />
-        <div class="cc-nav">{SYSTEM_NAV.map(navLink)}</div>
-        <div class="cc-offline"><Icon name="lock" /><span><b>Local mode</b> · {workspace.data?.connected
-          ? <>scans stay offline. Runs go to {hostOf(workspace.data.url)} only when you press Send.</>
-          : "offline, no remote requests."}<br />Served from {window.location.host}</span></div>
+        <div class="mx-foot">
+          <div class="cc-nav">{SYSTEM_NAV.filter((n) => n.id !== "health").map(navLink)}</div>
+          <p class="mx-local" title={workspace.data?.connected ? `Runs go to ${hostOf(workspace.data.url)} only when you press Send` : "No remote requests"}><Icon name="lock" size={14} /><span>{workspace.data?.connected ? "Scans stay offline" : "Offline, nothing leaves this computer"}</span></p>
+        </div>
       </nav>
       <div class="cc-main">
-        <header class="cc-top">
-          <div class="cc-crumb">{current
-            ? <><a href={`#/p/${pid}/features`} onClick={(e) => { e.preventDefault(); navigate("features"); }}>{current.name}</a>
-                {page === "features" ? <> / <b>Features</b></>
-                  : atPlanned ? <> / <b>{domain?.label}</b></>
-                    : sysPage ? <> / <b>{ALL_NAV.find((n) => n.id === page)?.label}</b></>
-                      : <> / <a href={`#/p/${pid}/overview`} onClick={(e) => { e.preventDefault(); navigate("overview"); }}>Application security</a> / <b>{ALL_NAV.find((n) => n.id === page)?.label ?? "Overview"}</b></>}</>
-            : <b>{ALL_NAV.find((n) => n.id === page)?.label ?? "Projects"}</b>}</div>
-          <button class="cc-search" onClick={() => setPalette(true)} aria-label="Search or run a command (Ctrl K)"><Icon name="search" /><span>Search or run a command</span><span class="cc-key">Ctrl K</span></button>
-          {live && live.kind === "benchmark" && (
-            <a class="cc-pill" href="#/health" onClick={(e) => { e.preventDefault(); navigate("health"); }} aria-label="Model benchmark in progress, open System Health">
-              <Spinner /><b>Benchmark</b><span>{live.options.model} · {live.progress_done} of {live.progress_total} cases</span><span class="mini"><i style={`width:${live.progress_total ? (100 * live.progress_done) / live.progress_total : 0}%`} /></span>
-            </a>
-          )}
-          {live && live.kind !== "benchmark" && (
-            <a class="cc-pill" href={`#/p/${live.project_id}/runs/${live.id}`} onClick={(e) => { e.preventDefault(); setPillRun(live.id); }} aria-label={`Run ${live.id} in progress, open details`}>
-              <Spinner /><b>Run #{live.id}</b><span>{stepLabel(live)} · {percent(live)}%</span><span class="mini"><i style={`width:${percent(live)}%`} /></span>
-            </a>
-          )}
-          {pid && <button class="btn primary" onClick={() => navigate("runs")}><Icon name="plus" size={14} /> New scan</button>}
-          <div class="cc-seg" role="radiogroup" aria-label="Look" title="Shortcut: u">
-            {UI_ORDER.map((u: Ui) => (
-              <button key={u} role="radio" aria-checked={ui === u} onClick={() => setUi(u)}>{UI_LABEL[u]}</button>
-            ))}
-          </div>
-          <div class="cc-seg icons" role="radiogroup" aria-label="Theme" title="Shortcut: t">
-            {(["light", "dark", "system"] as Theme[]).map((t) => {
-              const label = t === "light" ? "Light" : t === "dark" ? "Dark" : "System";
-              return <button key={t} role="radio" aria-checked={theme === t} aria-label={`${label} theme`} title={`${label} theme`} onClick={() => setTheme(t)}><Icon name={t === "light" ? "sun" : t === "dark" ? "moon" : "monitor"} size={15} /></button>;
-            })}
-          </div>
-        </header>
+        {live && (
+          <header class="cc-top">
+            {live.kind === "benchmark" ? (
+              <a class="cc-pill" href="#/health" onClick={(e) => { e.preventDefault(); navigate("health"); }} aria-label="Model benchmark in progress, open System Health">
+                <Spinner /><b>Benchmark</b><span>{live.options.model} · {live.progress_done} of {live.progress_total} cases</span><span class="mini"><i style={`width:${live.progress_total ? (100 * live.progress_done) / live.progress_total : 0}%`} /></span>
+              </a>
+            ) : (
+              <a class="cc-pill" href={`#/p/${live.project_id}/runs/${live.id}`} onClick={(e) => { e.preventDefault(); setPillRun(live.id); }} aria-label={`Run ${live.id} in progress, open details`}>
+                <Spinner /><b>Run #{live.id}</b><span>{stepLabel(live)} · {percent(live)}%</span><span class="mini"><i style={`width:${percent(live)}%`} /></span>
+              </a>
+            )}
+          </header>
+        )}
         <main class={`cc-body${!pid || page === "features" || (domain && !domain.ready) ? " wide" : ""}`} id="main">
           {!conn.ok && <ConnectionBanner lastOk={conn.lastOk} onRetry={() => { reloadAll(); queue.reload(); }} />}
           {project.data?.archived && (
@@ -250,14 +224,14 @@ function Palette({ onClose, pid, projects, domains }: { onClose: () => void; pid
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
   const commands = useMemo(() => [
-    ...(pid ? [{ label: "Go to Features", hint: "", run: () => navigate("features") }] : []),
+    ...(pid && isComplianceAvailable() ? [{ label: "Go to Features", hint: "", run: () => navigate("features") }] : []),
     ...(pid ? ALL_NAV.filter((n) => isComplianceAvailable() || n.id !== "compliance").map((n) => ({ label: `Go to ${n.label}`, hint: n.key ? String(n.key) : "", run: () => navigate(n.id) })) : []),
     ...(pid ? domains.filter((d) => !d.ready).map((d) => ({ label: `Go to ${d.label} (planned)`, hint: "", run: () => navigate(d.id) })) : []),
     ...(pid ? [{ label: "Start a new scan", hint: "", run: () => navigate("runs") }] : []),
     { label: "Switch theme", hint: "t", run: cycleTheme },
     { label: "Switch look (Midnight / GapScan / soft / glassy)", hint: "u", run: toggleUi },
     { label: "All projects", hint: "", run: () => navigate("home", null, null) },
-    ...projects.map((p) => ({ label: `Open project ${p.name}`, hint: "", run: () => navigate("features", null, String(p.id)) })),
+    ...projects.map((p) => ({ label: `Open project ${p.name}`, hint: "", run: () => navigate(projectPage(), null, String(p.id)) })),
   ], [pid, projects, domains]);
   const shown = commands.filter((c) => c.label.toLowerCase().includes(q.toLowerCase())).slice(0, 10);
   const go = (i: number) => { const c = shown[i]; if (c) { onClose(); c.run(); } };

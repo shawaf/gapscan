@@ -1,7 +1,7 @@
 import type { JSX } from "preact";
 
 // Decorative pictures for the domain cards, drawn inline (the Control Center stays fully offline). Colors come
-// from the card's tone variables, so every picture follows the theme and the soft or classic look.
+// from the card's tone variables, so every picture follows the theme and every look.
 const ART: Record<string, JSX.Element> = {
   security: (
     <>

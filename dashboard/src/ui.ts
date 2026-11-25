@@ -1,10 +1,10 @@
-import classicCss from "./styles-classic.css?inline";
+import midnightCss from "./styles-midnight.css?inline";
 import softCss from "./styles-soft.css?inline";
 import glassCss from "./styles-glass.css?inline";
 import gapscanCss from "./styles-gapscan.css?inline";
 import { uiStore, type Ui } from "./store";
 
-const CSS: Record<Ui, string> = { gapscan: gapscanCss, soft: softCss, classic: classicCss, glassy: glassCss };
+const CSS: Record<Ui, string> = { gapscan: gapscanCss, soft: softCss, midnight: midnightCss, glassy: glassCss };
 
 /** Swap the active stylesheet; `data-ui` on <html> lets charts follow the switch. */
 export function applyUi(ui: Ui): void {

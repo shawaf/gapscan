@@ -286,14 +286,15 @@ def test_keyboard_navigation_and_theme(dash):
     )
 
 
-DARK_BG = {"soft": "rgb(21, 23, 31)", "classic": "rgb(14, 19, 24)", "gapscan": "rgb(14, 19, 24)"}
+DARK_BG = {"soft": "rgb(21, 23, 31)", "gapscan": "rgb(14, 19, 24)"}
+MIDNIGHT_BG = "rgb(14, 17, 22)"  # Midnight is dark-only: same ink in both schemes
 
 
 def test_dark_and_light_screenshots(browser, report_file):
     for scheme in ("light", "dark"):
         p = Page(browser, report_file.as_uri(), scheme=scheme)
         try:
-            for ui in ("gapscan", "soft", "classic"):
+            for ui in ("gapscan", "midnight", "soft"):
                 for _ in range(4):  # the look cycles through four editions; press until it lands
                     if p.page.evaluate("document.documentElement.getAttribute('data-ui')") == ui:
                         break
@@ -305,7 +306,10 @@ def test_dark_and_light_screenshots(browser, report_file):
                 p.page.wait_for_timeout(300)
                 p.page.screenshot(path=str(SHOTS / f"overview-{ui}-{scheme}.png"))
                 bg = p.page.evaluate("getComputedStyle(document.body).backgroundColor")
-                assert (bg == DARK_BG[ui]) == (scheme == "dark"), (ui, bg)
+                if ui == "midnight":
+                    assert bg == MIDNIGHT_BG, (ui, scheme, bg)
+                else:
+                    assert (bg == DARK_BG[ui]) == (scheme == "dark"), (ui, bg)
         finally:
             p.close()
 

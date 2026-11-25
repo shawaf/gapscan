@@ -1,5 +1,5 @@
 /* Control Center, "soft" edition: rounded surfaces, gentle shadows, pill controls.
-   Every rule is scoped to [data-ui="soft"], so the classic look is untouched. Tokens come from ../styles-soft.css. */
+   Every rule is scoped to [data-ui="soft"], so the other looks are untouched. Tokens come from ../styles-soft.css. */
 :root[data-ui="soft"] {
   --r: var(--radius); --rs: var(--radius-sm);
   --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);

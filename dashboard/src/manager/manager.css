@@ -1,4 +1,4 @@
-/* GapScan Control Center. Built on the design tokens in ../styles-classic.css or ../styles-soft.css (the "Look" switch); soft refinements are in manager-soft.css. */
+/* GapScan Control Center. Built on the design tokens of the active look (../styles-*.css, the "Look" switch); each look's refinements are in manager-<look>.css. */
 .cc { display: grid; grid-template-columns: 264px minmax(0, 1fr); min-height: 100vh; }
 .cc-side { background: var(--surface); border-right: 1px solid var(--line); display: flex; flex-direction: column; padding: 16px 16px 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
 .cc-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; padding: 2px 4px 14px; color: var(--text); text-decoration: none; }

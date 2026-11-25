@@ -72,12 +72,11 @@ def stack(tmp_path):
 def test_add_project_run_read_results_decide_and_remember(stack):
     server, page, project, errors = stack
     page.goto(server.url())  # the token handshake sets the cookie and drops the token from the URL
-    page.get_by_role("heading", name="What do you want to close gaps against?").wait_for()
+    page.get_by_role("heading", name="Welcome to GapScan").wait_for()  # the Projects landing, empty
     assert "token" not in page.url
     page.get_by_role(
-        "button", name="Open Application security, 0 projects"
-    ).click()  # the start page picks a domain
-    page.get_by_role("heading", name="Welcome to GapScan").wait_for()
+        "button", name="Add your first project"
+    ).click()  # opens the create-project wizard
     page.get_by_label("Project folder").fill(str(project))
     page.get_by_role("button", name="Add project").click()
     page.get_by_role("heading", name="Runs").wait_for()
@@ -144,7 +143,10 @@ def test_add_project_run_read_results_decide_and_remember(stack):
 def test_findings_explorer_views_filters_bulk_decisions_and_saved_views(stack):
     server, page, project, errors = stack
     page.goto(server.url())
-    page.get_by_role("button", name="Open Application security, 0 projects").click()
+    page.get_by_role("heading", name="Welcome to GapScan").wait_for()  # the Projects landing, empty
+    page.get_by_role(
+        "button", name="Add your first project"
+    ).click()  # opens the create-project wizard
     page.get_by_label("Project folder").fill(str(project))
     page.get_by_role("button", name="Add project").click()
     page.get_by_role("button", name="Start run").click()
@@ -222,7 +224,10 @@ def test_findings_explorer_views_filters_bulk_decisions_and_saved_views(stack):
 def test_every_rebuilt_page_opens_and_a_project_is_deleted_with_a_typed_confirmation(stack):
     server, page, project, errors = stack
     page.goto(server.url())
-    page.get_by_role("button", name="Open Application security, 0 projects").click()
+    page.get_by_role("heading", name="Welcome to GapScan").wait_for()  # the Projects landing, empty
+    page.get_by_role(
+        "button", name="Add your first project"
+    ).click()  # opens the create-project wizard
     page.get_by_label("Project folder").fill(str(project))
     page.get_by_role("button", name="Add project").click()
     for n in (1, 2):  # two finished runs, so Compare has something to compare
@@ -295,7 +300,10 @@ def test_dry_run_archive_and_model_benchmark(stack, monkeypatch):
         lambda self: [{"name": best, "size_gb": 18.0, "params": "30B", "quant": "Q4"}],
     )
     page.goto(server.url())
-    page.get_by_role("button", name="Open Application security, 0 projects").click()
+    page.get_by_role("heading", name="Welcome to GapScan").wait_for()  # the Projects landing, empty
+    page.get_by_role(
+        "button", name="Add your first project"
+    ).click()  # opens the create-project wizard
     page.get_by_label("Project folder").fill(str(project))
     page.get_by_role("button", name="Add project").click()
     page.get_by_role("heading", name="Runs").wait_for()
@@ -334,7 +342,10 @@ def test_switching_project_replaces_the_data_that_is_shown(stack):
     second.mkdir()
     (second / "x.py").write_text("print('x')\n")
     page.goto(server.url())
-    page.get_by_role("button", name="Open Application security, 0 projects").click()
+    page.get_by_role("heading", name="Welcome to GapScan").wait_for()  # the Projects landing, empty
+    page.get_by_role(
+        "button", name="Add your first project"
+    ).click()  # opens the create-project wizard
     page.get_by_label("Project folder").fill(str(project))
     page.get_by_role("button", name="Add project").click()
     page.get_by_role("button", name="Start run").click()
@@ -344,7 +355,8 @@ def test_switching_project_replaces_the_data_that_is_shown(stack):
 
     # a second project that was never scanned: its page must not show the first project's results
     page.get_by_role("button", name="myapp").click()
-    page.get_by_role("button", name="All security projects and add a project…").click()
+    page.get_by_role("button", name="All projects and add a project…").click()
+    page.get_by_role("button", name="New project").click()  # opens the create-project wizard
     page.get_by_label("Project folder").fill(str(second))
     page.get_by_role("button", name="Add project").click()
     page.get_by_role("heading", name="Runs").wait_for()
@@ -363,3 +375,22 @@ def test_switching_project_replaces_the_data_that_is_shown(stack):
     page.wait_for_timeout(600)
     assert page.locator("[role=listitem]").count() == 0
     assert not errors
+
+
+def test_the_look_is_saved_per_project_and_defaults_to_midnight(stack):
+    server, page, project, errors = stack
+    page.goto(server.url())
+    page.get_by_role("button", name="Add your first project").click()
+    page.get_by_label("Project folder").fill(str(project))
+    page.get_by_role("button", name="Add project").click()
+    page.get_by_role("heading", name="Runs").wait_for()
+    pid = page.url.split("/p/")[1].split("/")[0]
+    looks = "() => Object.fromEntries(Object.entries(localStorage).filter(([k]) => k.startsWith('gapscan.ui')))"
+    assert page.evaluate(looks) == {}
+    page.locator("main").click()
+    page.keyboard.press("u")  # midnight, the default, steps to gapscan for this project only
+    page.wait_for_function(
+        "() => Object.keys(localStorage).some((k) => k.startsWith('gapscan.ui'))"
+    )
+    assert page.evaluate(looks) == {f"gapscan.ui.{pid}": "gapscan"}
+    assert errors == []

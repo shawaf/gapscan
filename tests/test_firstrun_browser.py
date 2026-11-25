@@ -82,10 +82,8 @@ def test_a_new_user_is_guided_from_setup_to_a_first_scan(stack):
     assert [p["name"] for p in httpx.get(base + "/api/projects", cookies=cookies).json()] == [
         "GapScan sample"
     ]
-    page.goto(server.url())  # coming back later starts on the domain picker, not the welcome page
-    page.get_by_role("heading", name="What do you want to close gaps against?").wait_for()
-    page.get_by_role("button", name="Open Application security, 1 project").click()
-    page.get_by_role("heading", name="Application security projects").wait_for()
+    page.goto(server.url())  # coming back later starts on the project list, not the welcome page
+    page.get_by_role("heading", name="Projects", exact=True).wait_for()
     assert errors == []
 
 
@@ -104,8 +102,8 @@ def test_skipping_the_welcome_page_is_remembered(stack):
     )
     page.goto(server.url())
     page.get_by_role(
-        "button", name="Open Application security, 0 projects"
-    ).click()  # the domain picker, not the wizard
+        "button", name="Add your first project"
+    ).click()  # the project list, not the wizard
     page.get_by_label(
         "Project folder"
     ).wait_for()  # the add-project form, not a redirect to the wizard

@@ -1,7 +1,10 @@
-import type { ComplianceCatalog, Project } from "./api";
-import { PageHead, Skeleton } from "./common";
+import { useState } from "preact/hooks";
+import { api } from "./api";
+import type { ComplianceCatalog, Project, Service } from "./api";
+import { ConfirmDialog, Grade, PageHead, Skeleton } from "./common";
 import { Icon } from "./icons";
 import type { IconName } from "./icons";
+import { useLoad } from "./useApi";
 import { useData } from "../context";
 import { num } from "../format";
 import { navigate } from "../store";
@@ -60,63 +63,77 @@ function TargetRow({ t, onOpen }: { t: Target; onOpen?: () => void }) {
   );
 }
 
-/** The gap model in one line, so the start page says what GapScan does before asking anything. */
-function GapModel() {
-  const step = (icon: IconName, title: string, text: string) => (
-    <div style="flex:1;min-width:150px"><b style="display:flex;gap:6px;align-items:center"><Icon name={icon} size={14} />{title}</b><p class="cc-note" style="margin:2px 0 0">{text}</p></div>
-  );
-  const op = (s: string) => <span aria-hidden="true" style="font-size:20px;color:var(--text-3);align-self:center">{s}</span>;
-  return (
-    <div class="cc-card" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px" role="note" aria-label="How GapScan measures">
-      {step("asvs", "Target", "A versioned standard or your own policy")}{op("−")}
-      {step("findings", "Evidence", "What scanners, data flow and reachability show")}{op("=")}
-      {step("warn", "Gap", "A control the evidence shows is not met")}{op("→")}
-      {step("check", "Proof of fix", "A rescan confirms the gap is closed")}
-    </div>
-  );
-}
-
 /** False when the server has no compliance catalog (GapScan Open ships without it): the planned
  * compliance domains and their links are then not shown. Set by App from GET /api/compliance. */
 let complianceAvailable = true;
 export const setComplianceAvailable = (v: boolean): void => { complianceAvailable = v; };
 export const isComplianceAvailable = (): boolean => complianceAvailable;
 
-/** Start page: choose what to measure the software against, then go to that domain's projects. */
 const SHOWN = 5;
 
-export function TargetsPage({ projects, domains, loading }: { projects: Project[] | null; domains: Domain[]; loading: boolean }) {
-  const count = (projects ?? []).filter((p) => !p.archived).length;
+/** The features home for one project: which features (domains) it is scanned for, each
+ *  opening into its own pages. Application security is enabled today; the rest are planned. */
+export function ProjectFeatures({ project, domains }: { project: Project; domains: Domain[] }) {
+  const done = project.latest_done;
+  const services = useLoad(() => api<Service[]>("GET", `/api/projects/${project.id}/services`), [project.id]);
+  const enabled = new Set((services.data ?? []).filter((s) => s.enabled).map((s) => s.domain));
+  const [confirm, setConfirm] = useState<{ d: Domain; enable: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const apply = async () => {
+    if (!confirm) return;
+    setBusy(true);
+    try { await api("PUT", `/api/projects/${project.id}/services/${confirm.d.id}`, { enabled: confirm.enable }); }
+    finally { setBusy(false); setConfirm(null); services.reload(); }
+  };
   return (
     <>
-      <div class="cc-h"><div><h1>What do you want to close gaps against?</h1>
-        <p>{complianceAvailable
-          ? "Choose a domain to see its projects and dashboards. Application security is built. The compliance and legal domains are planned: they will map the same evidence to each framework's controls."
-          : "Choose a domain to see its projects and dashboards."}</p></div></div>
-      <GapModel />
+      <div class="cc-h"><div><h1>{project.name}</h1>
+        <p class="mono cc-note" style="margin:3px 0 0">{project.path}</p>
+        <p style="margin-top:8px">The features this project is measured against.{complianceAvailable ? " Turn a feature on or off for this project. Application security is built; the compliance and legal domains are planned and will map the same evidence to each framework's controls." : ""}</p></div></div>
       <div class="dom-grid">
         {domains.map((d) => {
-          const go = () => navigate(d.id, null, null);
+          const on = enabled.has(d.id);
           return (
-            <section key={d.id} class={`cc-card dom${d.ready ? "" : " planned"}`} aria-labelledby={`dom-${d.id}`}>
+            <section key={d.id} class={`cc-card dom${on ? "" : " planned"}`} aria-labelledby={`feat-${d.id}`}>
               <DomainArt id={d.id} />
               <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-                <h2 id={`dom-${d.id}`} class="big" style="display:flex;gap:8px;align-items:center;margin:0"><Icon name={d.icon} size={18} />{d.label}</h2>
-                <span class={`badge2 ${d.ready ? "ok" : ""}`}>{d.ready ? `${count} project${count === 1 ? "" : "s"}` : "Planned"}</span>
+                <h2 id={`feat-${d.id}`} class="big" style="display:flex;gap:8px;align-items:center;margin:0"><Icon name={d.icon} size={18} />{d.label}</h2>
+                <span class={`badge2 ${on ? "ok" : ""}`}>{on ? "Enabled" : d.ready ? "Off" : "Planned"}</span>
               </div>
               <p style="margin:8px 0 4px;font-size:13px">{d.text}</p>
-              <p class="cc-note" style="margin:0 0 8px">{d.source}</p>
+              {on && d.ready
+                ? <p class="cc-note" style="margin:0 0 8px;display:flex;align-items:center;gap:8px">{done
+                    ? <>Latest scan: <Grade g={done.grade} n={done.score} /> · {done.open_findings} open gaps of {done.findings}</>
+                    : "Not scanned yet — open it to run the first scan."}</p>
+                : on
+                  ? <p class="cc-note" style="margin:0 0 8px">Enabled for this project. {d.source} · no scan engine yet, so this only records intent for now.</p>
+                  : <p class="cc-note" style="margin:0 0 8px">{d.ready ? "Not enabled for this project." : `${d.source} · not available to scan yet.`}</p>}
               <ul class="dom-targets">{d.targets.slice(0, d.ready ? undefined : SHOWN).map((t) => <li key={t.id}><span>{t.name}{t.edition && !t.edition.includes(".toml") ? ` ${t.edition}` : ""}</span><span class={`dot ${t.state}`} title={STATE_LABEL[t.state]} aria-label={STATE_LABEL[t.state]} /></li>)}
                 {!d.ready && d.targets.length > SHOWN && <li class="cc-note"><span>and {d.targets.length - SHOWN} more</span></li>}</ul>
-              <button class={`btn ${d.ready ? "primary" : ""}`} style="margin-top:12px" onClick={go}
-                aria-label={d.ready ? `Open ${d.label}, ${count} project${count === 1 ? "" : "s"}` : `Open ${d.label}, planned`}>
-                {d.ready ? "Open projects" : "See what is planned"}</button>
+              <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+                {on && d.ready && <button class="btn primary" onClick={() => navigate("overview")} aria-label={`Open ${d.label}`}>Open</button>}
+                {!on && <button class="btn primary" onClick={() => setConfirm({ d, enable: true })} aria-label={`Enable ${d.label}`}><Icon name="plus" size={13} /> Enable</button>}
+                {on && d.id !== "security" && <button class="btn" onClick={() => setConfirm({ d, enable: false })} aria-label={`Disable ${d.label}`}>Disable</button>}
+                {!d.ready && <button class="btn" onClick={() => navigate(d.id)} aria-label={`See what is planned for ${d.label}`}>See what is planned</button>}
+              </div>
             </section>
           );
         })}
-        {loading && <section class="cc-card"><Skeleton rows={4} /></section>}
       </div>
-      <p class="cc-note" style="margin-top:12px;display:flex;gap:14px;flex-wrap:wrap">{(Object.keys(STATE_LABEL) as TargetState[]).map((s) => <span key={s}><span class={`dot ${s}`} /> {STATE_LABEL[s]}</span>)}</p>
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.enable ? `Enable ${confirm.d.label}?` : `Disable ${confirm.d.label}?`}
+          confirm={busy ? "Working…" : confirm.enable ? "Enable" : "Disable"}
+          danger={!confirm.enable}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => void apply()}>
+          {confirm.enable
+            ? (confirm.d.ready
+                ? <>Turn on <b>{confirm.d.label}</b> for <b>{project.name}</b>. New scans will measure this project against its targets ({confirm.d.targets.slice(0, 2).map((t) => t.name).join(", ")}…).</>
+                : <>Turn on <b>{confirm.d.label}</b> for <b>{project.name}</b>. This feature is planned — there is no scan engine for it yet, so enabling it only records that this project will use it.</>)
+            : <>Turn off <b>{confirm.d.label}</b> for <b>{project.name}</b>. Its history is kept; it stops being part of this project's scans until you enable it again.</>}
+        </ConfirmDialog>
+      )}
     </>
   );
 }
@@ -128,7 +145,7 @@ export function PlannedDomain({ domain }: { domain: Domain }) {
       <div class="cc-h"><div><h1>{domain.label}</h1><p>{domain.text}</p></div></div>
       <div class="fd-banner grey" role="status" style="margin:0 0 16px"><b><Icon name="info" size={13} /> Planned ({domain.source})</b>
         <p>Nothing is measured against these frameworks yet. They will map the evidence that security scans already collect, so projects scanned today will not need to be scanned differently. GapScan will report technical evidence for the controls software can show; it will never say a project is compliant or certified, and it is not legal advice.</p>
-        <span style="display:flex;gap:8px"><button class="btn sm primary" onClick={() => navigate("security", null, null)}>Go to Application security</button><button class="btn sm" onClick={() => navigate("home", null, null)}>All domains</button></span></div>
+        <span style="display:flex;gap:8px"><button class="btn sm primary" onClick={() => navigate("overview")}>Go to Application security</button><button class="btn sm" onClick={() => navigate("features")}>All features</button></span></div>
       <section class="cc-card" style="padding:0" aria-label="Frameworks"><div class="tbl-wrap" style="border:0"><table class="tbl">
         <thead><tr><th>Framework</th><th>Region</th><th>What scans can show</th><th style="text-align:right">Build wave</th></tr></thead>
         <tbody>{domain.targets.map((t) => (
@@ -167,7 +184,7 @@ export function ProjectTargetsPage() {
             <td style="white-space:nowrap;text-align:right"><span class={`badge2 ${STATE_CLASS[t.state]}`}>{STATE_LABEL[t.state]}</span></td>
           </tr>
         ))}</tbody></table></div></section>
-      {complianceAvailable && <p class="cc-note">Compliance frameworks and legal regulations will map the same evidence once their packs exist. <a href="#" onClick={(e) => { e.preventDefault(); navigate("compliance"); }}>See the planned frameworks</a> · <a href="#/" onClick={(e) => { e.preventDefault(); navigate("home", null, null); }}>See all domains</a></p>}
+      {complianceAvailable && <p class="cc-note">Compliance frameworks and legal regulations will map the same evidence once their packs exist. <a href="#" onClick={(e) => { e.preventDefault(); navigate("compliance"); }}>See the planned frameworks</a> · <a href="#" onClick={(e) => { e.preventDefault(); navigate("features"); }}>See all features</a></p>}
     </>
   );
 }

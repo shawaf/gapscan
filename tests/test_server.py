@@ -1361,3 +1361,34 @@ def test_without_the_compliance_catalog_the_endpoint_is_absent(env, monkeypatch)
     )
     r = env.req("GET", "/api/compliance")
     assert r.status_code == 200 and r.json()["available"] is False
+
+
+def test_a_planned_feature_can_be_enabled_and_disabled_per_project(env, monkeypatch):
+    p = add_project(env)
+    group = "standards"
+    # GapScan Open has no planned features, so the id is refused until a catalog provides it.
+    url = f"/api/projects/{p['id']}/services/{group}"
+    monkeypatch.setattr("gapscan.server.app.compliance_catalog", lambda: None)
+    assert env.req("PUT", url, {"enabled": True}).status_code == 404
+    monkeypatch.setattr(
+        "gapscan.server.app.compliance_catalog", lambda: {"groups": [{"id": group}]}
+    )
+    # It is not set up until enabled; enabling creates the service for this project.
+    before = {s["domain"] for s in env.get(f"/api/projects/{p['id']}/services").json()}
+    assert group not in before
+    r = env.req("PUT", f"/api/projects/{p['id']}/services/{group}", {"enabled": True})
+    assert r.status_code == 200 and r.json()["enabled"] is True
+    after = {
+        s["domain"] for s in env.get(f"/api/projects/{p['id']}/services").json() if s["enabled"]
+    }
+    assert group in after
+    # Turning it back off keeps the row but marks it disabled.
+    off = env.req("PUT", f"/api/projects/{p['id']}/services/{group}", {"enabled": False})
+    assert off.status_code == 200 and off.json()["enabled"] is False
+    # An unknown feature id is still refused.
+    assert (
+        env.req(
+            "PUT", f"/api/projects/{p['id']}/services/not-a-feature", {"enabled": True}
+        ).status_code
+        == 404
+    )

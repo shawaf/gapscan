@@ -23,6 +23,14 @@ export function useStore<T>(store: Store<T>): T {
 function readLS(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }
 function writeLS(key: string, value: string): void { try { localStorage.setItem(key, value); } catch { /* ignore */ } }
 
+// Theme and look are per-viewer conveniences that can be set globally or per project. When a project
+// is active, its own choice wins and is what a change saves; with no project the global default is used.
+let activeProject: string | null = null;
+function scopedKey(base: string): string { return activeProject ? `${base}.${activeProject}` : base; }
+function resolveScoped(base: string, pid: string | null): string | null {
+  return (pid ? readLS(`${base}.${pid}`) : null) ?? readLS(base);
+}
+
 export type Theme = "system" | "light" | "dark";
 export const themeStore = new Store<Theme>((readLS("gapscan.theme") as Theme | null) ?? "system");
 export function applyTheme(t: Theme): void {
@@ -31,7 +39,7 @@ export function applyTheme(t: Theme): void {
 }
 export function setTheme(t: Theme): void {
   themeStore.set(t);
-  writeLS("gapscan.theme", t);
+  writeLS(scopedKey("gapscan.theme"), t);
   applyTheme(t);
 }
 export function cycleTheme(): void {
@@ -41,18 +49,30 @@ export function cycleTheme(): void {
 // ---- UI edition: "midnight" (dark-only control room, the default), "gapscan" (the GapScan design
 // system, light and dark), "soft" (rounded, pastel) or "glassy" (translucent, frosted). All four
 // stylesheets ship inlined; the look cycles midnight → gapscan → soft → glassy. A saved look that no
-// longer exists (such as the retired "classic") falls back to the default. ----
+// longer exists (such as the retired "classic") falls back to the default.
+// Saved globally or per active project, like the theme. ----
 export type Ui = "gapscan" | "midnight" | "soft" | "glassy";
 export const DEFAULT_UI: Ui = "midnight";
 export const UI_ORDER: Ui[] = ["midnight", "gapscan", "soft", "glassy"];
 export const UI_LABEL: Record<Ui, string> = { gapscan: "GapScan", midnight: "Midnight", soft: "Soft", glassy: "Glassy" };
-export const uiStore = new Store<Ui>((readLS("gapscan.ui") as Ui | null) && UI_ORDER.includes(readLS("gapscan.ui") as Ui) ? (readLS("gapscan.ui") as Ui) : DEFAULT_UI);
+const validUi = (v: string | null): Ui => (v && UI_ORDER.includes(v as Ui) ? (v as Ui) : DEFAULT_UI);
+export const uiStore = new Store<Ui>(validUi(readLS("gapscan.ui")));
 export function setUi(ui: Ui): void {
   uiStore.set(ui);
-  writeLS("gapscan.ui", ui);
+  writeLS(scopedKey("gapscan.ui"), ui);
 }
 export function toggleUi(): void {
   setUi(UI_ORDER[(UI_ORDER.indexOf(uiStore.get()) + 1) % UI_ORDER.length] ?? DEFAULT_UI);
+}
+
+/** Switch the project whose theme/look apply now. A project's own choice wins over the global one;
+ *  this only reads and applies (it never persists), so it is safe to call on every project change. */
+export function setActiveProject(pid: string | null): void {
+  activeProject = pid;
+  const theme = (resolveScoped("gapscan.theme", pid) as Theme | null) ?? "system";
+  themeStore.set(theme);
+  applyTheme(theme);
+  uiStore.set(validUi(resolveScoped("gapscan.ui", pid)));  // uiStore change re-applies the stylesheet
 }
 
 // ---- reviewer decisions: kept per report in localStorage, exported as gapscan-decisions.json ----
@@ -120,7 +140,7 @@ export function parseHash(hash: string): Route {
   let project: string | null = null;
   if (parts[0] === "p" && parts[1]) { project = parts[1]; parts.splice(0, 2); }
   const [page = "", id = null] = parts;
-  return { page: page || (project ? "overview" : "home"), id: id || null, project };
+  return { page: page || (project ? "features" : "home"), id: id || null, project };
 }
 export function navigate(page: string, id: string | null = null, project: string | null = routeStore.get().project): void {
   const base = project ? `/p/${encodeURIComponent(project)}` : "";

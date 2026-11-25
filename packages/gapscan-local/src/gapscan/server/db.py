@@ -378,7 +378,15 @@ class Database:
             "SELECT config FROM services WHERE project_id = ? AND domain = ?", (project_id, domain)
         )
         if row is None:
-            return None
+            # Enabling a feature the project never had sets it up now; a capability-only change
+            # on a feature that is not set up is refused (there is nothing to configure yet).
+            if enabled is None:
+                return None
+            self.execute(
+                "INSERT INTO services (project_id, domain, enabled, config, created_at) VALUES (?,?,?,'{}',?)",
+                (project_id, domain, int(enabled), now()),
+            )
+            row = {"config": "{}"}
         config = json.loads(row["config"] or "{}")
         sets: list[str] = []
         params: list[Any] = []

@@ -38,20 +38,21 @@ export function cycleTheme(): void {
   setTheme({ system: "light", light: "dark", dark: "system" }[themeStore.get()] as Theme);
 }
 
-// ---- UI edition: "gapscan" (the GapScan design system, the default), "midnight" (dark-only control
-// room), "soft" (rounded, pastel) or "glassy" (translucent, frosted). All four stylesheets ship
-// inlined; the look cycles gapscan → midnight → soft → glassy. A saved look that no longer exists
-// (such as the retired "classic") falls back to the default. ----
+// ---- UI edition: "midnight" (dark-only control room, the default), "gapscan" (the GapScan design
+// system, light and dark), "soft" (rounded, pastel) or "glassy" (translucent, frosted). All four
+// stylesheets ship inlined; the look cycles midnight → gapscan → soft → glassy. A saved look that no
+// longer exists (such as the retired "classic") falls back to the default. ----
 export type Ui = "gapscan" | "midnight" | "soft" | "glassy";
-export const UI_ORDER: Ui[] = ["gapscan", "midnight", "soft", "glassy"];
+export const DEFAULT_UI: Ui = "midnight";
+export const UI_ORDER: Ui[] = ["midnight", "gapscan", "soft", "glassy"];
 export const UI_LABEL: Record<Ui, string> = { gapscan: "GapScan", midnight: "Midnight", soft: "Soft", glassy: "Glassy" };
-export const uiStore = new Store<Ui>((readLS("gapscan.ui") as Ui | null) && UI_ORDER.includes(readLS("gapscan.ui") as Ui) ? (readLS("gapscan.ui") as Ui) : "gapscan");
+export const uiStore = new Store<Ui>((readLS("gapscan.ui") as Ui | null) && UI_ORDER.includes(readLS("gapscan.ui") as Ui) ? (readLS("gapscan.ui") as Ui) : DEFAULT_UI);
 export function setUi(ui: Ui): void {
   uiStore.set(ui);
   writeLS("gapscan.ui", ui);
 }
 export function toggleUi(): void {
-  setUi(UI_ORDER[(UI_ORDER.indexOf(uiStore.get()) + 1) % UI_ORDER.length] ?? "gapscan");
+  setUi(UI_ORDER[(UI_ORDER.indexOf(uiStore.get()) + 1) % UI_ORDER.length] ?? DEFAULT_UI);
 }
 
 // ---- reviewer decisions: kept per report in localStorage, exported as gapscan-decisions.json ----

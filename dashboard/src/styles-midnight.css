@@ -1,4 +1,4 @@
-/* Midnight: a dark-only control-room look. Ink surfaces in four steps, soft glass edges (a 6% white
+/* Midnight: the default look, dark only, in the style of a control room. Ink surfaces in four steps, soft glass edges (a 6% white
    hairline plus a 4% inner top highlight, no blur), one periwinkle accent, green dots for healthy
    status and monospace for logs and paths. It stays dark whatever the light/dark switch says.
    The brand fonts are used only when installed; nothing is loaded from the network. */
@@ -14,7 +14,7 @@
   --sev-info: #8B95A3; --sev-info-bg: #1D232C; --sev-info-fill: #4A5361;
   --ok: #6FD39B; --ok-bg: #16291F; --ok-fill: #3F8F65;
   --gap: #FF8A65; --clear: #8FB3D9; --review: #C7A6FF; --bar-clear: #4F6E91; --bar-review: #8E74C2;
-  --on-sev: #0A0D11; --code-bg: #1D232C; --halo: #DCE3F5;
+  --on-sev: #0A0D11; --code-bg: #1D232C; --halo: #DCE3F5; --fail-text: var(--gap);
   --drawer-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
   --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans", "Helvetica Neue", sans-serif;
   --display: "Space Grotesk", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -189,8 +189,11 @@ pre.code { background: var(--code-bg); border: 0; border-radius: 14px; padding: 
 :root .hljs-number, :root .hljs-symbol { color: #FFC266; }
 :root .hljs-title, :root .hljs-function .hljs-title { color: #9DB0FF; }
 @media (max-width: 860px) {
-  .app { padding: 0; gap: 0; } .sidebar { border-radius: 0; height: auto; border: 0; border-bottom: 1px solid var(--hair); }
+  .app { padding: 0; gap: 0; grid-template-columns: minmax(0, 1fr); } .sidebar { position: static; border-radius: 0; height: auto; border: 0; border-bottom: 1px solid var(--hair); }
 }
 @media print { .app { padding: 0; } .card { box-shadow: none; } }
 /* Midnight has no light variant, so the light/dark switch is hidden while it is the look */
 [role="radiogroup"][aria-label="Theme"] { display: none; }
+/* chapter and row buttons inside tables read as list rows, as in the design boards */
+.t td .btn:not([aria-pressed="true"]) { background: transparent; border-color: transparent; }
+.t td .btn:not([aria-pressed="true"]):hover { background: var(--raised); }

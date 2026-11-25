@@ -1,4 +1,4 @@
-/* Control Center, GapScan edition (the default look). Every rule is scoped to [data-ui="gapscan"].
+/* Control Center, GapScan edition. Every rule is scoped to [data-ui="gapscan"].
    Tokens come from ../styles-gapscan.css: dark first, one accent, 8px controls and 14px cards. */
 :root[data-ui="gapscan"] { --r: 14px; --rs: 8px; }
 :root[data-ui="gapscan"] .cc-side { background: var(--bg); }

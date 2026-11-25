@@ -93,3 +93,16 @@
   :root[data-ui="midnight"] .cc { padding: 0; gap: 0; }
   :root[data-ui="midnight"] .cc-side { position: static; height: auto; border-radius: 0; border: 0; border-bottom: 1px solid var(--hair); }
 }
+
+/* match the design boards: coverage in gap coral, no-issue steel blue and needs-a-person purple;
+   big numbers in the display face; counts in the sidebar as plain text */
+:root[data-ui="midnight"] .s-fail { background: var(--gap); }
+:root[data-ui="midnight"] .s-ok { background: var(--bar-clear); }
+:root[data-ui="midnight"] .s-man { background: var(--bar-review); }
+:root[data-ui="midnight"] .score .n, :root[data-ui="midnight"] .grade-box, :root[data-ui="midnight"] .stat3 .v,
+:root[data-ui="midnight"] .tile .n, :root[data-ui="midnight"] .state3 .v { font-family: var(--display); font-weight: 600; letter-spacing: -0.02em; }
+:root[data-ui="midnight"] .score .n { font-size: 52px; }
+:root[data-ui="midnight"] .stat3 .v, :root[data-ui="midnight"] .state3 .v { font-size: 30px; line-height: 36px; }
+:root[data-ui="midnight"] .cc-nav .cc-key { background: none; border: 0; color: var(--text-3); font-family: var(--font); font-size: 13px; }
+:root[data-ui="midnight"] .tbl td a:not(.btn) { color: var(--text); text-decoration: none; font-weight: 500; }
+:root[data-ui="midnight"] .tbl td a:not(.btn):hover { text-decoration: underline; }

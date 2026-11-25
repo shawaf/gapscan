@@ -234,7 +234,7 @@ function Palette({ onClose, pid, projects, domains }: { onClose: () => void; pid
     ...(pid ? ALL_NAV.filter((n) => isComplianceAvailable() || n.id !== "compliance").map((n) => ({ label: `Go to ${n.label}`, hint: n.key ? String(n.key) : "", run: () => navigate(n.id) })) : []),
     ...(pid ? [{ label: "Start a new scan", hint: "", run: () => navigate("runs") }] : []),
     { label: "Switch theme", hint: "t", run: cycleTheme },
-    { label: "Switch look (GapScan / Midnight / soft / glassy)", hint: "u", run: toggleUi },
+    { label: "Switch look (Midnight / GapScan / soft / glassy)", hint: "u", run: toggleUi },
     { label: "All domains", hint: "", run: () => navigate("home", null, null) },
     ...domains.map((d) => ({ label: `Go to ${d.label}${d.ready ? " projects" : " (planned)"}`, hint: "", run: () => navigate(d.id, null, null) })),
     ...projects.map((p) => ({ label: `Open project ${p.name}`, hint: "", run: () => navigate("overview", null, String(p.id)) })),

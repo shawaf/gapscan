@@ -439,6 +439,10 @@ def _make_handler(srv: GapScanServer) -> type[BaseHTTPRequestHandler]:
         def update_service(self, pid: str, domain: str) -> None:
             if not db.project(int(pid)):
                 raise ApiError(404, "no such project")
+            catalog = compliance_catalog() or NO_CATALOG
+            known = {"security"} | {g["id"] for g in catalog["groups"]}
+            if domain not in known:
+                raise ApiError(404, "unknown feature")
             b = self._body()
             enabled = b.get("enabled")
             if enabled is not None and not isinstance(enabled, bool):

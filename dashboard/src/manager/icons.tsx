@@ -43,13 +43,32 @@ const PATHS: Record<string, string> = {
   help: "M8 14A6 6 0 1 0 8 2a6 6 0 0 0 0 12zM6.2 6.3a1.9 1.9 0 1 1 2.6 1.8c-.5.3-.8.7-.8 1.3M8 11.6h.01",
 };
 
+// The navigation set from the Midnight boards: a 24 px grid with a 2 px stroke.
+const PATHS24: Record<string, string> = {
+  overview: "M5 3h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM16 3h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM5 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2zM16 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-3a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2z",
+  runs: "M21 12a9 9 0 1 1-3-6.7M21 4v5h-5",
+  findings: "M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z",
+  asvs: "M4 6h16M4 12h16M4 18h10",
+  owasp: "M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  compliance: "M9 12l2 2 4-4M7 3h10a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z",
+  deps: "M12 3l8 4.5v9L12 21l-8-4.5v-9z",
+  secrets: "M8 19a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM11 12l9-9M17 6l3 3",
+  hotspots: "M12 3c3 4 6 6 6 10a6 6 0 0 1-12 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3 0-6 2-8.5z",
+  settings: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1",
+  health: "M4 12h4l2-6 4 12 2-6h4",
+  search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-3.5-3.5",
+  triage: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z",
+  trend: "M4 18l5-6 4 3 7-9",
+  sidebar: "M6 4h12a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3zM9 4v16",
+};
+
 export type IconName = keyof typeof PATHS;
 
 export function Icon({ name, size = 16, label }: { name: IconName; size?: number; label?: string }): JSX.Element {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
+    <svg width={size} height={size} viewBox={PATHS24[name] ? "0 0 24 24" : "0 0 16 16"} fill="none" stroke="currentColor" stroke-width={PATHS24[name] ? 2 : 1.5}
       stroke-linecap="round" stroke-linejoin="round" aria-hidden={label ? undefined : "true"} role={label ? "img" : undefined} aria-label={label}>
-      <path d={PATHS[name]} />
+      <path d={PATHS24[name] ?? PATHS[name]} />
     </svg>
   );
 }

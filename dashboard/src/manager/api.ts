@@ -77,6 +77,8 @@ export interface Scan {
   branch?: string; commit_sha?: string;
 }
 export interface ProjectDetail extends Project { scans: Scan[] }
+/** One feature (domain) a project has turned on, from GET /api/projects/{id}/services. */
+export interface Service { domain: string; enabled: boolean; label: string }
 export interface Profile { name: string; model: string; note: string; installed: boolean; selected: boolean; size_gb: number | null }
 export interface Models { profiles: Profile[]; installed: { name: string }[]; error: string; endpoint: string }
 export interface Settings { profile: string; triage_limit: number; use_tools: boolean; max_tool_calls: number; asvs_level: number; default_preset: "full" | "scanners"; deep_dive: boolean; deep_dive_limit: number; scanners: string[] }

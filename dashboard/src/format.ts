@@ -33,3 +33,11 @@ export function csvEscape(v: unknown): string {
   const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
   return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
+
+/** A scanner title without its rule plumbing: "Semgrep Finding: a.b.tainted-sql-string" is "Tainted sql string". */
+export function plainTitle(t: string): string {
+  const m = /^Semgrep Finding:\s*(\S+)$/i.exec(t);
+  if (!m) return t;
+  const words = (m[1]?.split(".").pop() ?? t).replace(/[-_]+/g, " ").trim();
+  return words ? words[0]?.toUpperCase() + words.slice(1) : t;
+}

@@ -1,5 +1,5 @@
 import type { ComponentChildren, JSX } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useState } from "preact/hooks";
 import { Icon, SevGlyph, Spinner } from "./icons";
 import type { QueueRun, RunOptions, Scan } from "./api";
 import { ACTIVE } from "./api";
@@ -118,7 +118,7 @@ export { duration };
 // ---- drawer -------------------------------------------------------------------------------
 
 export function Drawer({ title, onClose, children }: { title: ComponentChildren; onClose: () => void; children: ComponentChildren }): JSX.Element {
-  useEffect(() => {
+  useLayoutEffect(() => {  // before paint, so Escape works as soon as the drawer is visible
     const on = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", on);
     return () => window.removeEventListener("keydown", on);

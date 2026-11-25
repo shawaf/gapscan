@@ -35,7 +35,7 @@ def test_the_wizard_installs_downloads_and_starts_the_engine(tmp_path, monkeypat
     server = build_server(cfg, port=0, pipeline=FakePipeline(), runtime=runtime)
     server.runtime.set_welcome(
         "skipped"
-    )  # these tests start from the domain picker, not the first-run welcome page
+    )  # these tests start from the project list, not the first-run welcome page
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         with playwright_api.sync_playwright() as p:
@@ -47,7 +47,7 @@ def test_the_wizard_installs_downloads_and_starts_the_engine(tmp_path, monkeypat
             errors: list[str] = []
             page.on("pageerror", lambda e: errors.append(str(e)))
             page.goto(server.url())
-            page.get_by_role("heading", name="What do you want to close gaps against?").wait_for()
+            page.get_by_role("heading", name="Welcome to GapScan").wait_for()
             page.get_by_role("link", name="Setup").click()
             page.get_by_role("heading", name="Setup").wait_for()
             page.get_by_text(

@@ -24,6 +24,10 @@ All notable changes to GapScan are listed here. Versions follow [semantic versio
 - **Midnight look**, now the default for the report and the web UI: a dark-only control-room style
   with glass-edged cards, a floating sidebar, green status dots and monospace logs. The GapScan,
   Soft and Glassy looks stay one click away on the Look switch (or press `u`).
+- **Projects first.** The web UI opens on your projects, adding one is a dialog, and each project has
+  a Features page when there is more than one feature. The theme and look can be saved per project.
+- **A simpler web UI.** New sidebar, icons and Overview from the Midnight design; Gaps, ASVS coverage
+  and Runs show the essentials first, with the rest one click away. Look and theme are in Settings.
 
 ### Removed
 

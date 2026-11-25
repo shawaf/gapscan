@@ -43,8 +43,8 @@ export function WelcomePage() {
   const finishedOk = q.finished === "done" || (everythingReady && !q.running);
 
   const markDone = async (value: "done" | "skipped") => { try { await api("POST", "/api/setup/welcome", { value }); } catch { /* the page still moves on */ } };
-  const skip = async () => { await markDone("skipped"); navigate("security", null, null); };
-  const addOwn = async () => { await markDone("done"); navigate("security", null, null); };
+  const skip = async () => { await markDone("skipped"); navigate("home", null, null); };
+  const addOwn = async () => { await markDone("done"); navigate("home", null, null); };
   const trySample = async () => {
     try {
       const p = await api<Project>("POST", "/api/sample", {});

@@ -56,6 +56,7 @@ runs:
         INSTALL: ${{ inputs.install }}
       run: eval "$INSTALL"
     - name: Prepare the GapScan image
+      id: prep
       if: inputs.engine == 'docker'
       shell: bash
       env:
@@ -75,13 +76,14 @@ runs:
         cp "$ACTION_PATH/integrations/ci/gapscan-docker.sh" "$bin/gapscan"
         chmod +x "$bin/gapscan"
         echo "$bin" >> "$GITHUB_PATH"
-        echo "GAPSCAN_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+        echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
     - name: Scan
       shell: bash
       env:
         TARGET: ${{ inputs.target }}
         BASE: ${{ inputs.base }}
         GAPSCAN_DOCKER_NETWORK: none  # the scan never needs the network
+        GAPSCAN_IMAGE: ${{ steps.prep.outputs.image }}
       run: >
         gapscan ci run "$TARGET" ${BASE:+--base "origin/$BASE"}
         --comment gapscan-comment.md --out gapscan-findings.json --sarif gapscan.sarif
@@ -97,6 +99,7 @@ runs:
       env:
         GAPSCAN_SCM_TOKEN: ${{ inputs.github-token }}
         GAPSCAN_DOCKER_NETWORK: bridge  # posting the comment talks to the GitHub API
+        GAPSCAN_IMAGE: ${{ steps.prep.outputs.image }}
         API_URL: ${{ github.api_url }}
         REPO: ${{ github.repository }}
         PR_NUMBER: ${{ github.event.pull_request.number }}

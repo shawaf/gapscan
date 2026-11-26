@@ -13,6 +13,7 @@ from gapscan.normalize import normalize
 from gapscan.pipeline import collect_evidence
 from gapscan.registry import Registry, registry
 from gapscan.scanners import scan_target
+from gapscan.scanners.imports import RuntimeProof
 from gapscan.security_pack import Reachability, SecretFacts, VulnEnrichment
 
 
@@ -25,7 +26,11 @@ def test_the_security_pack_registers_its_scan_step_annotators_and_flow_filter() 
     reg = registry()
     assert reg.collectors == [scan_target]
     without_config = reg.annotators_for(None)
-    assert [type(a) for a in without_config] == [SecretFacts, Reachability]  # KEV needs data
+    assert [type(a) for a in without_config] == [
+        SecretFacts,
+        Reachability,
+        RuntimeProof,
+    ]  # KEV needs data
     with_config = reg.annotators_for(Config())
     assert [type(a) for a in with_config] == [SecretFacts, Reachability, VulnEnrichment]
     assert all(isinstance(a, Annotator) for a in with_config)

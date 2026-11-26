@@ -32,7 +32,12 @@ def test_the_security_pack_registers_its_scan_step_annotators_and_flow_filter() 
         RuntimeProof,
     ]  # KEV needs data
     with_config = reg.annotators_for(Config())
-    assert [type(a) for a in with_config] == [SecretFacts, Reachability, VulnEnrichment]
+    assert [type(a) for a in with_config] == [
+        SecretFacts,
+        Reachability,
+        RuntimeProof,
+        VulnEnrichment,
+    ]
     assert all(isinstance(a, Annotator) for a in with_config)
     assert [a.stage for a in with_config] == ["evidence", "context", "context"]
 

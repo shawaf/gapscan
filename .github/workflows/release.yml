@@ -22,6 +22,10 @@ on:
       version:
         description: "Version to release, as in CHANGELOG.md (for example 1.1.0)"
         required: true
+      dry_run:
+        description: "Build and test everything, but publish nothing (no tag, release, PyPI or registry)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -131,6 +135,7 @@ jobs:
 
   release:
     needs: [notes, python, desktop]
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

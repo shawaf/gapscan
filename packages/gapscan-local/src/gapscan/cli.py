@@ -36,7 +36,7 @@ from .memory import (
     remove_memory,
     save_memories,
 )
-from .models import Finding, Investigation, ScanResult, Verdict
+from .models import Finding, Investigation, ScannerRun, ScanResult, Verdict
 from .offline.bundle import BundleError, BundleOptions, build_bundle
 from .offline.fetch import (
     fetch_enrichment,
@@ -48,7 +48,7 @@ from .offline.fetch import (
 from .offline.refresh import download_wheels, refresh_all
 from .offline.update import UpdateError, import_bundle, verify_bundle
 from .paths import use_app_dir
-from .pipeline import run_scan
+from .pipeline import collect_evidence, normalize_scan, run_scan
 from .report.build import load_previous
 from .report.dashboard import TemplateMissing
 from .report.decisions import load_decisions
@@ -58,6 +58,7 @@ from .report.service import build_dashboard
 from .runtime.download import DownloadCancelled, DownloadError
 from .runtime.manager import RuntimeManager
 from .runtime.tools import activate as activate_tools
+from .scanners.imports import Imported, ImportError_, load_import
 from .services import ReviewHooks, review_scan
 from .stages import StageMismatch, TriageOutput
 from .store.raw import RawStore
@@ -165,6 +166,14 @@ def scan(
             "Scanned offline with Trivy and shown as its own view.",
         ),
     ] = None,
+    imports: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--import",
+            help="Results of another tool to add as evidence (repeatable): SARIF, an OWASP ZAP JSON "
+            "report or nuclei JSON Lines. A ZAP or nuclei result marks the code it confirms.",
+        ),
+    ] = None,
     config: ConfigOption = None,
 ) -> None:
     """Run the scanners and normalize their findings (LLM triage and the dashboard come later)."""
@@ -176,7 +185,22 @@ def scan(
     if missing:
         console.print(f"[red]Image archive not found:[/red] {', '.join(map(str, missing))}")
         raise typer.Exit(code=2)
-    result = run_scan(cfg, target, images=image or [])
+    imported: list[Imported] = []
+    for path in imports or []:
+        try:
+            imported.append(load_import(path, target))
+        except ImportError_ as exc:
+            console.print(f"[red]Cannot import:[/red] {exc}", markup=False)
+            raise typer.Exit(code=2) from exc
+    if imported:
+        raw = collect_evidence(cfg, target, images=image or [])
+        for item in imported:
+            raw.findings += item.findings
+            raw.runs.append(ScannerRun(scanner=f"{item.scanner} (imported)", status="ok",
+                                       finding_count=len(item.findings)))  # fmt: skip
+        result = normalize_scan(cfg, raw, target)
+    else:
+        result = run_scan(cfg, target, images=image or [])
     out.write_text(result.model_dump_json(indent=2), encoding="utf-8")
     table = Table(title=f"Scanners ({result.target})")
     for col in ("scanner", "status", "findings", "seconds"):
@@ -187,6 +211,9 @@ def scan(
     console.print(
         f"{len(result.findings)} findings after merging, {result.ignored_count} ignored -> {out}"
     )
+    confirmed = sum(1 for f in result.findings if f.raw.get("runtime_proof"))
+    if confirmed:
+        console.print(f"{confirmed} code finding(s) confirmed at runtime by imported results")
     if any(r.status != "ok" for r in result.runs):
         console.print("[yellow]Some scanners did not run; see the table above.[/yellow]")
 

@@ -21,6 +21,7 @@ from .scanners import scan_target
 from .scanners.bandit import BanditScanner
 from .scanners.checkov import CheckovScanner
 from .scanners.gitleaks import GitleaksScanner
+from .scanners.imports import RuntimeProof
 from .scanners.osv import OSVScanner
 from .scanners.semgrep import SemgrepScanner
 from .scanners.trivy import TrivyScanner
@@ -34,6 +35,7 @@ def register(reg: Registry) -> None:
     reg.add_collector(scan_target)
     reg.add_annotator(lambda c: SecretFacts())
     reg.add_annotator(lambda c: Reachability())  # before KEV/EPSS, as scoring reads both
+    reg.add_annotator(lambda c: RuntimeProof())  # code a ZAP/nuclei result confirms (--import)
     reg.add_annotator(vuln_enrichment)
     # Weak algorithms and insecure settings are judged by what was chosen, not by data flow.
     reg.add_flow_filter(lambda f: weakness_kind(f) == "dataflow")

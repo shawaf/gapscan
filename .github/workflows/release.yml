@@ -135,7 +135,11 @@ jobs:
 
   release:
     needs: [notes, python, desktop]
-    if: ${{ !inputs.dry_run }}
+    # A desktop build that fails blocks the release. One that never started (no macOS runner for the
+    # account) does not: the release then carries the files that were built.
+    if: >-
+      ${{ always() && !inputs.dry_run && needs.notes.result == 'success'
+      && needs.python.result == 'success' && needs.desktop.result != 'failure' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -175,6 +179,7 @@ jobs:
 
   pypi:
     needs: [notes, release]
+    if: ${{ always() && needs.release.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
@@ -191,6 +196,7 @@ jobs:
 
   mcp-registry:
     needs: [notes, pypi]
+    if: ${{ always() && needs.pypi.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

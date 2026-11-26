@@ -160,7 +160,7 @@ jobs:
         run: |
           gh release create "$TAG" --target "$GITHUB_SHA" --title "GapScan $TAG" \
             --notes-file artifacts/notes/notes.md upload/*
-      - name: Move the major tag (v1) to this release for `uses: shawaf/gapscan@v1`
+      - name: Move the major tag (v1) to this release, which workflows using @v1 follow
         run: |
           major="${TAG%%.*}"
           git config user.name "github-actions[bot]"

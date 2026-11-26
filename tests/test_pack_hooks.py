@@ -39,7 +39,7 @@ def test_the_security_pack_registers_its_scan_step_annotators_and_flow_filter() 
         VulnEnrichment,
     ]
     assert all(isinstance(a, Annotator) for a in with_config)
-    assert [a.stage for a in with_config] == ["evidence", "context", "context"]
+    assert [a.stage for a in with_config] == ["evidence", "context", "context", "context"]
 
 
 def test_data_flow_is_traced_for_tainted_data_only() -> None:

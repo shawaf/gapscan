@@ -149,3 +149,23 @@ def test_image_findings_parse_like_trivy_and_asset_is_image() -> None:
 
     classify_asset(fs[0])
     assert fs[0].asset == "image"
+
+
+def test_malicious_release_of_a_real_package_respects_the_declared_range(tmp_path: Path) -> None:
+    """ng2-file-upload had compromised 7.x-9.x releases in 2025; `^10.0.0` cannot install them."""
+    from gapscan.malware import malicious_findings
+
+    z = tmp_path / "db" / "osv-scalibr" / "npm"
+    z.mkdir(parents=True)
+    bad = ["7.0.2", "7.0.3", "8.0.1", "8.0.2", "8.0.3", "9.0.1"]
+    with zipfile.ZipFile(z / "all.zip", "w") as zf:
+        zf.writestr("MAL-2025-47196.json", json.dumps({"id": "MAL-2025-47196", "affected": [
+            {"package": {"ecosystem": "npm", "name": "ng2-file-upload"}, "versions": bad}]}))  # fmt: skip
+
+    def hits(spec: str | None) -> int:
+        dep = Dep("npm", "ng2-file-upload", spec, "package.json", 1)
+        return len(malicious_findings([dep], tmp_path / "db"))
+
+    assert hits("^10.0.0") == 0 and hits("~9.0.2") == 0
+    assert hits("^8.0.0") == 1 and hits("~7.0.1") == 1 and hits("9.0.1") == 1
+    assert hits(">=6") == 1 and hits(None) == 1  # anything we cannot rule out stays reported

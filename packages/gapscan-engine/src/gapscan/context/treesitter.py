@@ -12,7 +12,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
-from typing import NamedTuple
+from typing import NamedTuple, cast
 
 from tree_sitter import Language, Node, Parser, Tree
 
@@ -84,6 +84,9 @@ class ParsedFile:
     source: bytes
     tree: Tree
     lines: list[str] = field(default_factory=list)
+    # Memo for `functions()` and the flow tracer: a report asks for them once per finding, and a
+    # walk of a large file per question made big projects take minutes.
+    _cache: dict[object, object] = field(default_factory=dict, repr=False, compare=False)
 
     def text(self, node: Node) -> str:
         return self.source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
@@ -182,7 +185,13 @@ def _make_info(pf: ParsedFile, node: Node, start: Node, body: Node | None) -> Fu
 
 
 def functions(pf: ParsedFile) -> list[FunctionInfo]:
-    """Every function/method defined in the file, outermost first."""
+    """Every function/method defined in the file, outermost first (computed once per file)."""
+    if "functions" not in pf._cache:
+        pf._cache["functions"] = _functions(pf)
+    return list(cast("list[FunctionInfo]", pf._cache["functions"]))
+
+
+def _functions(pf: ParsedFile) -> list[FunctionInfo]:
     out: list[FunctionInfo] = []
     fn_types = _SPECS[pf.language].function_types
     for node in _walk(pf.tree.root_node):
@@ -260,6 +269,12 @@ def _last_name(pf: ParsedFile, node: Node | None) -> str | None:
 
 def calls(pf: ParsedFile) -> list[CallSite]:
     """Call expressions with the called function/method name (receiver types not resolved)."""
+    if "calls" not in pf._cache:
+        pf._cache["calls"] = _calls(pf)
+    return list(cast("list[CallSite]", pf._cache["calls"]))
+
+
+def _calls(pf: ParsedFile) -> list[CallSite]:
     out: list[CallSite] = []
     lang = pf.language
     for node in _walk(pf.tree.root_node):

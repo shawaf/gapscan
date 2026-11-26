@@ -5,10 +5,13 @@ from __future__ import annotations
 
 import os
 import re
+import time
+from functools import lru_cache
 from pathlib import Path
 
 from ..models import Caller
 from .treesitter import (
+    ParsedFile,
     calls,
     class_ranges,
     detect_language,
@@ -28,7 +31,35 @@ _TEST_HINT = re.compile(
 )
 
 
+# A report asks for callers once per finding. Walking the tree and re-parsing every file each
+# time made large projects take minutes, so both are cached: the file list for a short while (a
+# long-running `serve` must still see new files), parsed files for as long as they are unchanged.
+_LIST_TTL_S = 60.0
+_lists: dict[tuple[str, str], tuple[float, list[str]]] = {}
+
+
 def _candidate_files(target: Path, language: str) -> list[str]:
+    key = (str(target.resolve()), family(language))
+    hit = _lists.get(key)
+    if hit is not None and time.monotonic() - hit[0] < _LIST_TTL_S:
+        return list(hit[1])
+    found = _walk_candidates(target, language)
+    if len(_lists) > 32:
+        _lists.clear()
+    _lists[key] = (time.monotonic(), found)
+    return list(found)
+
+
+@lru_cache(maxsize=512)
+def _parse_cached(path: str, rel: str, mtime_ns: int, size: int) -> ParsedFile | None:
+    try:
+        source = Path(path).read_bytes()
+    except OSError:
+        return None
+    return parse(rel, source, detect_language(rel))
+
+
+def _walk_candidates(target: Path, language: str) -> list[str]:
     fam = family(language)
     found: list[str] = []
     for root, dirs, files in os.walk(target):
@@ -71,7 +102,8 @@ def find_callers(
         confirmed += 1
         if confirmed > MAX_FILES_CONFIRMED:
             break
-        pf = parse(rel, source, detect_language(rel))
+        st = path.stat()
+        pf = _parse_cached(str(path), rel, st.st_mtime_ns, st.st_size)
         if pf is None:
             continue
         for site in calls(pf):

@@ -94,6 +94,17 @@ def test_context_classification():
     v = code(file="node_modules/x/index.js")
     classify_context(v)
     assert v.is_vendor_code
+    for vendored in ("sqli/static/js/jquery-3.2.1.min.js", "static/js/libs/jquery-2.1.4.min.js",
+                     "public/bower_components/a/a.js", "static/app-min.css"):  # fmt: skip
+        m = code(file=vendored)
+        classify_context(m)
+        assert m.is_vendor_code, vendored
+    own = code(file="src/admin.js")
+    classify_context(own)
+    assert not own.is_vendor_code
+    g = code(file="testdata/certificate/key.pem")
+    classify_context(g)
+    assert g.is_test_code  # Go's convention for test inputs
     r = code(file="app/views.py", snippet="@app.route('/x')\ndef x(): ...")
     classify_context(r)
     assert r.internet_facing

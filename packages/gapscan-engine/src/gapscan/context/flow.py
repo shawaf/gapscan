@@ -532,7 +532,16 @@ def _container_element(
 
 
 def _helper_returns_constant(pf: ParsedFile, name: str) -> bool:
-    """True when a same-file function `name` only ever returns literals."""
+    """True when a same-file function `name` only ever returns literals (memoized per file; a
+    helper whose answer depends on itself counts as not constant)."""
+    key = ("returns_constant", name)
+    if key not in pf._cache:
+        pf._cache[key] = False  # in progress: a recursive helper is not provably constant
+        pf._cache[key] = _returns_constant(pf, name)
+    return bool(pf._cache[key])
+
+
+def _returns_constant(pf: ParsedFile, name: str) -> bool:
     for f in functions(pf):
         if f.name != name:
             continue

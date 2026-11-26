@@ -26,6 +26,10 @@ on:
         description: "Build and test everything, but publish nothing (no tag, release, PyPI or registry)"
         type: boolean
         default: false
+      publish_only:
+        description: "Only publish an existing GitHub release's files to PyPI and the MCP Registry (for a retry)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -76,6 +80,7 @@ jobs:
 
   python:
     needs: notes
+    if: ${{ !inputs.publish_only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -94,6 +99,7 @@ jobs:
 
   desktop:
     needs: notes
+    if: ${{ !inputs.publish_only }}
     strategy:
       fail-fast: false
       matrix:
@@ -138,7 +144,7 @@ jobs:
     # A desktop build that fails blocks the release. One that never started (no macOS runner for the
     # account) does not: the release then carries the files that were built.
     if: >-
-      ${{ always() && !inputs.dry_run && needs.notes.result == 'success'
+      ${{ always() && !inputs.dry_run && !inputs.publish_only && needs.notes.result == 'success'
       && needs.python.result == 'success' && needs.desktop.result != 'failure' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -179,19 +185,32 @@ jobs:
 
   pypi:
     needs: [notes, release]
-    if: ${{ always() && needs.release.result == 'success' }}
+    if: >-
+      ${{ always() && (needs.release.result == 'success'
+      || (inputs.publish_only && needs.notes.result == 'success')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
       name: pypi
       url: https://pypi.org/project/gapscan/
     permissions:
+      contents: read
       id-token: write  # trusted publishing: no API token is stored anywhere
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        if: ${{ !inputs.publish_only }}
         with:
           name: python
           path: dist
+      - name: Take the wheel and sdist from the published release (the same files, same checksums)
+        if: ${{ inputs.publish_only }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.notes.outputs.tag }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir dist \
+            --pattern 'gapscan-*.whl' --pattern 'gapscan-[0-9]*.tar.gz'
+          ls -l dist
       - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
 
   mcp-registry:

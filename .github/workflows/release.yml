@@ -1,6 +1,17 @@
-# Publishes a GitHub release, either when a version tag (v1.2.3) is pushed or when the workflow is
-# started by hand with a version (it then tags the commit it runs on). The notes are that version's
-# section of CHANGELOG.md, so the changelog stays the one place release notes are written.
+# Publishes a release, either when a version tag (v1.2.3) is pushed or when the workflow is started by
+# hand with a version (it then tags the commit it runs on). The notes are that version's section of
+# CHANGELOG.md, so the changelog stays the one place release notes are written.
+#
+# What a release carries:
+# - the `gapscan` wheel and sdist (tools/build_dist.py), checked by installing them in a clean venv
+# - the desktop app for macOS (GapScan.dmg, unsigned) and a Linux x86_64 build (gapscan-linux-x86_64.tar.gz)
+# - SHA256SUMS and a GitHub build-provenance attestation for every file
+# - the moving major tag (v1) that `uses: shawaf/gapscan@v1` follows
+# Then, separately so a missing PyPI setup never blocks the GitHub release: the package on PyPI
+# (trusted publishing, environment `pypi`) and the server's listing in the MCP Registry.
+# The Docker image is published by docker.yml on the same tag.
+#
+# Actions are pinned to commit SHAs (the tag is in the comment), as in ci.yml.
 name: Release
 
 on:
@@ -9,28 +20,41 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release, as in CHANGELOG.md (for example 1.0.0)"
+        description: "Version to release, as in CHANGELOG.md (for example 1.1.0)"
         required: true
 
 permissions:
-  contents: write
+  contents: read
+
+env:
+  VERSION: ${{ inputs.version || github.ref_name }}
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      VERSION: ${{ inputs.version || github.ref_name }}
+  notes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.notes.outputs.tag }}
+      version: ${{ steps.notes.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Extract the notes for this version
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Extract the notes for this version and check it matches the code
+        id: notes
         run: |
           version="${VERSION#v}"
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "not a version: $VERSION" >&2
             exit 1
           fi
-          echo "TAG=v$version" >> "$GITHUB_ENV"
+          code=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' packages/gapscan-core/src/gapscan/core/version.py)
+          if [ "$code" != "$version" ]; then
+            echo "the code says $code, the release says $version" >&2
+            exit 1
+          fi
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           awk -v v="$version" '
             $0 ~ "^## \\[" v "\\]" { on = 1; next }
             on && /^## \[/ { exit }
@@ -41,8 +65,155 @@ jobs:
             echo "CHANGELOG.md has no section for $version" >&2
             exit 1
           fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: notes
+          path: notes.md
+
+  python:
+    needs: notes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          version: "0.12.21"
+      - name: Build the wheel and sdist, install the wheel in a clean venv
+        run: uv run --no-dev python tools/build_dist.py --check
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: python
+          path: build/pypi/dist/gapscan-*
+
+  desktop:
+    needs: notes
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            file: GapScan.dmg
+          - os: ubuntu-24.04
+            file: gapscan-linux-x86_64.tar.gz
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          version: "0.12.21"
+      - name: Install dependencies
+        run: uv sync --frozen --group dev --group build --group desktop
+      - name: Build the macOS app and disk image
+        if: runner.os == 'macOS'
+        run: make dmg
+      - name: Build the Linux program folder
+        if: runner.os == 'Linux'
+        run: |
+          make freeze
+          tar -C dist -czf "dist/${{ matrix.file }}" gapscan
+      - name: Put semgrep and bandit on PATH (the setup wizard provides them to users)
+        run: |
+          uv tool install semgrep==1.176.0
+          uv tool install bandit==1.9.4
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Start the built program, scan a sample, read the report
+        run: uv run pytest -q tests/test_frozen.py
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: desktop-${{ matrix.os }}
+          path: dist/${{ matrix.file }}
+
+  release:
+    needs: [notes, python, desktop]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      TAG: ${{ needs.notes.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          path: artifacts
+      - name: Gather the files and their checksums
+        run: |
+          mkdir upload
+          find artifacts -type f ! -name notes.md -exec cp {} upload/ \;
+          (cd upload && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: "upload/*"
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$TAG" --target "$GITHUB_SHA" --title "GapScan $TAG" --notes-file notes.md
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "GapScan $TAG" \
+            --notes-file artifacts/notes/notes.md upload/*
+      - name: Move the major tag (v1) to this release for `uses: shawaf/gapscan@v1`
+        run: |
+          major="${TAG%%.*}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f -a "$major" -m "GapScan $TAG" "$GITHUB_SHA"
+          git push -f origin "refs/tags/$major"
+
+  pypi:
+    needs: [notes, release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/gapscan/
+    permissions:
+      id-token: write  # trusted publishing: no API token is stored anywhere
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: python
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086  # v1.14.3
+
+  mcp-registry:
+    needs: [notes, pypi]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write  # GitHub OIDC login to the MCP Registry for the io.github.shawaf namespace
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+      - name: Download and verify mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: v1.8.16
+        run: |
+          set -euo pipefail
+          archive="mcp-publisher_linux_amd64.tar.gz"
+          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
+          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+          rm -f "$archive" "$archive.sigstore.json"
+      - name: Publish server.json to the MCP Registry
+        run: |
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish

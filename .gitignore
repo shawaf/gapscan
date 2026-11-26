@@ -27,7 +27,8 @@ config/gapscan.local.toml
 # dashboard frontend build artifacts (the built single-file template IS committed)
 dashboard/node_modules/
 dashboard/dist/
-docker/bundle/
+docker/bundle/*
+!docker/bundle/README.md
 docker/requirements.lock
 dashboard/dist-manager/
 

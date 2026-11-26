@@ -1,10 +1,14 @@
 # syntax=docker/dockerfile:1.7
-# GapScan offline image: scanners, GapScan itself and the data bundle, all preinstalled so that
-#   docker run --rm --network none ... gapscan-offline scan /scan
+# GapScan image: scanners, GapScan itself and the security data, all preinstalled so that
+#   docker run --rm --network none -v "$PWD:/scan:ro" ghcr.io/shawaf/gapscan scan /scan
 # works on a machine with no network. Build it on a CONNECTED machine (it downloads the pinned
 # scanners once); the finished image never needs the network.
 #
-#   make docker-build BUNDLE=build/bundle/gapscan-bundle.tar.gz
+# Where the security data comes from (DATA_SOURCE):
+#   bundle  (default) a verified offline bundle in docker/bundle/ (`make docker-build BUNDLE=...`)
+#   fetch   the vulnerability data fetched while building (`gapscan data fetch-vulns`): the public
+#           image published to GHCR by .github/workflows/docker.yml, rebuilt every week
+#   none    no data; mount a data folder at /opt/gapscan/data or run `gapscan setup --no-scanners`
 #
 # Behind a TLS-inspecting proxy, give its CA bundle as a build secret (curl and pip only, never
 # stored in a layer): DOCKER_BUILD_ARGS="--secret id=ca_bundle,src=/path/to/ca.pem" make docker-build
@@ -15,6 +19,7 @@
 FROM python:3.12-slim-bookworm
 
 ARG TARGETARCH
+ARG DATA_SOURCE=bundle
 # Pinned scanner releases and the checksums the projects publish for them.
 ARG GITLEAKS_VERSION=8.30.1
 ARG OSV_VERSION=2.6.0
@@ -28,7 +33,8 @@ ARG TRIVY_SHA256_AMD64=2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8
 
 ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONDONTWRITEBYTECODE=1
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+# git: `gapscan ci run --base` diffs against the pull request's base branch.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git \
     && rm -rf /var/lib/apt/lists/*
 
 # Go-based scanners: download, verify the pinned sha256, install. A mismatch fails the build.
@@ -69,6 +75,9 @@ RUN pip install --no-deps /opt/gapscan-src/packages/gapscan-core /opt/gapscan-sr
 # Data: installed from the bundle with `gapscan update`, which verifies every checksum. The bundle is
 # bind-mounted during the build, so it is not stored in any image layer.
 COPY docker/gapscan.toml /opt/gapscan/gapscan.toml
+# The GitHub Action and `docker run --user $(id -u)` mount a checkout owned by someone else: let git
+# read it (system-wide, so it holds for any user id).
+RUN git config --system --add safe.directory '*'
 RUN useradd --create-home --uid 10001 gapscan && mkdir -p /opt/gapscan/data /work \
     && chown -R gapscan:gapscan /opt/gapscan /work
 ENV GAPSCAN_CONFIG=/opt/gapscan/gapscan.toml \
@@ -78,11 +87,26 @@ ENV GAPSCAN_CONFIG=/opt/gapscan/gapscan.toml \
     SEMGREP_VERSION_CHECK_URL=
 USER gapscan
 RUN --mount=type=bind,source=docker/bundle,target=/bundle \
-    gapscan update --from /bundle/gapscan-bundle.tar.gz --no-model \
-    && if [ -d /opt/gapscan/data/semgrep-rules ]; then \
-         echo "This image contains the Semgrep community rules (Semgrep Rules License v1.0): internal use only, do not publish it." > /opt/gapscan/IMAGE-NOTICE.txt; \
-       fi
+    --mount=type=secret,id=ca_bundle,required=false,uid=10001 \
+    set -eu; \
+    if [ -s /run/secrets/ca_bundle ]; then export SSL_CERT_FILE=/run/secrets/ca_bundle; fi; \
+    case "$DATA_SOURCE" in \
+      bundle) gapscan update --from /bundle/gapscan-bundle.tar.gz --no-model ;; \
+      fetch)  gapscan data fetch-vulns ;; \
+      none)   echo "no security data in this image" ;; \
+      *) echo "DATA_SOURCE must be bundle, fetch or none" >&2; exit 1 ;; \
+    esac; \
+    if [ -d /opt/gapscan/data/semgrep-rules ]; then \
+      echo "This image contains the Semgrep community rules (Semgrep Rules License v1.0): internal use only, do not publish it." > /opt/gapscan/IMAGE-NOTICE.txt; \
+    fi; \
+    chmod -R a+rX /opt/gapscan/data
+COPY --chown=gapscan:gapscan docker/DATA-NOTICE.md /opt/gapscan/DATA-NOTICE.md
 
+LABEL org.opencontainers.image.title="GapScan" \
+      org.opencontainers.image.description="Offline security scanner that maps every finding to OWASP, with evidence" \
+      org.opencontainers.image.source="https://github.com/shawaf/gapscan" \
+      org.opencontainers.image.url="https://gapscan.dev" \
+      org.opencontainers.image.licenses="Apache-2.0"
 WORKDIR /work
 ENTRYPOINT ["gapscan"]
 CMD ["--help"]

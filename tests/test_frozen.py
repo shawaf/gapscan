@@ -75,18 +75,18 @@ def test_the_packaged_app_serves_scans_and_keeps_data_in_its_folder(app, tmp_pat
         time.sleep(1)
     assert scan["status"] == "done", scan.get("error") or scan.get("log")
     report = client.get(f"/api/scans/{sid}/report.json").json()
-    assert report["findings"], "the scanners found nothing in a file with SQL injection and md5"
-    assert all(f["owasp"] for f in report["findings"]), "OWASP mapping tables were not bundled"
     tools = {t["name"]: t["status"] for t in scan["stats"]["scanners"]}
     # gitleaks and osv-scanner ship inside the app; the Python scanners (bandit, semgrep, checkov)
-    # come from the setup wizard or the machine, so they are only required when present here.
+    # come from the setup wizard or the machine, so they are only required when present here
+    # (the release workflow puts semgrep and bandit on PATH before running this test).
     assert tools["gitleaks"] == "ok" and tools["osv"] != "failed"
+    if shutil.which("bandit") or shutil.which("semgrep"):
+        assert report["findings"], "the scanners found nothing in a file with SQL injection and md5"
+        assert all(f["owasp"] for f in report["findings"]), "OWASP mapping tables were not bundled"
+        page = client.get(f"/api/scans/{sid}/report.html")  # embeds each finding's quoted code
+        assert page.status_code == 200 and "hashlib.md5" in page.text
     if shutil.which("bandit"):
         assert tools["bandit"] == "ok"
-    page = client.get(
-        f"/api/scans/{sid}/report.html"
-    )  # the report embeds the quoted code of each finding
-    assert page.status_code == 200 and "hashlib.md5" in page.text
     assert client.get(f"/api/scans/{sid}/exports/report.sarif").status_code == 200
     assert (home / "data" / "gapscan.db").is_file()  # all state is under the app folder
 
@@ -102,7 +102,9 @@ def test_the_bundled_scanners_are_found_without_anything_installed(tmp_path):
         for line in out.splitlines()
         if line.count("│") >= 3
     }
-    assert rows["gitleaks"] == "OK" and rows["osv"] == "OK"
+    assert rows["gitleaks"] == "OK"
+    # osv-scanner ships inside too, but it is only ready once its offline database is there
+    assert (BUILT.parent / "_internal" / "tools" / "osv-scanner").is_file()
     assert (
         rows["semgrep"] == "MISSING" and rows["trivy"] == "MISSING"
     )  # these come from the setup wizard

@@ -1,0 +1,154 @@
+# The public GapScan image, ghcr.io/shawaf/gapscan: every scanner, GapScan and fresh vulnerability
+# data, ready for `docker run --network none`.
+#
+# - Pull requests that touch the image or the code: build it (amd64) and run docker/test-offline.sh,
+#   a full scan and report with the network switched off.
+# - A version tag (v1.2.3), the weekly schedule and a manual run: the same test, then a multi-arch
+#   build (linux/amd64, linux/arm64) pushed with the tags 1.2.3, 1.2, 1 and latest. The weekly run
+#   rebuilds the newest release so the bundled vulnerability data stays fresh.
+#
+# Actions are pinned to commit SHAs (the tag is in the comment), as in ci.yml.
+name: Docker image
+
+on:
+  pull_request:
+    paths:
+      - "docker/**"
+      - "packages/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/docker.yml"
+  push:
+    tags: ["v*.*.*"]
+  schedule:
+    - cron: "17 4 * * 1"  # Mondays 04:17 UTC: refresh the data in the newest release's image
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/shawaf/gapscan
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Use the newest release on the weekly rebuild
+        if: github.event_name == 'schedule'
+        run: |
+          tag=$(git tag -l 'v*.*.*' --sort=-v:refname | head -1)
+          echo "rebuilding $tag"
+          git checkout --quiet "$tag"
+
+      - name: Read the version
+        id: version
+        run: |
+          v=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' packages/gapscan-core/src/gapscan/core/version.py)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "minor=${v%.*}" >> "$GITHUB_OUTPUT"
+          echo "major=${v%%.*}" >> "$GITHUB_OUTPUT"
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          version: "0.12.21"
+
+      - name: Lock GapScan's runtime requirements for the image
+        run: uv export --frozen --no-dev --no-hashes --no-emit-project --no-emit-workspace -o docker/requirements.lock
+
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+
+      - name: Build for this runner (amd64)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          build-args: DATA_SOURCE=fetch
+          platforms: linux/amd64
+          load: true
+          tags: gapscan-offline
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan and report with no network inside the container
+        run: ALLOW_NO_KB=1 sh docker/test-offline.sh
+
+      - name: Run this repository's GitHub Action on the sample app, with the image just built
+        uses: ./
+        with:
+          target: eval/fixtures/vuln-app
+          image: gapscan-offline
+          comment: "false"
+          upload-sarif: "false"
+
+      - name: Check what the action produced
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          findings = json.loads(Path("gapscan-findings.json").read_text())
+          sarif = json.loads(Path("gapscan.sarif").read_text())
+          comment = Path("gapscan-comment.md").read_text()
+          n = len(findings.get("findings", findings) if isinstance(findings, dict) else findings)
+          assert n > 0, "the action found nothing in the sample app"
+          assert sarif["runs"] and sarif["runs"][0]["results"], "empty SARIF"
+          assert comment.strip(), "empty PR comment"
+          print(f"action OK: {n} findings, {len(sarif['runs'][0]['results'])} SARIF results")
+          PY
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550  # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push (amd64 and arm64)
+        if: github.event_name != 'pull_request'
+        id: push
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          build-args: DATA_SOURCE=fetch
+          platforms: linux/amd64,linux/arm64
+          push: true
+          cache-from: type=gha
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE }}:${{ steps.version.outputs.minor }}
+            ${{ env.IMAGE }}:${{ steps.version.outputs.major }}
+            ${{ env.IMAGE }}:latest
+
+      - name: Attest the image's build provenance
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - name: Check that anyone can pull it
+        if: github.event_name != 'pull_request'
+        run: |
+          docker logout ghcr.io
+          if ! docker pull --quiet "$IMAGE:${{ steps.version.outputs.version }}"; then
+            echo "::warning::The image is private. Make it public once: GitHub > Packages > gapscan > Package settings > Change visibility."
+          fi

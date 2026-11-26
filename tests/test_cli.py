@@ -82,3 +82,35 @@ def test_data_fetch_vulns_gets_what_a_scan_checks_dependencies_against(tmp_path,
     assert res.exit_code == 0, res.output
     assert calls == ["kev", "osv:osv-db", "trivy:trivy-cache:False"]
     assert "OSV 2026-11-20" in res.output and "KEV 2026-11-19" in res.output
+
+
+def test_data_fetch_vulns_keeps_going_when_one_source_is_blocked(tmp_path, monkeypatch):
+    """A proxy that refuses cisa.gov must not cost the user the OSV and Trivy databases."""
+    import httpx
+
+    import gapscan.cli as cli
+
+    monkeypatch.setenv("GAPSCAN_HOME", str(tmp_path))
+    calls: list[str] = []
+
+    def blocked(store):
+        raise httpx.ProxyError("403 Forbidden")
+
+    monkeypatch.setattr(cli, "fetch_enrichment", blocked)
+    monkeypatch.setattr(cli, "fetch_osv_db", lambda d: calls.append("osv") or "2026-11-20")
+    monkeypatch.setattr(
+        cli, "fetch_trivy_db", lambda d, java_db=False: calls.append("trivy") or "2026-11-20"
+    )
+    res = runner.invoke(app, ["data", "fetch-vulns"])
+    assert res.exit_code == 1
+    assert calls == ["osv", "trivy"]
+    assert "OSV 2026-11-20" in res.output and "KEV missing" in res.output
+    assert "Not downloaded: CISA KEV/EPSS" in res.output and "Traceback" not in res.output
+
+
+def test_version_flag():
+    from gapscan.core.version import __version__
+
+    for flag in ("--version", "-V"):
+        res = runner.invoke(app, [flag])
+        assert res.exit_code == 0 and __version__ in res.output

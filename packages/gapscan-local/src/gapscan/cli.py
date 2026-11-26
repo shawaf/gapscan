@@ -10,9 +10,10 @@ import errno
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -87,8 +88,25 @@ def _load(config_path: Path | None) -> Config:
         raise typer.Exit(code=2) from exc
 
 
+def _print_version(value: bool) -> None:
+    if value:
+        console.print(f"gapscan {__version__}")
+        raise typer.Exit()
+
+
 @app.callback()
-def _main() -> None:
+def _main(
+    _version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            "-V",
+            help="Print the GapScan version and exit.",
+            callback=_print_version,
+            is_eager=True,
+        ),
+    ] = False,
+) -> None:
     """GapScan — offline AI security analysis agent."""
     use_app_dir()  # an installed package keeps its data in the per-user folder, not the cwd
 
@@ -143,6 +161,9 @@ def setup(
             console.print(f"[red]Vulnerability data download failed:[/red] {exc}", markup=True)
             console.print("Scanning still works; dependency checks need this data. Retry later.")
             raise typer.Exit(code=1) from exc
+        except typer.Exit:
+            console.print("Scanning still works; dependency checks need this data.")
+            raise
     console.print("Next: `gapscan scan <folder> -o scan.json`, then `gapscan report scan.json`.")
 
 
@@ -176,7 +197,7 @@ def scan(
     ] = None,
     config: ConfigOption = None,
 ) -> None:
-    """Run the scanners and normalize their findings (LLM triage and the dashboard come later)."""
+    """Run the scanners and normalize their findings into one JSON file (then `gapscan report`)."""
     cfg = _load(config)
     if not target.is_dir():
         console.print(f"[red]Target directory not found:[/red] {target}")
@@ -1234,19 +1255,44 @@ def data_fetch_vulns(
     """Download the vulnerability data a scan checks dependencies against: the OSV and Trivy
     databases, CISA KEV and EPSS (needs network once; the scan itself stays offline)."""
     cfg = _load(config)
+    failed: list[str] = []
+
+    def attempt(name: str, step: Callable[[], Any]) -> Any:
+        # Each source is independent: one blocked host (a proxy that refuses cisa.gov, say) must
+        # not stop the others from downloading.
+        try:
+            return step()
+        except (FetchError, OSError, ValueError, subprocess.SubprocessError) as exc:
+            failed.append(name)
+            console.print(f"[red]{name} download failed:[/red] {exc}", markup=True, highlight=False)
+            return None
+
     console.print("downloading CISA KEV and EPSS ...")
-    dates = fetch_enrichment(RawStore(cfg.data.dir / "enrichment"))
+    dates = attempt(
+        "CISA KEV/EPSS", lambda: fetch_enrichment(RawStore(cfg.data.dir / "enrichment"))
+    )
     console.print("downloading the OSV database (about 260 MB) ...")
-    osv_date = fetch_osv_db(cfg.scanners.osv.db_dir)
+    osv_date = attempt("OSV", lambda: fetch_osv_db(cfg.scanners.osv.db_dir))
     console.print("downloading the Trivy database ...")
-    trivy_date = fetch_trivy_db(cfg.scanners.trivy.cache_dir, java_db=java_db)
+    trivy_date = attempt(
+        "Trivy", lambda: fetch_trivy_db(cfg.scanners.trivy.cache_dir, java_db=java_db)
+    )
+    dates = dates or {}
     console.print(
-        f"OSV {osv_date}, Trivy {trivy_date}, KEV {dates.get('cisa_kev', '?')}, "
-        f"EPSS {dates.get('epss', '?')}. Check with `gapscan doctor`.",
+        f"OSV {osv_date or 'missing'}, Trivy {trivy_date or 'missing'}, "
+        f"KEV {dates.get('cisa_kev', 'missing')}, EPSS {dates.get('epss', 'missing')}. "
+        "Check with `gapscan doctor`.",
         markup=False,
     )
-    if then_watch:
+    if then_watch and (osv_date or trivy_date):
         _run_watch(cfg, None, True, None, None, notify, False, True)
+    if failed:
+        console.print(
+            "Not downloaded: " + ", ".join(failed) + ". Check the network or proxy and run "
+            "`gapscan data fetch-vulns` again; scanning works meanwhile.",
+            markup=False,
+        )
+        raise typer.Exit(code=1)
 
 
 schedule_app = typer.Typer(

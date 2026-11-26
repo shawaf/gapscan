@@ -36,11 +36,14 @@ _BASE = {
     Severity.INFO: 5,
 }
 _TEST_RE = re.compile(
-    r"(^|/)(tests?|__tests__|spec|specs|e2e|androidTest|testing|fixtures)/|"
+    r"(^|/)(tests?|__tests__|spec|specs|e2e|androidTest|testing|fixtures|testdata)/|"
     r"(_test\.(go|py)|\.(test|spec)\.[jt]sx?|Tests?\.(java|kt|swift)|_test\.dart)$",
 )
+# Minified files are almost always a copied library (jquery-3.2.1.min.js under static/), and their
+# one-line bodies make every pattern look like a hit.
 _VENDOR_RE = re.compile(
-    r"(^|/)(node_modules|vendor|third_party|Pods|Carthage|\.dart_tool|build|dist)/"
+    r"(^|/)(node_modules|vendor|third_party|bower_components|Pods|Carthage|\.dart_tool|build|dist)/"
+    r"|[.-]min\.(js|css|mjs)$"
 )
 # Build and developer scripts, docs and samples: they run on a developer's machine or CI, not in
 # the product. GitHub/GitLab workflow files are NOT here: injection in CI is a real attack path.

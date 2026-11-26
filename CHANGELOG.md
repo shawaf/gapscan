@@ -4,6 +4,21 @@ All notable changes to GapScan are listed here. Versions follow [semantic versio
 
 ## [Unreleased]
 
+### Fixed
+
+- `gapscan report` on large projects is about 20 times faster (OWASP Juice Shop: 7 minutes to 20
+  seconds, same output): parsed files and their function and call lists are cached.
+- Minified files (`*.min.js`, `*.min.css`) and `bower_components/` count as vendored code, and Go's
+  `testdata/` as test code, so a copied jQuery no longer tops the list.
+- The known-malicious check no longer flags a legitimate package whose declared range (`^10.0.0`)
+  cannot resolve to any of the compromised releases an advisory lists.
+- `gapscan data fetch-vulns` (and `gapscan setup`) keep downloading the other sources when one host
+  is blocked, and say which one failed instead of printing a traceback.
+
+### Added
+
+- `gapscan --version` / `-V`.
+
 ## [1.1.1] - 2026-11-26
 
 The zero-day check runs on its own.

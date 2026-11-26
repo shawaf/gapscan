@@ -38,7 +38,14 @@ def check_scanners(config: Config) -> list[Check]:
                 Check(st.name, Status.WARN, f"not registered by an allowed pack ({packs})")
             )
         elif not st.available:
-            checks.append(Check(st.name, Status.MISSING, "not found: install it or put it on PATH"))
+            checks.append(
+                Check(
+                    st.name,
+                    Status.MISSING,
+                    "not ready: run `gapscan setup` (it installs the scanner and its offline "
+                    "database), or put it on PATH",
+                )
+            )
         else:
             detail = st.version or "available"
             checks.append(

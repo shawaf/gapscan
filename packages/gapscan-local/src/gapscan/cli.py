@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
+import httpx
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -46,6 +47,7 @@ from .offline.fetch import (
 )
 from .offline.refresh import download_wheels, refresh_all
 from .offline.update import UpdateError, import_bundle, verify_bundle
+from .paths import use_app_dir
 from .pipeline import run_scan
 from .report.build import load_previous
 from .report.dashboard import TemplateMissing
@@ -53,6 +55,8 @@ from .report.decisions import load_decisions
 from .report.exports import write_exports
 from .report.exports.pdf import PdfUnavailable, render_pdf
 from .report.service import build_dashboard
+from .runtime.download import DownloadCancelled, DownloadError
+from .runtime.manager import RuntimeManager
 from .runtime.tools import activate as activate_tools
 from .services import ReviewHooks, review_scan
 from .stages import StageMismatch, TriageOutput
@@ -85,6 +89,60 @@ def _load(config_path: Path | None) -> Config:
 @app.callback()
 def _main() -> None:
     """GapScan — offline AI security analysis agent."""
+    use_app_dir()  # an installed package keeps its data in the per-user folder, not the cwd
+
+
+@app.command()
+def setup(
+    scanners: Annotated[
+        bool, typer.Option("--scanners/--no-scanners", help="Download missing scanners.")
+    ] = True,
+    data: Annotated[
+        bool, typer.Option("--data/--no-data", help="Download the vulnerability data.")
+    ] = True,
+    java_db: Annotated[
+        bool, typer.Option("--java-db", help="Also Trivy's Java DB (about 2.6 GB).")
+    ] = False,
+    config: ConfigOption = None,
+) -> None:
+    """Get this machine ready to scan (needs network once; the scan itself stays offline).
+
+    Downloads the scanners that are missing (Trivy, Gitleaks, OSV-Scanner, and Semgrep, Checkov and
+    Bandit in a private Python), only from the hosts pinned in the setup manifest, each file checked
+    against its pinned sha256, and then the vulnerability data (`gapscan data fetch-vulns`)."""
+    cfg = _load(config)
+    if scanners:
+        tools = RuntimeManager(cfg.data.dir).tools
+        last = [-1]
+
+        def progress(done: int, total: int) -> None:
+            pct = int(done * 100 / total) if total else 100
+            if pct // 25 != last[0] // 25:
+                last[0] = pct
+                console.print(f"  {pct}% of {total / 1e6:.0f} MB")
+
+        try:
+            tools.install(progress, say=lambda m: console.print(m, markup=False))
+        except (DownloadError, DownloadCancelled, OSError) as exc:
+            console.print(f"[red]Scanner download failed:[/red] {exc}")
+            raise typer.Exit(code=1) from exc
+        tools.activate()
+        left = tools.missing()
+        if left:
+            console.print(
+                "[yellow]Still missing:[/yellow] " + ", ".join(left) + " (no pinned download for "
+                "this platform; install them yourself or use the Docker image)"
+            )
+        else:
+            console.print("[green]Every scanner is ready.[/green]")
+    if data:
+        try:
+            data_fetch_vulns(java_db=java_db, config=config)
+        except (httpx.HTTPError, OSError) as exc:
+            console.print(f"[red]Vulnerability data download failed:[/red] {exc}", markup=True)
+            console.print("Scanning still works; dependency checks need this data. Retry later.")
+            raise typer.Exit(code=1) from exc
+    console.print("Next: `gapscan scan <folder> -o scan.json`, then `gapscan report scan.json`.")
 
 
 @app.command()
@@ -547,7 +605,7 @@ def doctor(config: ConfigOption = None) -> None:
     if missing:
         console.print(
             f"\n[red]{len(missing)} component(s) missing.[/red] "
-            "With network: `gapscan data fetch-vulns` for the vulnerability databases. "
+            "With network: `gapscan setup` installs missing scanners and vulnerability data. "
             "Air-gapped: `gapscan bundle` on a connected machine, then `gapscan update`."
         )
         raise typer.Exit(code=1)

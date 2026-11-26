@@ -1,6 +1,6 @@
 [project]
 name = "gapscan-local"
-version = "1.0.0"
+version = "1.1.0"
 description = "Local mode and apps: the CLI, desktop app and manager, offline bundle, setup wizard, CI mode."
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }

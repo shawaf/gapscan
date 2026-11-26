@@ -47,3 +47,15 @@ def test_a_source_checkout_is_left_alone(monkeypatch):
 def test_default_folder_is_per_user(monkeypatch):
     monkeypatch.delenv(paths.HOME_ENV, raising=False)
     assert "GapScan" in str(paths.app_dir()) or "gapscan" in str(paths.app_dir())
+
+
+def test_the_published_package_uses_the_app_folder(tmp_path, monkeypatch):
+    """`pipx install gapscan` has no project folder: data must not land in whatever cwd is."""
+    monkeypatch.setattr(paths, "installed_package", lambda: True)
+    monkeypatch.setattr(paths, "app_dir", lambda: tmp_path / "per-user")
+    assert paths.use_app_dir() == tmp_path / "per-user"
+    assert Config().data.dir == tmp_path / "per-user" / "data"
+
+
+def test_a_source_checkout_is_not_an_installed_package():
+    assert paths.installed_package() is False  # gapscan/_dist.py exists only in the built wheel

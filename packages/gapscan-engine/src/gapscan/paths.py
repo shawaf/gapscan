@@ -1,16 +1,25 @@
 """Where the installed app keeps its data.
 
-A source checkout keeps using `data/` in the project folder. The packaged app (and anyone who sets
-GAPSCAN_HOME) keeps everything in one per-user folder instead, because a packaged app has no project
-folder to write into."""
+A source checkout keeps using `data/` in the project folder. The packaged app, the published package
+(`pipx install gapscan`) and anyone who sets GAPSCAN_HOME keep everything in one per-user folder
+instead, because an installed program has no project folder to write into."""
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 from pathlib import Path
 
 HOME_ENV = "GAPSCAN_HOME"
+
+
+def installed_package() -> bool:
+    """True when running from the published package: tools/build_dist.py adds `gapscan._dist`."""
+    try:
+        return importlib.util.find_spec("gapscan._dist") is not None
+    except (ImportError, ValueError):
+        return False
 
 
 def app_dir() -> Path:
@@ -40,10 +49,13 @@ def data_env(base: Path) -> dict[str, str]:
 
 
 def use_app_dir(force: bool = False) -> Path | None:
-    """Point every data folder at the per-user folder (packaged app, or GAPSCAN_HOME set).
+    """Point every data folder at the per-user folder (packaged app, published package, or
+    GAPSCAN_HOME set).
 
     Locations already chosen through environment variables are kept. Returns the folder used."""
-    if not (force or getattr(sys, "frozen", False) or os.environ.get(HOME_ENV)):
+    if not (
+        force or getattr(sys, "frozen", False) or os.environ.get(HOME_ENV) or installed_package()
+    ):
         return None
     base = app_dir()
     for key, value in data_env(base).items():

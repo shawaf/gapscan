@@ -1,8 +1,8 @@
 # Homebrew formula for GapScan (TEMPLATE).
 #
 # This lives in a tap repo named `homebrew-gapscan` (so `brew tap shawaf/gapscan` finds it).
-# It is a template: fill in `url`, `sha256` and the Python `resource` blocks once the CLI is
-# published (PyPI sdists or a GitHub release). The real value of the formula is that it declares
+# `url` and `sha256` point at the latest release; the Python `resource` blocks still need
+# generating (below). The real value of the formula is that it declares
 # the external scanners as dependencies, so `brew install gapscan` pulls the whole toolchain.
 #
 # To generate the `resource` stanzas after the package is on PyPI:
@@ -18,9 +18,9 @@ class Gapscan < Formula
   homepage "https://github.com/shawaf/gapscan"
   license "Apache-2.0"
 
-  # TODO: point at a published release or the PyPI sdist of the `gapscan` meta-package.
-  url "https://github.com/shawaf/gapscan/archive/refs/tags/v1.0.0.tar.gz"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  # The single-package sdist attached to each release (the same file as on PyPI).
+  url "https://github.com/shawaf/gapscan/releases/download/v1.1.0/gapscan-1.1.0.tar.gz"
+  sha256 "df5ad1a19e5510712eabb100465c52863cce7b3caa79abf75b0336b386c667b3"
 
   depends_on "python@3.12"
 

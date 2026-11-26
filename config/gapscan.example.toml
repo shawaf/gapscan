@@ -29,6 +29,13 @@ endpoint = "http://localhost:11434"
 # Private addresses and .local / .internal / .home.arpa names are accepted as they are. An internal
 # model server known by a corporate DNS name must be listed explicitly (never a public service):
 # internal_hosts = ["llm.corp.example.com", "*.gpu.corp.example.com"]
+# Opt-in, off by default: let triage use a hosted OpenAI-compatible model over HTTPS when no local
+# model fits. `scan` still makes no network call; `triage`/`fix` then send each finding's bounded,
+# secret-masked review prompt to that host. The key comes from the environment, never this file.
+# backend = "openai"
+# endpoint = "https://api.openai.com"   # or an OpenAI-compatible gateway; /v1/chat/completions is appended
+# allow_remote = true
+# api_key_env = "GAPSCAN_LLM_API_KEY"
 # Choose the model by profile (best | balanced | small | tiny, or your own below), or set `model`
 # to any model id your backend serves; an explicit `model` always wins over the profile.
 # Run `gapscan model list` to see profiles and `gapscan model bench` to compare models.

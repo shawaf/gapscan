@@ -20,6 +20,32 @@ unchanged: public hosts are refused. For a GPU server, `config/gapscan.example.t
 `server` profile with `gpt-oss:120b` (checked on the Ollama registry on 2026-10-07; Apache-2.0). It is
 not benchmarked by GapScan: run `gapscan model bench` on your server first.
 
+## A hosted model (opt-in)
+
+No local machine strong enough? Triage can use a hosted OpenAI-compatible model instead. It is off
+by default and needs three explicit settings:
+
+```toml
+[llm]
+backend = "openai"
+endpoint = "https://api.openai.com"   # any OpenAI-compatible HTTPS endpoint
+allow_remote = true
+api_key_env = "GAPSCAN_LLM_API_KEY"   # the variable that holds the key
+```
+
+What changes and what doesn't:
+
+- `gapscan scan` still makes no network call. Only `triage`, `fix` and the other commands that ask the
+  model connect, and only to that one host (HTTPS only; plain HTTP is refused).
+- What is sent is the bounded review prompt for each finding (rule, file path, a code excerpt around
+  the line, data flow). Every message is secret-masked again just before it is sent.
+- The key is read from the environment variable, never from the config file, and never logged.
+- A warning names the host on every run, and cached answers from a hosted model are kept apart from
+  local ones.
+- The knowledge base embeddings always stay local.
+
+Use it only for code you are allowed to send to that provider.
+
 ## Verified with a real model
 
 On 2026-10-07, on a 4-core CPU-only Linux machine with 16 GB RAM, without Ollama:

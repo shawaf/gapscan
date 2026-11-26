@@ -1,13 +1,16 @@
-"""Local LLM client: Ollama's native API, or any OpenAI-compatible server (llama.cpp, vLLM).
+"""LLM client: Ollama's native API, or any OpenAI-compatible server (llama.cpp, vLLM).
 
 The endpoint must be localhost or a configured internal host (hard rule #2); the config
-validator enforces this and the client re-checks before every connection. Prompts are never
-logged at INFO level (hard rule: logging).
+validator enforces this and the client re-checks before every connection. The one exception is a
+hosted OpenAI-compatible model the user opted into with `llm.allow_remote` (HTTPS only, key from the
+environment): every message is then secret-masked again before it leaves the machine. Prompts are
+never logged at INFO level (hard rule: logging).
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import time
 from collections.abc import Iterable
 from typing import Any
@@ -15,9 +18,10 @@ from urllib.parse import urlparse
 
 import httpx
 
-from ..config import LLMConfig, endpoint_allowed
+from ..config import LLMConfig, endpoint_allowed, endpoint_is_remote, remote_endpoint_ok
 from ..core.interfaces import ChatResult as ChatResult  # declared in core; re-exported here
 from ..core.interfaces import LLMError as LLMError
+from ..redact import mask
 
 log = logging.getLogger(__name__)
 
@@ -31,10 +35,28 @@ class LLMClient:
     """The local `LLMProvider`."""
 
     def __init__(self, cfg: LLMConfig, http: httpx.Client | None = None) -> None:
-        assert_local_endpoint(cfg.endpoint, cfg.internal_hosts)
+        self.remote = endpoint_is_remote(cfg)
+        if self.remote:
+            if not remote_endpoint_ok(cfg.endpoint) or cfg.backend == "ollama":
+                raise LLMError("a remote model needs an https:// OpenAI-compatible endpoint")
+            key = os.environ.get(cfg.api_key_env, "")
+            if not key:
+                raise LLMError(
+                    f"llm.allow_remote is on but ${cfg.api_key_env} is empty: set the API key there"
+                )
+            headers = {"Authorization": f"Bearer {key}"}
+            log.warning(
+                "triage uses the hosted model at %s: masked review prompts leave this machine",
+                urlparse(cfg.endpoint).hostname,
+            )
+        else:
+            assert_local_endpoint(cfg.endpoint, cfg.internal_hosts)
+            headers = {}
         self.cfg = cfg
         self.endpoint = cfg.endpoint.rstrip("/")
-        self._http = http or httpx.Client(timeout=cfg.timeout_s)
+        self._http = http or httpx.Client(timeout=cfg.timeout_s, headers=headers)
+        if http is not None and headers:
+            self._http.headers.update(headers)
 
     @property
     def model(self) -> str:
@@ -47,6 +69,8 @@ class LLMClient:
                                    "ctx": cfg.context_tokens, "think": cfg.think}  # fmt: skip
         if cfg.backend != "ollama":  # another runtime can answer differently: never share answers
             options["backend"] = cfg.backend
+        if self.remote:
+            options["endpoint"] = urlparse(cfg.endpoint).hostname
         return options
 
     # --- discovery -----------------------------------------------------------------
@@ -85,6 +109,8 @@ class LLMClient:
         """One non-streaming completion. With `schema`, the server is asked to constrain the
         output to that JSON schema (the caller must still validate it)."""
         model = model or self.cfg.model
+        if self.remote:  # leaving the machine: mask secrets once more, whatever the prompt holds
+            messages = [{**m, "content": mask(m.get("content", ""))} for m in messages]
         started = time.monotonic()
         try:
             if self.cfg.backend == "ollama":

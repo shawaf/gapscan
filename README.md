@@ -270,7 +270,7 @@ All screenshots are from the sample app in `eval/fixtures/vuln-app` and are rege
 
 | | |
 |---|---|
-| **Offline** | No network calls during `scan`. The model endpoint must be localhost or an explicitly configured internal host. |
+| **Offline** | No network calls during `scan`. The model endpoint must be localhost or an explicitly configured internal host, unless you opt into a hosted model for triage ([how](docs/ai-upgrades.md#a-hosted-model-opt-in)). |
 | **Read-only** | The scanned code is read, never executed, built, installed or imported. |
 | **Untrusted input** | All scanned content is treated as data (prompt-injection risk). Agent tools are read-only and confined to the target directory. |
 | **Redacted** | Secret values are redacted in findings, cache, logs and reports. |

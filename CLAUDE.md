@@ -48,7 +48,9 @@ How the code is layered is in `ARCHITECTURE.md`.
 ## Hard rules (do not break)
 1. Never execute, build, install or import the code being scanned.
 2. No network calls during `scan`. The LLM endpoint must be localhost or an explicitly configured
-   internal host. The one exception is the setup wizard (`gapscan/runtime/`, `server/setup.py`, and
+   internal host, unless the user opts into a hosted model for triage (`llm.allow_remote`: HTTPS
+   only, key from the environment, every message secret-masked again before it leaves; `scan`
+   itself never calls it). The one exception is the setup wizard (`gapscan/runtime/`, `server/setup.py`, and
    the `gapscan setup` command that calls the same code): a user-triggered step that downloads the AI
    engine, models, scanners and data, only from the hosts pinned in `runtime/manifest.json`, with
    every file checked against its pinned sha256 (plus the user-run `gapscan data` / `bundle`

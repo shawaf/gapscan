@@ -2,7 +2,7 @@
 
 The endpoint must be localhost or a configured internal host (hard rule #2); the config
 validator enforces this and the client re-checks before every connection. The one exception is a
-hosted OpenAI-compatible model the user opted into with `llm.allow_remote` (HTTPS only, key from the
+hosted model the user opted into with `llm.allow_remote` (HTTPS only, key from the
 environment): every message is then secret-masked again before it leaves the machine. Prompts are
 never logged at INFO level (hard rule: logging).
 """
@@ -26,6 +26,14 @@ from ..redact import mask
 log = logging.getLogger(__name__)
 
 
+def openai_url(endpoint: str, route: str) -> str:
+    """An OpenAI-compatible route under `endpoint`. A bare host gets the usual `/v1` prefix
+    (`http://localhost:8080` -> `/v1/models`); an endpoint that already names its API path keeps
+    it, since providers differ (`https://api.groq.com/openai/v1`, Gemini's `.../v1beta/openai`)."""
+    base = endpoint.rstrip("/")
+    return f"{base}/{route}" if urlparse(base).path.strip("/") else f"{base}/v1/{route}"
+
+
 def assert_local_endpoint(endpoint: str, internal_hosts: Iterable[str] = ()) -> None:
     if not endpoint_allowed(endpoint, internal_hosts):
         raise LLMError(f"refusing non-local LLM endpoint host {urlparse(endpoint).hostname!r}")
@@ -37,14 +45,15 @@ class LLMClient:
     def __init__(self, cfg: LLMConfig, http: httpx.Client | None = None) -> None:
         self.remote = endpoint_is_remote(cfg)
         if self.remote:
-            if not remote_endpoint_ok(cfg.endpoint) or cfg.backend == "ollama":
-                raise LLMError("a remote model needs an https:// OpenAI-compatible endpoint")
+            if not remote_endpoint_ok(cfg.endpoint):
+                raise LLMError("a hosted model needs an https:// endpoint")
             key = os.environ.get(cfg.api_key_env, "")
             if not key:
                 raise LLMError(
                     f"llm.allow_remote is on but ${cfg.api_key_env} is empty: set the API key there"
                 )
-            headers = {"Authorization": f"Bearer {key}"}
+            header = cfg.api_key_header or "Authorization"
+            headers = {header: f"Bearer {key}" if header.lower() == "authorization" else key}
             log.warning(
                 "triage uses the hosted model at %s: masked review prompts leave this machine",
                 urlparse(cfg.endpoint).hostname,
@@ -90,7 +99,7 @@ class LLMClient:
                     }
                     for m in r.json().get("models", [])
                 ]
-            r = self._http.get(f"{self.endpoint}/v1/models")
+            r = self._http.get(openai_url(self.endpoint, "models"))
             r.raise_for_status()
             return [{"name": m["id"], "size_gb": 0.0, "params": "", "quant": ""}
                     for m in r.json().get("data", [])]  # fmt: skip
@@ -166,7 +175,7 @@ class LLMClient:
                 "type": "json_schema",
                 "json_schema": {"name": "response", "schema": schema, "strict": True},
             }
-        r = self._http.post(f"{self.endpoint}/v1/chat/completions", json=body)
+        r = self._http.post(openai_url(self.endpoint, "chat/completions"), json=body)
         if r.status_code >= 400:
             raise httpx.HTTPError(f"{r.status_code}: {r.text[:200]}")
         data = r.json()

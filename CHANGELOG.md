@@ -35,7 +35,8 @@ the running application through ZAP and nuclei imports.
 - **For contributors**: a 10-minute rule-writing guide (`docs/writing-rules.md`), issue forms for
   bugs, false positives and rule requests, a pull-request template and a code of conduct.
 
-- Opt-in hosted model for triage (`llm.allow_remote`): any OpenAI-compatible HTTPS endpoint, key from an
+- Opt-in hosted model for triage (`llm.allow_remote`): any provider over HTTPS (OpenAI-compatible APIs
+  such as OpenAI, Anthropic, Gemini, Mistral, Groq, OpenRouter and Azure, or a hosted Ollama), key from an
   environment variable, every message secret-masked again before it is sent. Off by default; `scan`
   still makes no network call.
 

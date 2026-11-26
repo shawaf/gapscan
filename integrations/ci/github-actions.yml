@@ -9,6 +9,11 @@
 name: gapscan
 on:
   pull_request:
+  # Weekly: re-scan the default branch so a dependency that became vulnerable without a code change
+  # is caught too (refresh the runner's offline data first, e.g. a new bundle or
+  # `gapscan data fetch-vulns`). On this event there is no base ref, so everything is scanned.
+  schedule:
+    - cron: "17 6 * * 1"
 permissions:
   contents: read
   pull-requests: write
@@ -24,7 +29,7 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: >
-          gapscan ci run . --base "origin/$BASE_REF"
+          gapscan ci run . ${BASE_REF:+--base "origin/$BASE_REF"}
           --comment gapscan-comment.md --out gapscan-findings.json --sarif gapscan.sarif
       - name: Upload SARIF to the Security tab
         if: always()
@@ -33,7 +38,7 @@ jobs:
           sarif_file: gapscan.sarif
           category: gapscan
       - name: Comment on the pull request
-        if: always()
+        if: always() && github.event_name == 'pull_request'
         env:
           GAPSCAN_SCM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           API_URL: ${{ github.api_url }}

@@ -20,6 +20,7 @@ gapscan watch scan.json -t ./my-project          # one saved scan; -t lets it ch
 gapscan watch --all --notify                     # every project in the local manager, with a
                                                  # desktop notification when something is new
 gapscan watch --all -o alerts.json --fail-on-alert   # for cron or CI: exit code 3 on alerts
+gapscan watch --all --new-only --notify          # only what no earlier --new-only run reported
 ```
 
 Alerts are ranked by a fixed rule computed in Python, never by the model:
@@ -38,6 +39,31 @@ so. Ecosystems without an installed offline database are listed as skipped, neve
 The watch makes no network call. The desktop notification uses macOS Notification Center or
 `notify-send` on Linux; package names are passed to it as data, so a crafted name cannot run a
 script.
+
+### Automatic: the daily check
+
+```bash
+gapscan schedule enable              # every day at 09:00; --at 07:30 for another time
+gapscan schedule status
+gapscan schedule disable
+```
+
+Turning it on is your choice; nothing is scheduled until you do. Once a day the system runs
+`gapscan data fetch-vulns --watch --notify`: it downloads fresh vulnerability data (the same hosts as
+the command by hand), re-checks every project saved in the local manager, and shows a desktop
+notification for advisories no earlier check reported, so the same alert does not come back every
+morning. The output goes to `data/watch/schedule.log`.
+
+The job is registered with the system's own scheduler, so nothing of GapScan keeps running: a
+LaunchAgent on macOS (`~/Library/LaunchAgents/dev.gapscan.watch.plist`) and a systemd user timer on
+Linux (`gapscan-watch.timer`, which also catches up after the machine was off). Without systemd, the
+command prints the crontab line to add; on Windows, the command for Task Scheduler.
+
+On an air-gapped machine, `gapscan schedule enable --no-fetch` only re-checks against the data you
+bring in with an offline bundle (`gapscan update`).
+
+The same check in CI: add a weekly `schedule:` trigger to the GitHub Action workflow
+([`github-action.md`](github-action.md#between-pull-requests-the-weekly-re-check)).
 
 ## 2. `gapscan fix-deps`: the nearest safe version
 

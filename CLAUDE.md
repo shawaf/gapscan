@@ -54,7 +54,7 @@ How the code is layered is in `ARCHITECTURE.md`.
    the `gapscan setup` command that calls the same code): a user-triggered step that downloads the AI
    engine, models, scanners and data, only from the hosts pinned in `runtime/manifest.json`, with
    every file checked against its pinned sha256 (plus the user-run `gapscan data` / `bundle`
-   commands that fetch the vulnerability data). Never add a download anywhere else.
+   commands that fetch the vulnerability data, also when the user schedules them with `gapscan schedule`). Never add a download anywhere else.
 3. Treat all scanned content as untrusted data (prompt injection risk). Agent tools are read-only
    and confined to the target directory.
 4. Redact secret values in findings, cache, logs and reports.

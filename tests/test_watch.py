@@ -254,3 +254,41 @@ def test_cli_watch_needs_a_scan_or_all(tmp_path) -> None:
     cfg.write_text(f'[data]\ndir = "{tmp_path / "data"}"\n')
     r = CliRunner().invoke(app, ["watch", "-c", str(cfg)])
     assert r.exit_code == 2
+
+
+def test_new_only_reports_each_alert_once(scanner, tmp_path, monkeypatch) -> None:
+    from gapscan.cli import app
+
+    s, _ = scanner
+    monkeypatch.setattr("gapscan.scanners.osv.OSVScanner.is_available", lambda self: True)
+    monkeypatch.setattr(
+        "gapscan.scanners.osv.OSVScanner._exec", lambda self, argv, timeout_s=None: s._exec(argv)
+    )
+    monkeypatch.setattr(
+        "gapscan.scanners.osv.OSVScanner.installed_ecosystems", lambda self: {"PyPI"}
+    )
+    sent: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        "gapscan.notify.desktop_notify", lambda t, b, **k: sent.append((t, b)) or True
+    )
+    scan_file = tmp_path / "scan.json"
+    scan_file.write_text(saved_scan().model_dump_json())
+    cfg = tmp_path / "gapscan.toml"
+    cfg.write_text(f'[data]\ndir = "{tmp_path / "data"}"\n')
+    args = ["watch", str(scan_file), "--new-only", "--notify", "--fail-on-alert", "-c", str(cfg)]
+    first = CliRunner().invoke(app, args)
+    assert first.exit_code == 3 and "2 not reported before" in first.output
+    second = CliRunner().invoke(app, args)
+    assert second.exit_code == 0, second.output  # same data, nothing new: no alert, no exit 3
+    assert "0 not reported before (2 already were)" in second.output
+    assert len(sent) == 1
+
+
+def test_only_unseen_survives_a_broken_file(tmp_path) -> None:
+    from gapscan.watch import only_unseen
+
+    alert = WatchAlert(project="p", advisory="GHSA-1", package="x", severity=Severity.HIGH)
+    seen = tmp_path / "reported.json"
+    seen.write_text("{not json")
+    assert only_unseen([alert], seen) == [alert]
+    assert only_unseen([alert], seen) == []

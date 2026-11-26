@@ -259,3 +259,26 @@ def alert_line(a: WatchAlert) -> str:
     if a.fixed_version:
         parts.append(f"fixed in {a.fixed_version}")
     return "; ".join(parts)
+
+
+def alert_key(alert: WatchAlert) -> str:
+    """What makes an alert the same alert on the next check: project, package, version, advisory."""
+    return "|".join([alert.project, alert.ecosystem or "", alert.package, alert.version or "",
+                     alert.advisory])  # fmt: skip
+
+
+def only_unseen(alerts: list[WatchAlert], seen_file: Path) -> list[WatchAlert]:
+    """The alerts not reported by an earlier check, and remember them for the next one.
+
+    A scheduled check runs every day against the same saved scans, so without this it would raise
+    the same alerts each morning. A broken or missing file counts as "nothing seen yet".
+    """
+    try:
+        seen = set(json.loads(seen_file.read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError):
+        seen = set()
+    new = [a for a in alerts if alert_key(a) not in seen]
+    seen |= {alert_key(a) for a in alerts}
+    seen_file.parent.mkdir(parents=True, exist_ok=True)
+    seen_file.write_text(json.dumps(sorted(seen), indent=0), encoding="utf-8")
+    return new

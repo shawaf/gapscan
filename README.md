@@ -125,12 +125,16 @@ gapscan scan ./my-app -o scan.json --import zap-report.json --import nuclei.json
 - `gapscan watch` re-checks every saved project's dependency list against freshly updated
   vulnerability data, without rescanning the code, and reports only what is new: exploited (CISA
   KEV) and reachable first. `--notify` shows a desktop notification.
+- `gapscan schedule enable` makes it automatic: every day, fresh data, every saved project
+  re-checked, and a notification only for advisories you haven't seen. In CI, a weekly `schedule:`
+  trigger does the same for the default branch.
 - `gapscan fix-deps` proposes the nearest safe version where the project declares the package and
   verifies it with an offline rescan. It never runs a package manager.
 - `gapscan pr` turns a reviewed fix into a branch and a pull request on GitHub or GitLab, with your
   own credentials, when you ask for it ([`docs/zero-day-watch.md`](docs/zero-day-watch.md)).
 
 ```bash
+gapscan schedule enable                            # the daily zero-day check, on autopilot
 gapscan watch --all --notify                       # every saved project, desktop alert when something is new
 gapscan watch --all -o alerts.json --fail-on-alert # for cron or CI: exit code 3 on new alerts
 gapscan fix-deps scan.json -t ./my-project -p fix.diff

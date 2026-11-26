@@ -4,6 +4,23 @@ All notable changes to GapScan are listed here. Versions follow [semantic versio
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-26
+
+The zero-day check runs on its own.
+
+### Added
+
+- **`gapscan schedule enable`**: a daily zero-day check you turn on once. Every day it downloads
+  fresh vulnerability data, re-checks every saved project's dependencies and shows a desktop
+  notification only for advisories no earlier check reported. It uses the system scheduler (a
+  LaunchAgent on macOS, a systemd user timer on Linux, a printed crontab line otherwise), so nothing
+  keeps running. `--at` sets the time, `--no-fetch` only re-checks (air-gapped machines), and
+  `gapscan schedule status` / `disable` show and stop it.
+- `gapscan data fetch-vulns --watch [--notify]` downloads the data and then runs that check.
+- `gapscan watch --new-only` reports each alert once, however often it runs.
+- The GitHub Action docs and CI example add a weekly `schedule:` trigger, so the default branch is
+  re-scanned with the newest image (fresh vulnerability data every week) even when nobody pushes.
+
 ## [1.1.0] - 2026-11-26
 
 GapScan in one step: `pipx install gapscan`, a ready-to-run Docker image, a GitHub Action that needs

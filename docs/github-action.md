@@ -16,7 +16,10 @@ pulling the image, the SARIF upload and the comment.
 
 ```yaml
 name: gapscan
-on: pull_request
+on:
+  pull_request:
+  schedule:
+    - cron: "17 6 * * 1"          # weekly: catch vulnerabilities disclosed since the last change
 permissions:
   contents: read
   pull-requests: write
@@ -50,6 +53,14 @@ That is the whole setup. `@v1` follows the newest 1.x release and runs the image
           engine: path
           install: pipx install gapscan && gapscan setup
 ```
+
+### Between pull requests: the weekly re-check
+
+A dependency can become vulnerable without anyone touching the code: an advisory is published for
+a version you already use. The `schedule:` trigger above covers that. On a scheduled run there is no
+base branch, so GapScan scans the whole default branch with the newest image, which is rebuilt every
+week with fresh vulnerability data (OSV, Trivy, CISA KEV, EPSS). New findings show up in the
+Security tab, where GitHub notifies the repository's security contacts. No PR comment is posted.
 
 To stop a pull request on serious findings, add a `gapscan.policy.toml` to the repository (see
 [What blocks a pull request](#what-blocks-a-pull-request)).

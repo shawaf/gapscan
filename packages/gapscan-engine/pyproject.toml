@@ -1,6 +1,6 @@
 [project]
 name = "gapscan-engine"
-version = "1.1.0"
+version = "1.1.1"
 description = "Engine: pipeline stages, normalize, code context, redaction, LLM plumbing, storage."
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }

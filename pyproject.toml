@@ -1,6 +1,6 @@
 [project]
 name = "gapscan"
-version = "1.1.0"
+version = "1.1.1"
 description = "GapScan Open: a free, offline security scanner that maps every finding to OWASP, with evidence. Deterministic scanners plus optional local AI review."
 readme = "README.md"
 requires-python = ">=3.11"

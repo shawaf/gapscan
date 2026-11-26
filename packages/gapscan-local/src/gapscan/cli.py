@@ -283,19 +283,38 @@ def watch(
     fail_on_alert: Annotated[
         bool, typer.Option("--fail-on-alert", help="Exit with code 3 when there are alerts.")
     ] = False,
+    new_only: Annotated[
+        bool,
+        typer.Option(
+            "--new-only",
+            help="Report only advisories no earlier `--new-only` check reported (for a daily job).",
+        ),
+    ] = False,
     config: ConfigOption = None,
 ) -> None:
     """Zero-day watch: re-check saved scans' dependencies against the vulnerability data installed
-    now (after `gapscan update` or `gapscan data fetch`), without scanning the code again. Reports
-    every advisory the saved scan did not know about, exploited (KEV) and reachable ones first.
-    Makes no network call."""
+    now (after `gapscan update` or `gapscan data fetch-vulns`), without scanning the code again.
+    Reports every advisory the saved scan did not know about, exploited (KEV) and reachable ones
+    first. Makes no network call. `gapscan schedule enable` runs it every day."""
+    _run_watch(_load(config), scans, all_projects, target, out, notify, fail_on_alert, new_only)
+
+
+def _run_watch(
+    cfg: Config,
+    scans: list[Path] | None,
+    all_projects: bool,
+    target: Path | None,
+    out: Path | None,
+    notify: bool,
+    fail_on_alert: bool,
+    new_only: bool,
+) -> None:
     from .enrich import load_enrichment
     from .notify import desktop_notify
     from .scanners.osv import OSVScanner
     from .server.watch import watch_saved_projects
-    from .watch import WatchReport, alert_line, watch_scan
+    from .watch import WatchReport, alert_line, only_unseen, watch_scan
 
-    cfg = _load(config)
     if not scans and not all_projects:
         console.print("[red]Give one or more scan JSON files, or --all.[/red]")
         raise typer.Exit(code=2)
@@ -324,6 +343,10 @@ def watch(
     alerts = sorted(
         (a for r in reports for a in r.alerts), key=lambda a: (-a.priority, a.project, a.package)
     )
+    if new_only:
+        known = len(alerts)
+        alerts = only_unseen(alerts, work / "reported.json")
+        console.print(f"{len(alerts)} not reported before ({known - len(alerts)} already were)")
     for r in reports:
         line = f"{r.project}: {r.components} dependencies checked, {len(r.alerts)} new advisories"
         console.print(line + (f" ({r.note})" if r.note else ""), markup=False)
@@ -1195,6 +1218,17 @@ def data_fetch_vulns(
     java_db: Annotated[
         bool, typer.Option("--java-db", help="Also Trivy's Java DB (about 2.6 GB).")
     ] = False,
+    then_watch: Annotated[
+        bool,
+        typer.Option(
+            "--watch",
+            help="Afterwards, re-check every saved project and report advisories not reported "
+            "before (the zero-day check `gapscan schedule enable` runs daily).",
+        ),
+    ] = False,
+    notify: Annotated[
+        bool, typer.Option("--notify", help="With --watch: a desktop notification on new alerts.")
+    ] = False,
     config: ConfigOption = None,
 ) -> None:
     """Download the vulnerability data a scan checks dependencies against: the OSV and Trivy
@@ -1211,6 +1245,81 @@ def data_fetch_vulns(
         f"EPSS {dates.get('epss', '?')}. Check with `gapscan doctor`.",
         markup=False,
     )
+    if then_watch:
+        _run_watch(cfg, None, True, None, None, notify, False, True)
+
+
+schedule_app = typer.Typer(
+    name="schedule",
+    help="A daily zero-day check: fresh vulnerability data, every saved project re-checked.",
+    no_args_is_help=True,
+)
+app.add_typer(schedule_app)
+
+
+@schedule_app.command("enable")
+def schedule_enable(
+    at: Annotated[str, typer.Option("--at", help="Time of day, HH:MM (local time).")] = "09:00",
+    fetch: Annotated[
+        bool,
+        typer.Option(
+            "--fetch/--no-fetch",
+            help="Download fresh vulnerability data first (default), or only re-check against "
+            "data you refresh yourself (an offline bundle on an air-gapped machine).",
+        ),
+    ] = True,
+    config: ConfigOption = None,
+) -> None:
+    """Run the zero-day check every day: download the vulnerability data, re-check every project
+    saved in the local manager, and notify only about advisories not reported before. Uses the
+    system's scheduler (launchd on macOS, a systemd user timer on Linux); nothing stays running."""
+    from . import schedule
+
+    cfg = _load(config)
+    log = (cfg.data.dir / "watch" / "schedule.log").resolve()
+    log.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        plan = schedule.plan_enable(at, fetch=fetch, log=log)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from exc
+    if plan.kind in ("cron", "manual"):
+        console.print(plan.note, markup=False)
+        return
+    problems = schedule.apply(plan)
+    for p in problems:
+        console.print(f"[yellow]{p}[/yellow]", markup=True)
+    if problems:
+        raise typer.Exit(code=1)
+    what = "downloads fresh data and re-checks" if fetch else "re-checks"
+    console.print(
+        f"Daily at {at}: GapScan {what} every saved project and notifies you about new "
+        f"advisories. Log: {log}. Turn it off with `gapscan schedule disable`.",
+        markup=False,
+    )
+
+
+@schedule_app.command("disable")
+def schedule_disable() -> None:
+    """Stop the daily zero-day check."""
+    from . import schedule
+
+    plan = schedule.plan_disable()
+    if schedule.is_enabled() is None:
+        console.print("No daily check is scheduled.")
+        return
+    schedule.apply(plan, remove=True)
+    console.print("The daily zero-day check is off.")
+
+
+@schedule_app.command("status")
+def schedule_status() -> None:
+    """Show whether the daily zero-day check is on."""
+    from . import schedule
+
+    found = schedule.is_enabled()
+    console.print(f"On ({found})." if found else "Off. Turn it on with `gapscan schedule enable`.",
+                  markup=False)  # fmt: skip
 
 
 @data_app.command("fetch-kb")

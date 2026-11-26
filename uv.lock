@@ -364,7 +364,7 @@ wheels = [
 
 [[package]]
 name = "gapscan"
-version = "1.1.0"
+version = "1.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "gapscan-local" },
@@ -412,7 +412,7 @@ dev = [
 
 [[package]]
 name = "gapscan-core"
-version = "1.1.0"
+version = "1.1.1"
 source = { editable = "packages/gapscan-core" }
 dependencies = [
     { name = "pydantic" },
@@ -423,7 +423,7 @@ requires-dist = [{ name = "pydantic", specifier = ">=2.13.5" }]
 
 [[package]]
 name = "gapscan-engine"
-version = "1.1.0"
+version = "1.1.1"
 source = { editable = "packages/gapscan-engine" }
 dependencies = [
     { name = "cryptography" },
@@ -471,7 +471,7 @@ provides-extras = ["postgres"]
 
 [[package]]
 name = "gapscan-local"
-version = "1.1.0"
+version = "1.1.1"
 source = { editable = "packages/gapscan-local" }
 dependencies = [
     { name = "gapscan-engine" },
@@ -492,7 +492,7 @@ requires-dist = [
 
 [[package]]
 name = "gapscan-security"
-version = "1.1.0"
+version = "1.1.1"
 source = { editable = "packages/gapscan-security" }
 dependencies = [
     { name = "gapscan-engine" },

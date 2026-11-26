@@ -1,6 +1,6 @@
 [project]
 name = "gapscan-core"
-version = "1.1.0"
+version = "1.1.1"
 description = "Core: the gap model and the interfaces every layer above uses (no I/O)."
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }

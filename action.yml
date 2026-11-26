@@ -1,17 +1,18 @@
 # GapScan GitHub Action: scan a pull request, upload the results to the Security tab, comment on
-# the PR. A thin wrapper over the CLI (`gapscan ci run` / `ci comment`); the engine makes no
-# network call during the scan.
+# the PR. A thin wrapper over the CLI (`gapscan ci run` / `ci comment`); the scan runs inside the
+# public image (ghcr.io/shawaf/gapscan, every scanner and fresh vulnerability data included) with the
+# network switched off.
 #
 # Usage (see docs/github-action.md):
 #   - uses: actions/checkout@v4
 #     with: { fetch-depth: 0 }        # the diff against the base branch needs history
-#   - uses: <owner>/gapscan@v1
+#   - uses: shawaf/gapscan@v1
 #     with:
 #       base: ${{ github.base_ref }}
 #
-# The runner must have `gapscan` on PATH. On a self-hosted runner install the offline bundle; on a
-# hosted runner pass `install:` with the command that installs it (e.g. a pip install or a release
-# download). Values from the event reach the shell through env only, never interpolated into a script.
+# `engine: path` uses a `gapscan` already on PATH instead (a self-hosted runner with the offline
+# bundle, or one installed with `install:`). Values from the event reach the shell through env only,
+# never interpolated into a script.
 name: GapScan
 description: Find, prove and prioritize security gaps against OWASP, in your pull requests.
 branding:
@@ -36,23 +37,53 @@ inputs:
   github-token:
     description: Token used to post the PR comment.
     default: ${{ github.token }}
+  engine:
+    description: "How to run GapScan: docker (the public image, nothing to install) or path (a gapscan already on PATH)."
+    default: docker
+  image:
+    description: Image to run with engine docker. Empty = ghcr.io/shawaf/gapscan at the version this action was referenced with (@v1 -> :1, @v1.1.0 -> :1.1.0, a branch or SHA -> :latest).
+    default: ""
   install:
-    description: Shell command to install gapscan before scanning (empty = already on PATH).
+    description: With engine path, a shell command that installs gapscan before scanning (empty = already on PATH).
     default: ""
 runs:
   using: composite
   steps:
     - name: Install gapscan
-      if: inputs.install != ''
+      if: inputs.engine == 'path' && inputs.install != ''
       shell: bash
       env:
         INSTALL: ${{ inputs.install }}
       run: eval "$INSTALL"
+    - name: Prepare the GapScan image
+      id: prep
+      if: inputs.engine == 'docker'
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        ACTION_REF: ${{ github.action_ref }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        if [ -z "$IMAGE" ]; then
+          tag=latest
+          if [[ "$ACTION_REF" =~ ^v([0-9]+(\.[0-9]+){0,2})$ ]]; then tag="${BASH_REMATCH[1]}"; fi
+          IMAGE="ghcr.io/shawaf/gapscan:$tag"
+        fi
+        echo "using $IMAGE"
+        docker image inspect "$IMAGE" > /dev/null 2>&1 || docker pull --quiet "$IMAGE"
+        bin="$RUNNER_TEMP/gapscan-bin"
+        mkdir -p "$bin"
+        cp "$ACTION_PATH/integrations/ci/gapscan-docker.sh" "$bin/gapscan"
+        chmod +x "$bin/gapscan"
+        echo "$bin" >> "$GITHUB_PATH"
+        echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
     - name: Scan
       shell: bash
       env:
         TARGET: ${{ inputs.target }}
         BASE: ${{ inputs.base }}
+        GAPSCAN_DOCKER_NETWORK: none  # the scan never needs the network
+        GAPSCAN_IMAGE: ${{ steps.prep.outputs.image }}
       run: >
         gapscan ci run "$TARGET" ${BASE:+--base "origin/$BASE"}
         --comment gapscan-comment.md --out gapscan-findings.json --sarif gapscan.sarif
@@ -67,6 +98,8 @@ runs:
       shell: bash
       env:
         GAPSCAN_SCM_TOKEN: ${{ inputs.github-token }}
+        GAPSCAN_DOCKER_NETWORK: bridge  # posting the comment talks to the GitHub API
+        GAPSCAN_IMAGE: ${{ steps.prep.outputs.image }}
         API_URL: ${{ github.api_url }}
         REPO: ${{ github.repository }}
         PR_NUMBER: ${{ github.event.pull_request.number }}

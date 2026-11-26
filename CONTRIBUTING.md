@@ -1,7 +1,9 @@
 # Contributing to GapScan
 
-Thanks for your interest. GapScan is in early alpha, so the design still moves; please open an issue
-to discuss anything larger than a small fix before you start.
+Thanks for your interest. The design still moves, so please open an issue to discuss anything larger
+than a small fix before you start. The quickest useful contribution is a new rule:
+[`docs/writing-rules.md`](docs/writing-rules.md) walks through one in about 10 minutes. Please follow
+the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Set up
 
@@ -19,6 +21,15 @@ The code is a uv workspace: five packages under `packages/` (core, engine, secur
 all contributing to the one `gapscan` import package. Put a new module in the package of its layer
 (`ARCHITECTURE.md` sections 2 and 6); `make lint` refuses an import that crosses a package boundary
 the wrong way.
+
+## Releases
+
+`CHANGELOG.md` is the one place release notes are written. To release, bump `__version__` in
+`packages/gapscan-core/src/gapscan/core/version.py` and the `version` of every `pyproject.toml` and of
+`server.json`, move the changelog's Unreleased section under the new version, merge, and run the
+**Release** workflow with the version (or push the tag `vX.Y.Z`). It builds and checks the wheel and
+the desktop builds, creates the GitHub release with checksums, moves the major tag (`v1`), publishes to
+PyPI and the MCP Registry; the **Docker image** workflow publishes the image on the same tag.
 
 ## Before you open a pull request
 

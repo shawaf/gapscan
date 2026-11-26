@@ -27,7 +27,11 @@ except OSError as exc:
 echo "== 2. doctor: every scanner and every dataset is present"
 run "$IMAGE" doctor | tee "$OUT/doctor.txt" | grep -E "semgrep|osv|trivy|gitleaks|checkov|bandit|rules|db|cache|kb"
 # The LLM rows are expected to be missing: the model is not part of this image (see the Dockerfile).
-if grep -v "llm" "$OUT/doctor.txt" | grep -q "MISSING"; then echo "FAIL: a scanner or dataset is missing"; exit 1; fi
+# The public image (DATA_SOURCE=fetch) carries no knowledge-base index either: it is only used by the
+# optional AI review, so ALLOW_NO_KB=1 accepts that row.
+SKIP="llm"
+if [ "${ALLOW_NO_KB:-0}" = 1 ]; then SKIP="llm|kb index"; fi
+if grep -Ev "$SKIP" "$OUT/doctor.txt" | grep -q "MISSING"; then echo "FAIL: a scanner or dataset is missing"; exit 1; fi
 
 echo "== 3. scan"
 run "$IMAGE" scan /scan -o /out/findings.json

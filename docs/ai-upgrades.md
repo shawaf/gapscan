@@ -20,6 +20,49 @@ unchanged: public hosts are refused. For a GPU server, `config/gapscan.example.t
 `server` profile with `gpt-oss:120b` (checked on the Ollama registry on 2026-10-07; Apache-2.0). It is
 not benchmarked by GapScan: run `gapscan model bench` on your server first.
 
+## A hosted model (opt-in)
+
+No local machine strong enough? Triage can use any hosted model you choose. It is off by default;
+turning it on is your agreement to send review prompts to that provider:
+
+```toml
+[llm]
+backend = "openai"                    # or "ollama" for a hosted Ollama
+endpoint = "https://api.openai.com"   # any HTTPS endpoint, see the table
+model = "your-model-id"
+allow_remote = true
+api_key_env = "GAPSCAN_LLM_API_KEY"   # the variable that holds the key
+```
+
+| Provider | `endpoint` | Notes |
+|---|---|---|
+| OpenAI | `https://api.openai.com` | |
+| Anthropic | `https://api.anthropic.com/v1` | its OpenAI-compatible API |
+| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | |
+| Mistral | `https://api.mistral.ai` | |
+| Groq | `https://api.groq.com/openai/v1` | |
+| DeepSeek | `https://api.deepseek.com` | |
+| OpenRouter | `https://openrouter.ai/api/v1` | one key, many models |
+| Azure OpenAI | `https://<resource>.openai.azure.com/openai/v1` | `api_key_header = "api-key"` |
+| Hosted Ollama | `https://ollama.com` | `backend = "ollama"` |
+| Your gateway | its HTTPS URL | anything OpenAI-compatible |
+
+A bare host gets the usual `/v1` path; an endpoint that already names its API path is used as given.
+
+What changes and what doesn't:
+
+- `gapscan scan` still makes no network call. Only `triage`, `fix` and the other commands that ask the
+  model connect, and only to that one host (HTTPS only; plain HTTP is refused).
+- What is sent is the bounded review prompt for each finding (rule, file path, a code excerpt around
+  the line, data flow). Every message is secret-masked again just before it is sent.
+- The key is read from the environment variable, never from the config file, and never logged.
+- A warning names the host on every run, `gapscan doctor` shows it, and cached answers from a hosted
+  model are kept apart from local ones.
+- The knowledge base embeddings always stay local.
+
+Use it only for code you are allowed to send to that provider. Answers are still validated against
+the schema, and invalid ones are marked `triage_failed`, whichever model gave them.
+
 ## Verified with a real model
 
 On 2026-10-07, on a 4-core CPU-only Linux machine with 16 GB RAM, without Ollama:

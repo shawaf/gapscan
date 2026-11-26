@@ -1,0 +1,64 @@
+{
+  "@programName": "ZAP",
+  "@version": "2.16.1",
+  "@generated": "Thu, 26 Nov 2026 10:00:00",
+  "site": [
+    {
+      "@name": "http://localhost:5000",
+      "@host": "localhost",
+      "@port": "5000",
+      "@ssl": "false",
+      "alerts": [
+        {
+          "pluginid": "40018",
+          "alertRef": "40018",
+          "alert": "SQL Injection",
+          "name": "SQL Injection",
+          "riskcode": "3",
+          "confidence": "2",
+          "riskdesc": "High (Medium)",
+          "desc": "<p>SQL injection may be possible.</p>",
+          "instances": [
+            {
+              "uri": "http://localhost:5000/user?name=%27+OR+%271%27%3D%271",
+              "method": "GET",
+              "param": "name",
+              "attack": "' OR '1'='1",
+              "evidence": "sqlite3.OperationalError: unrecognized token"
+            }
+          ],
+          "count": "1",
+          "solution": "<p>Use parameterized queries.</p>",
+          "cweid": "89",
+          "wascid": "19",
+          "sourceid": "1"
+        },
+        {
+          "pluginid": "10038",
+          "alert": "Content Security Policy (CSP) Header Not Set",
+          "name": "Content Security Policy (CSP) Header Not Set",
+          "riskcode": "2",
+          "confidence": "3",
+          "desc": "<p>No CSP header.</p>",
+          "instances": [
+            {"uri": "http://localhost:5000/", "method": "GET", "param": "", "evidence": ""}
+          ],
+          "cweid": "693",
+          "wascid": "15"
+        },
+        {
+          "pluginid": "10020",
+          "alert": "Missing Anti-clickjacking Header",
+          "riskcode": "2",
+          "confidence": "2",
+          "desc": "<p>No X-Frame-Options.</p>",
+          "instances": [
+            {"uri": "http://localhost:5000/ping?host=x", "method": "GET", "param": "x-frame-options", "evidence": ""}
+          ],
+          "cweid": "1021",
+          "wascid": "15"
+        }
+      ]
+    }
+  ]
+}

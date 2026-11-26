@@ -19,6 +19,9 @@ from ..store.raw import RawStore
 
 log = logging.getLogger(__name__)
 
+# What a failed download raises, for callers that may not import httpx themselves (hard rule 2).
+FetchError = httpx.HTTPError
+
 GITHUB_API = "https://api.github.com"
 RAW = "https://raw.githubusercontent.com"
 CC_BY_SA = "CC BY-SA 4.0"

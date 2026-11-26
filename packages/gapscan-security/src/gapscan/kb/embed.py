@@ -10,7 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..config import LLMConfig
-from ..llm.client import LLMError, assert_local_endpoint
+from ..llm.client import LLMError, assert_local_endpoint, openai_url
 
 log = logging.getLogger(__name__)
 
@@ -44,10 +44,12 @@ class OllamaEmbedder:
         for i in range(0, len(texts), BATCH):
             batch = [prefix + t[:MAX_CHARS] for t in texts[i : i + BATCH]]
             try:
-                path = "/v1/embeddings" if self.openai else "/api/embed"
-                r = self._http.post(
-                    f"{self.endpoint}{path}", json={"model": self.model, "input": batch}
+                url = (
+                    openai_url(self.endpoint, "embeddings")
+                    if self.openai
+                    else f"{self.endpoint}/api/embed"
                 )
+                r = self._http.post(url, json={"model": self.model, "input": batch})
                 if r.status_code >= 400:
                     raise httpx.HTTPError(f"{r.status_code}: {r.text[:200]}")
                 body = r.json()

@@ -51,12 +51,12 @@ the Jenkinsfile is not linted (that needs a Jenkins controller).
 ## GitHub Action (one-line setup)
 
 For github.com, the composite action in `action.yml` wraps the steps above: it scans the pull
-request, uploads SARIF to the **Security tab**, posts the comment, and can send the report to your
-GapScan project. See [`github-action.md`](github-action.md).
+request, uploads SARIF to the **Security tab** and posts the comment, running GapScan from the public
+Docker image so nothing has to be installed. See [`github-action.md`](github-action.md).
 
     - uses: actions/checkout@v4
       with: { fetch-depth: 0 }
-    - uses: <owner>/gapscan@v1
+    - uses: shawaf/gapscan@v1
       with:
         base: ${{ github.base_ref }}
 
@@ -83,4 +83,13 @@ Visual Studio Marketplace or Open VSX. JetBrains is not started.
     gapscan mcp --root .
 
 Add it to an assistant's MCP configuration (stdio). Tools: `gapscan_scan_snippet(language, code)`
-and `gapscan_scan_file(path)`. Read-only, confined to `--root`, fast scanners only, offline.
+and `gapscan_scan_file(path)`. Read-only, confined to `--root`, fast scanners only, offline. Setup for
+Claude Code, Cursor and other clients is in [`mcp.md`](mcp.md).
+
+## Other CI systems with the Docker image
+
+Any CI whose runners have Docker can use `ghcr.io/shawaf/gapscan` instead of installing GapScan
+(add `--user "$(id -u):$(id -g)" -e HOME=/tmp` when the checkout belongs to the runner's user):
+
+    docker run --rm --network none -v "$PWD:/src" -w /src ghcr.io/shawaf/gapscan:1 \
+      ci run . --base origin/main --comment gapscan-comment.md --out gapscan-findings.json

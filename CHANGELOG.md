@@ -4,6 +4,50 @@ All notable changes to GapScan are listed here. Versions follow [semantic versio
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-26
+
+GapScan in one step: `pipx install gapscan`, a ready-to-run Docker image, a GitHub Action that needs
+nothing installed, desktop and Linux builds on every release, an MCP Registry listing, and proof from
+the running application through ZAP and nuclei imports.
+
+### Added
+
+- **On PyPI.** `pipx install gapscan` (or `uvx gapscan`) installs the whole program as one package.
+  An installed package keeps its data in the per-user folder, never in the current directory.
+- **`gapscan setup`**: gets a machine ready in one command. It downloads the missing scanners from
+  the pinned setup manifest (every file checked against its sha256), then the vulnerability data.
+  `--no-scanners`, `--no-data` and `--java-db` choose what it fetches.
+- **Docker image** `ghcr.io/shawaf/gapscan` (linux/amd64 and linux/arm64): every scanner, GapScan and
+  vulnerability data, ready for `docker run --network none`. Rebuilt every week with fresh data, with
+  a build-provenance attestation. Tags `1.1.0`, `1.1`, `1` and `latest`.
+- **The GitHub Action needs nothing installed.** `uses: shawaf/gapscan@v1` runs GapScan from the
+  image, with the network off for the scan. `engine: path` keeps the old behaviour for self-hosted
+  runners.
+- **`gapscan scan --import`** adds results from other tools as evidence: SARIF from any static tool,
+  OWASP ZAP JSON reports and nuclei JSON Lines. A ZAP or nuclei result marks the code finding it
+  confirms (same CWE, the handler of that route), which then lists the runtime scanner as a source,
+  shows what was seen, and ranks higher. See `docs/imports.md`.
+- **Releases carry builds**: the wheel and sdist, the macOS app (`GapScan.dmg`, Apple silicon,
+  unsigned) and a Linux x86_64 build, with `SHA256SUMS` and provenance attestations. Each build is
+  started and made to scan a sample before it is published.
+- **MCP Registry listing** (`io.github.shawaf/gapscan`) and setup guides for Claude Code, Cursor and
+  VS Code in `docs/mcp.md`.
+- **For contributors**: a 10-minute rule-writing guide (`docs/writing-rules.md`), issue forms for
+  bugs, false positives and rule requests, a pull-request template and a code of conduct.
+
+- Opt-in hosted model for triage (`llm.allow_remote`): any provider over HTTPS (OpenAI-compatible APIs
+  such as OpenAI, Anthropic, Gemini, Mistral, Groq, OpenRouter and Azure, or a hosted Ollama), key from an
+  environment variable, every message secret-masked again before it is sent. Off by default; `scan`
+  still makes no network call.
+
+### Changed
+
+- The README opens with three ways to try GapScan (Docker, pipx, desktop app), the pull-request setup,
+  the MCP setup and a comparison with running the scanners by hand and with cloud services.
+- `gapscan doctor` now names `gapscan setup` as the fix for a missing scanner or database.
+- The status is now beta: the "early alpha" badge and warning are gone. The evaluation still comes
+  with every number.
+
 ### Fixed
 
 - **No network call during a scan.** Trivy contacted `check.trivy.dev` (version check and

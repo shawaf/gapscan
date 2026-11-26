@@ -15,7 +15,8 @@ will credit you in the release notes unless you prefer otherwise.
 
 ## Supported versions
 
-GapScan is in **early alpha**. Only the latest commit on `main` receives security fixes.
+Only the latest release (and `main`) receives security fixes. The Docker image is rebuilt every week
+with fresh vulnerability data; pull it again to get the newest one.
 
 ## What counts as a vulnerability in GapScan
 

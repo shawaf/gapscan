@@ -7,10 +7,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 
-from .config import Config
+from .config import Config, endpoint_is_remote
+from .llm.client import LLMClient, LLMError, openai_url
 from .registry import scanner_status
 
 
@@ -38,7 +40,14 @@ def check_scanners(config: Config) -> list[Check]:
                 Check(st.name, Status.WARN, f"not registered by an allowed pack ({packs})")
             )
         elif not st.available:
-            checks.append(Check(st.name, Status.MISSING, "not found: install it or put it on PATH"))
+            checks.append(
+                Check(
+                    st.name,
+                    Status.MISSING,
+                    "not ready: run `gapscan setup` (it installs the scanner and its offline "
+                    "database), or put it on PATH",
+                )
+            )
         else:
             detail = st.version or "available"
             checks.append(
@@ -56,13 +65,25 @@ def check_llm(config: Config) -> list[Check]:
     constrained to localhost/internal hosts.
     """
     endpoint = config.llm.endpoint.rstrip("/")
+    if endpoint_is_remote(config.llm):  # opted in: ask through the client, which sends the key
+        host = urlparse(endpoint).hostname
+        try:
+            models = [m["name"] for m in LLMClient(config.llm).list_models()]
+        except LLMError as exc:
+            return [Check("llm endpoint", Status.MISSING, f"hosted model at {host}: {exc}")]
+        found = config.llm.model in models or not models
+        return [
+            Check("llm endpoint", Status.OK, f"hosted model at {host} (opted in)"),
+            Check("llm model", Status.OK if found else Status.MISSING,
+                  config.llm.model if found else f"{config.llm.model!r} not offered by {host}"),
+        ]  # fmt: skip
     try:
         if config.llm.backend == "ollama":
             resp = httpx.get(f"{endpoint}/api/tags", timeout=5.0)
             resp.raise_for_status()
             models = [m.get("name", "") for m in resp.json().get("models", [])]
         else:  # openai-compatible
-            resp = httpx.get(f"{endpoint}/v1/models", timeout=5.0)
+            resp = httpx.get(openai_url(endpoint, "models"), timeout=5.0)
             resp.raise_for_status()
             models = [m.get("id", "") for m in resp.json().get("data", [])]
     except (httpx.HTTPError, ValueError) as exc:

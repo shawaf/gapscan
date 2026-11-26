@@ -47,6 +47,19 @@ def endpoint_allowed(url: str, internal_hosts: Iterable[str] = ()) -> bool:
     return False
 
 
+def remote_endpoint_ok(url: str) -> bool:
+    """A hosted model endpoint the user opted into (`llm.allow_remote`): HTTPS with a host name."""
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    return parsed.scheme == "https" and bool(parsed.hostname)
+
+
+def endpoint_is_remote(cfg: LLMConfig) -> bool:
+    """True when triage will send prompts off this machine and its private network."""
+    return cfg.allow_remote and not endpoint_allowed(cfg.endpoint, cfg.internal_hosts)
+
+
 class GeneralConfig(BaseModel):
     max_llm_findings: int = 200
     vuln_data_max_age_days: int = 30
@@ -121,6 +134,15 @@ class LLMConfig(BaseModel):
     # Internal model servers known by DNS name: ["llm.corp.example.com", "*.gpu.example.com"].
     # Private addresses and .local/.internal/.home.arpa names need no entry. Never a public service.
     internal_hosts: list[str] = Field(default_factory=list)
+    # Opt-in: let triage use any hosted model over HTTPS: an OpenAI-compatible API (OpenAI,
+    # Anthropic, Gemini, Mistral, Groq, DeepSeek, OpenRouter, Azure, a gateway) or a hosted Ollama.
+    # Off by default; turning it on is the user's agreement to send prompts there. `scan` never
+    # calls a model either way; what is sent is the bounded, secret-masked prompt for each finding.
+    # The API key is read from the environment variable named here, never from this file.
+    allow_remote: bool = False
+    api_key_env: str = "GAPSCAN_LLM_API_KEY"
+    # "Authorization" sends `Bearer <key>`; any other name (Azure: "api-key") sends the key as is.
+    api_key_header: str = "Authorization"
     temperature: float = 0.0
     seed: int = 7
     timeout_s: int = 120
@@ -169,15 +191,21 @@ class LLMConfig(BaseModel):
     def _endpoints_must_be_local(self) -> LLMConfig:
         from urllib.parse import urlparse
 
+        local = endpoint_allowed(self.endpoint, self.internal_hosts)
+        if self.allow_remote and not local and not remote_endpoint_ok(self.endpoint):
+            raise ValueError("llm.endpoint must be an https:// URL when llm.allow_remote is on")
         for name in ("endpoint", "embedding_endpoint"):
             url = getattr(self, name)
             if name == "embedding_endpoint" and not url:
                 continue
+            if name == "endpoint" and self.allow_remote:
+                continue  # checked above; the knowledge-base embeddings always stay local
             if not endpoint_allowed(url, self.internal_hosts):
                 raise ValueError(
                     f"llm.{name} host {urlparse(url).hostname or url!r} is not local or internal. "
                     "GapScan refuses public endpoints (hard rule: no network at scan time); list "
-                    "an internal model server by name in llm.internal_hosts."
+                    "an internal model server by name in llm.internal_hosts, or opt in to a "
+                    "hosted model for triage with llm.allow_remote (see docs/ai-upgrades.md)."
                 )
         return self
 

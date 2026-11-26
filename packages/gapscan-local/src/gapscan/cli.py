@@ -14,7 +14,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
-import httpx
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -39,6 +38,7 @@ from .memory import (
 from .models import Finding, Investigation, ScannerRun, ScanResult, Verdict
 from .offline.bundle import BundleError, BundleOptions, build_bundle
 from .offline.fetch import (
+    FetchError,
     fetch_enrichment,
     fetch_kb_sources,
     fetch_osv_db,
@@ -139,7 +139,7 @@ def setup(
     if data:
         try:
             data_fetch_vulns(java_db=java_db, config=config)
-        except (httpx.HTTPError, OSError) as exc:
+        except (FetchError, OSError) as exc:
             console.print(f"[red]Vulnerability data download failed:[/red] {exc}", markup=True)
             console.print("Scanning still works; dependency checks need this data. Retry later.")
             raise typer.Exit(code=1) from exc

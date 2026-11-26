@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import tomllib
 from pathlib import Path
@@ -47,7 +48,7 @@ def test_pypi_readme_links_are_absolute():
     assert "](docs/" not in text and 'src="docs/' not in text
     assert "https://raw.githubusercontent.com/shawaf/gapscan/v9.9.9/docs/images/" in text
     assert "https://github.com/shawaf/gapscan/blob/v9.9.9/docs/" in text
-    assert "](#quick-start)" in text  # in-page anchors stay
+    assert "](#try-it-in-a-minute)" in text  # in-page anchors stay
 
 
 def test_stage_merges_the_layers_and_adds_the_marker(tmp_path):
@@ -58,3 +59,23 @@ def test_stage_merges_the_layers_and_adds_the_marker(tmp_path):
     assert not list(pkg.rglob("__pycache__"))
     assert (pkg / "rules" / "semgrep").is_dir()
     assert (pkg / "report" / "templates" / "dashboard.html").is_file()
+
+
+def test_every_published_version_matches_the_code():
+    """PyPI, the MCP Registry listing and the workspace packages all release together."""
+    ver = bd.version()
+    server = json.loads((ROOT / "server.json").read_text())
+    assert server["version"] == ver and server["packages"][0]["version"] == ver
+    assert server["packages"][0]["identifier"] == "gapscan"
+    for pyproject in [
+        ROOT / "pyproject.toml",
+        *sorted((ROOT / "packages").glob("*/pyproject.toml")),
+    ]:
+        assert tomllib.loads(pyproject.read_text())["project"]["version"] == ver, pyproject
+    assert f"## [{ver}]" in (ROOT / "CHANGELOG.md").read_text()
+
+
+def test_the_readme_proves_the_mcp_registry_name():
+    """The MCP Registry checks for `mcp-name: <server name>` in the PyPI description."""
+    name = json.loads((ROOT / "server.json").read_text())["name"]
+    assert f"<!-- mcp-name: {name} -->" in bd.pypi_readme(bd.version())

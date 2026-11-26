@@ -46,6 +46,26 @@ gapscan update --from gapscan-bundle.tar.gz
 
 ## Docker
 
+**The public image.** `ghcr.io/shawaf/gapscan` (linux/amd64 and linux/arm64) carries every scanner,
+GapScan and vulnerability data fetched when it was built; it is rebuilt every week, so a fresh pull
+brings fresh data. Nothing else is needed, and the container needs no network:
+
+```bash
+mkdir -p gapscan-out
+docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -v "$PWD:/scan:ro" -v "$PWD/gapscan-out:/out" ghcr.io/shawaf/gapscan:1 scan /scan -o /out/findings.json
+docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -v "$PWD:/scan:ro" -v "$PWD/gapscan-out:/out" ghcr.io/shawaf/gapscan:1 \
+  report /out/findings.json -t /scan -o /out/report.html
+```
+
+Tags: `1.1.0` (exact), `1.1`, `1` and `latest`. The data's sources and terms are in
+`/opt/gapscan/DATA-NOTICE.md` inside the image; the Semgrep community rules are not included. Verify
+where an image came from with `gh attestation verify oci://ghcr.io/shawaf/gapscan:1 --repo shawaf/gapscan`.
+
+**Your own image from a bundle.** For an air-gapped site that wants to control the data, build the
+image from a verified bundle instead (`DATA_SOURCE=bundle`, the default of `docker/Dockerfile`):
+
 ```bash
 make docker-build BUNDLE=gapscan-bundle.tar.gz     # connected machine, once: pinned scanners + GapScan + the bundle
 docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp \
@@ -56,4 +76,4 @@ make docker-test                                   # the acceptance test: scan +
 
 The Go scanners (gitleaks, OSV-Scanner, Trivy) are downloaded at build time and **pinned by the sha256 the projects publish**; a mismatch fails the build. The image runs as a non-root user. The bundle is bind-mounted during the build and is not stored in any layer.
 
-**Limits.** The image has no language model: `scan`, `report` and `doctor` work fully offline, but `triage` needs an LLM endpoint on localhost or an internal host (a hard rule), so run Ollama next to the container (for example with `--network host`, or a private network that contains only the two). The image is built for the architecture it is built on (arm64 or amd64). If the bundle contained the Semgrep community rules, the image carries `/opt/gapscan/IMAGE-NOTICE.txt` and **must not be published**.
+**Limits.** The image has no language model: `scan`, `report` and `doctor` work fully offline, but `triage` needs an LLM endpoint on localhost or an internal host (a hard rule), so run Ollama next to the container (for example with `--network host`, or a private network that contains only the two). `make docker-build` builds for the architecture it runs on (arm64 or amd64). If the bundle contained the Semgrep community rules, the image carries `/opt/gapscan/IMAGE-NOTICE.txt` and **must not be published**.

@@ -5,7 +5,7 @@
 # interpolated into the script.
 #
 # For a one-line setup on github.com, use the composite action instead (see `action.yml` and
-# `docs/github-action.md`): `uses: <owner>/gapscan@v1`.
+# `docs/github-action.md`): `uses: shawaf/gapscan@v1`.
 name: gapscan
 on:
   pull_request:

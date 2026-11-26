@@ -9,23 +9,52 @@ API Security Top 10 and MASVS, and backs each one with evidence: a scanner resul
 or the quoted code. An optional local AI model triages, explains and proposes fixes. Your code
 never leaves the machine.
 
+[![PyPI](https://img.shields.io/pypi/v/gapscan?color=2ea44f&label=pypi)](https://pypi.org/project/gapscan/)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io%2Fshawaf%2Fgapscan-2496ed)](docs/offline.md#docker)
+[![CI](https://github.com/shawaf/gapscan/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/shawaf/gapscan/actions/workflows/ci.yml)
 [![Offline](https://img.shields.io/badge/network%20during%20scan-none-2ea44f)](docs/offline.md)
-[![Python](https://img.shields.io/badge/python-3.11%2B-3776ab)](pyproject.toml)
 [![OWASP](https://img.shields.io/badge/OWASP-Top%2010%3A2025%20%C2%B7%20ASVS%205.0-000000)](docs/rules.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
-[![Status](https://img.shields.io/badge/status-early%20alpha-orange)](#evaluation-read-this-before-trusting-any-number)
 
 [![GapScan dashboard overview](docs/images/report-overview.png)](docs/images/report-overview.png)
 
 *The report dashboard: one self-contained HTML file, no CDN, no network.*
 
-[Demo](#see-it-run) · [Quick start](#quick-start) · [Screenshots](#screenshots) · [Zero-day watch](#zero-day-watch-fixes-and-pull-requests) · [Trust](#built-to-be-trusted) · [Evaluation](#evaluation-read-this-before-trusting-any-number) · [Docs](#docs)
+[Try it](#try-it-in-a-minute) · [Demo](#see-it-run) · [Compare](#how-it-compares) · [Screenshots](#screenshots) · [CI](#in-every-pull-request) · [AI assistants](#for-ai-coding-assistants) · [Trust](#built-to-be-trusted) · [Evaluation](#evaluation-read-this-before-trusting-any-number) · [Docs](#docs) · [Contribute](#contributing)
 
 </div>
 
-> **Status: early alpha.** Install from source (below); there is no PyPI package or signed
-> desktop installer yet. The numbers in the [evaluation](#evaluation-read-this-before-trusting-any-number)
-> are measured and published with their weaknesses. Read them before relying on the tool.
+<!-- mcp-name: io.github.shawaf/gapscan -->
+
+## Try it in a minute
+
+Pick one. Each gets you a scan and an HTML report of the current folder.
+
+**Docker** (nothing to install; every scanner and fresh vulnerability data are in the image):
+
+```bash
+mkdir -p gapscan-out
+docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -v "$PWD:/scan:ro" -v "$PWD/gapscan-out:/out" ghcr.io/shawaf/gapscan:1 scan /scan -o /out/scan.json
+docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -v "$PWD:/scan:ro" -v "$PWD/gapscan-out:/out" ghcr.io/shawaf/gapscan:1 report /out/scan.json -t /scan -o /out/report.html
+```
+
+**pipx** (Python 3.11+; `gapscan setup` downloads the scanners and the vulnerability data once):
+
+```bash
+pipx install gapscan
+gapscan setup
+gapscan scan . -o scan.json && gapscan report scan.json -t . -o report.html
+gapscan serve --open             # or the local web UI: projects, history, your decisions
+```
+
+**Desktop app** (macOS, Apple silicon): download `GapScan.dmg` from the
+[latest release](https://github.com/shawaf/gapscan/releases/latest). It is not signed yet, so the first
+time, right-click the app and choose **Open**. The app's Setup page installs the scanners and data.
+
+**In your pull requests**: see [In every pull request](#in-every-pull-request). It's one step in a
+workflow, and nothing to install.
 
 ## See it run
 
@@ -45,13 +74,16 @@ not shown, and the watch step uses an older data snapshot so a new advisory can 
 | Fewer false alarms | optional local AI review: *confirmed / likely / false positive / needs review*, labeled as AI-generated |
 | Alerts when a new CVE hits code you already scanned | `gapscan watch`, exploited and reachable first |
 | Fixes you can check | `gapscan fix` and `gapscan fix-deps` keep a patch only if an offline rescan shows the gap gone; `gapscan pr` opens the pull request when you ask |
+| Proof from the running app | `--import` ZAP and nuclei results; code they confirm is marked and ranked up |
+| Checks in every pull request | a GitHub Action that needs nothing installed, plus GitLab, Jenkins, Azure and pre-commit |
 | Nothing leaves your machine | no network calls during `scan`; the model runs locally |
 
 ## What it does
 
 ### Scan
-Runs Semgrep, OSV-Scanner, Trivy, Gitleaks, Checkov and Bandit (plus any SARIF file) over a folder
-and merges everything into one finding schema with **stable IDs**. Secret values are redacted.
+Runs Semgrep, OSV-Scanner, Trivy, Gitleaks, Checkov and Bandit over a folder and merges everything
+into one finding schema with **stable IDs**. Secret values are redacted. Results from other tools
+(SARIF, ZAP, nuclei) can be added with `--import` ([`docs/imports.md`](docs/imports.md)).
 
 - **Own rule library**: 371 Apache-2.0 Semgrep rules in 9 languages, each with tests, CWE and a
   fix-oriented message ([`docs/rules.md`](docs/rules.md)).
@@ -79,6 +111,15 @@ mapping and the report all still work.
 For the top confirmed issues the model writes an audit-style investigation, and every cited
 `file:line` must have been shown to it. `gapscan fix` proposes a patch and offers it only if a
 rescan shows the finding gone. Nothing is applied automatically.
+
+### Prove it at runtime
+Static analysis says "this could be exploited". A dynamic scan of the running application can say
+"it was". Import ZAP or nuclei results and GapScan links each one to the code it confirms (same CWE,
+the handler for that route), adds the runtime scanner as a source and ranks the finding higher:
+
+```bash
+gapscan scan ./my-app -o scan.json --import zap-report.json --import nuclei.jsonl
+```
 
 ### Zero-day watch, fixes and pull requests
 - `gapscan watch` re-checks every saved project's dependency list against freshly updated
@@ -109,11 +150,66 @@ numbers are computed in Python; the dashboard only renders them.
 - `gapscan ci run`: scans only what a change introduced, applies your `monitor / comment / block`
   policy and writes pull-request comments. Also a GitHub Action, a pre-commit hook, GitLab, Jenkins
   and Azure templates, and a VS Code extension ([`docs/ci.md`](docs/ci.md)).
-- `gapscan mcp`: lets AI coding assistants scan the code they write.
+- `gapscan mcp`: lets AI coding assistants scan the code they write ([`docs/mcp.md`](docs/mcp.md)).
 - Verified offline bundles carry vulnerability data and rules to air-gapped machines
   ([`docs/offline.md`](docs/offline.md)).
 
 ![Flow](docs/flow.png)
+
+## How it compares
+
+GapScan runs well-known open-source scanners and adds what they leave to you. An honest summary:
+
+| | GapScan | The same scanners run by hand | Cloud code-security services |
+|---|---|---|---|
+| Findings from Semgrep, Trivy, Gitleaks, Checkov, Bandit, OSV | one merged, de-duplicated report | one output format per tool | their own engines |
+| Each finding mapped to OWASP Top 10, ASVS, API Top 10, MASVS | yes, with coverage per control | partly (some rules carry tags) | varies, often in paid tiers |
+| Cross-file data-flow path as evidence | Java, Python, JS/TS | Semgrep Pro only | usually |
+| AI triage and fixes | optional, local model, verified by a rescan | no | usually, in their cloud |
+| Your code leaves the machine | never | never | yes |
+| Price | free, Apache-2.0 | free | per seat or per repository |
+
+What GapScan is not: a dynamic scanner or a penetration-testing tool. It reads code and imports
+dynamic results ([`docs/imports.md`](docs/imports.md)); static analysis cannot prove code is secure,
+so it never says "passed". See the [evaluation](#evaluation-read-this-before-trusting-any-number)
+for measured accuracy.
+
+## In every pull request
+
+```yaml
+# .github/workflows/gapscan.yml
+name: gapscan
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: shawaf/gapscan@v1
+        with:
+          base: ${{ github.base_ref }}
+```
+
+It scans only what the pull request changed, posts a comment with the top findings, uploads SARIF
+to the Security tab, and blocks the merge only if your policy says so. It runs from the public
+Docker image with the network switched off. Details: [`docs/github-action.md`](docs/github-action.md);
+GitLab, Jenkins, Azure DevOps and pre-commit: [`docs/ci.md`](docs/ci.md).
+
+## For AI coding assistants
+
+Let your assistant check its own code against OWASP before you review it:
+
+```bash
+claude mcp add gapscan -- uvx gapscan mcp --root .        # Claude Code
+```
+
+Cursor, VS Code and other clients: [`docs/mcp.md`](docs/mcp.md). The server is read-only, offline and
+confined to the project folder. It is listed in the MCP Registry as `io.github.shawaf/gapscan`.
 
 ## Screenshots
 
@@ -185,17 +281,16 @@ All screenshots are from the sample app in `eval/fixtures/vuln-app` and are rege
 The one exception to "no network" is the setup wizard you start yourself, which downloads only from
 hosts pinned in `runtime/manifest.json` and checks every file against a pinned sha256.
 
-## Quick start
+## From source
 
-Requirements: [uv](https://docs.astral.sh/uv/) and the scanners on your `PATH`
-(`semgrep osv-scanner trivy gitleaks checkov bandit`). [Ollama](https://ollama.com) only if you want
-AI review. The Docker image bundles the scanners.
+Requirements: [uv](https://docs.astral.sh/uv/). [Ollama](https://ollama.com) only if you want AI
+review.
 
 ```bash
 git clone https://github.com/shawaf/gapscan && cd gapscan
 make setup                       # Python deps via uv
 cp config/gapscan.example.toml gapscan.toml
-uv run gapscan data fetch-vulns  # needs network once: OSV and Trivy databases, KEV, EPSS
+uv run gapscan setup             # needs network once: missing scanners, OSV and Trivy data, KEV, EPSS
 uv run gapscan doctor            # what is installed, what is missing
 
 uv run gapscan scan ./my-project -o scan.json
@@ -213,8 +308,9 @@ uv run gapscan report scan.json --triage triage.json -t ./my-project
 ```
 
 Large local data (vulnerability databases, models, the knowledge base index: several GB) lives in
-`data/` and is not in this repository; the commands above recreate it. Desktop app and packaging:
-[`docs/packaging.md`](docs/packaging.md).
+`data/` in a source checkout, and in a per-user folder for an installed package or the desktop app
+(`~/Library/Application Support/GapScan`, `%LOCALAPPDATA%\GapScan` or `~/.local/share/gapscan`; set
+`GAPSCAN_HOME` to move it). Desktop app and packaging: [`docs/packaging.md`](docs/packaging.md).
 
 **Languages:** Python, JavaScript/TypeScript, Java, Kotlin, Go, Swift, Dart, C# and PHP. Coverage is
 uneven: cross-file data flow covers Java, Python and JavaScript/TypeScript only, and Dart/Flutter
@@ -235,12 +331,15 @@ most of it comes from deterministic reasoning in the data-flow tracer, not from 
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | the layers, packages and rules for new code |
 | [`docs/rules.md`](docs/rules.md), [`docs/taint.md`](docs/taint.md), [`docs/supply-chain.md`](docs/supply-chain.md) | the rule library, the data-flow engine, reachability and malicious packages |
 | [`docs/zero-day-watch.md`](docs/zero-day-watch.md) | re-checking saved projects, dependency fixes and fix pull requests |
-| [`docs/ci.md`](docs/ci.md), [`docs/github-action.md`](docs/github-action.md) | CI, pull requests, IDE and MCP |
+| [`docs/ci.md`](docs/ci.md), [`docs/github-action.md`](docs/github-action.md) | CI, pull requests and IDE |
+| [`docs/mcp.md`](docs/mcp.md) | the MCP server for Claude Code, Cursor and other AI assistants |
+| [`docs/imports.md`](docs/imports.md) | adding SARIF, ZAP and nuclei results, and code confirmed at runtime |
 | [`docs/manager.md`](docs/manager.md) | the local web UI and its security design |
 | [`docs/ai-upgrades.md`](docs/ai-upgrades.md), [`docs/memories.md`](docs/memories.md) | model tiers, autofix, and how your notes guide the reviewer |
 | [`docs/offline.md`](docs/offline.md), [`docs/packaging.md`](docs/packaging.md) | bundles, verified updates, the Docker image, the desktop app |
 | [`docs/evaluation.md`](docs/evaluation.md) | method, results and failures |
 | [`docs/licenses.md`](docs/licenses.md) | licenses of everything GapScan runs, bundles or measures against |
+| [`docs/writing-rules.md`](docs/writing-rules.md) | write and test a new rule in 10 minutes |
 | [`SECURITY.md`](SECURITY.md), [`CONTRIBUTING.md`](CONTRIBUTING.md), [`CHANGELOG.md`](CHANGELOG.md) | reporting vulnerabilities, contributing, what changed in each release |
 
 ## Development
@@ -252,6 +351,18 @@ make rules-test    # every own rule against its vulnerable and safe cases (needs
 make dashboard     # rebuild the report dashboard (needs node)
 make manager       # rebuild the local web UI (needs node)
 ```
+
+## Contributing
+
+GapScan gets better with every rule, false-positive report and fix. Good places to start:
+
+- **Write a rule.** Rules are plain Semgrep YAML with a test file; [`docs/writing-rules.md`](docs/writing-rules.md)
+  takes you from idea to pull request in about 10 minutes. Issues labeled `rules` list requests.
+- **Report a false positive or a miss** with the issue form; each one becomes a test case.
+- **Ask, share and suggest** in [Discussions](https://github.com/shawaf/gapscan/discussions).
+
+Read [`CONTRIBUTING.md`](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md) first. Security
+problems in GapScan itself go to a private report ([`SECURITY.md`](SECURITY.md)).
 
 ## For teams
 

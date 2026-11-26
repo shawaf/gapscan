@@ -38,7 +38,29 @@ The scanners reach the user two ways, both from the pinned manifest (`packages/g
 - **Python scanners:** the wizard downloads a relocatable CPython (python-build-standalone), then every pinned wheel from `files.pythonhosted.org`, each checked against its sha256, and installs them offline with `pip --no-index --target` into the scanner's own folder. Launcher scripts (`bin/semgrep`, ...) start the private Python with `-m`; the folder can be moved because nothing holds an absolute path. Nothing is installed into any other Python.
 - **Regenerating the manifest:** `uv run python tools/make_pack_manifest.py` rebuilds it (GitHub release metadata, Hugging Face file hashes, and for the Python scanners `uv pip compile --generate-hashes` on `packages/gapscan-local/src/gapscan/runtime/python-tools.in` plus the PyPI file list). Run with `--skip-python` to leave the Python scanners out. Wheels are resolved for the platform you list in `SCANNER_PLATFORMS`; a source-only package stops the run, because it would need a build.
 
+## Release builds
+
+`.github/workflows/release.yml` builds on every version tag, and attaches to the GitHub release:
+
+| File | Built on | Checked by |
+|---|---|---|
+| `gapscan-<version>-py3-none-any.whl`, `gapscan-<version>.tar.gz` | Linux (`tools/build_dist.py`) | installing the wheel in a clean venv |
+| `GapScan.dmg` (macOS, Apple silicon, unsigned) | `macos-14` (`make dmg`) | `tests/test_frozen.py` against the built program |
+| `gapscan-linux-x86_64.tar.gz` (the `dist/gapscan/` folder) | `ubuntu-24.04` (`make freeze`) | `tests/test_frozen.py` |
+| `SHA256SUMS` | | `sha256sum -c SHA256SUMS` |
+
+Every file also carries a GitHub build-provenance attestation:
+`gh attestation verify GapScan.dmg --repo shawaf/gapscan`.
+
+## The PyPI package
+
+The workspace has four packages (ARCHITECTURE.md section 6), but PyPI gets one: `tools/build_dist.py`
+merges them into a single `gapscan` distribution, combines their dependencies and entry points, makes
+the README's links absolute, and adds `gapscan/_dist.py`. That marker tells the program it runs from
+an installed package, so it keeps its data in the per-user folder above instead of the current
+directory. The release workflow publishes it with PyPI trusted publishing (no stored token).
+
 ## Not in the package yet
 
-- Signing and notarization (macOS), signing (Windows), Windows and Linux installers, auto-update.
-- Only macOS arm64 has been built so far.
+- Signing and notarization (macOS), signing (Windows), a Windows build, auto-update.
+- The macOS build is Apple silicon only; Intel Macs can use `pipx install gapscan` or Docker.

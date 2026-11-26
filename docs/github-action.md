@@ -5,11 +5,12 @@ The composite action in `action.yml` runs GapScan on a pull request and:
 1. scans only what the change introduced (`gapscan ci run --base`),
 2. uploads **SARIF** to the repository's **Security tab** (code scanning),
 3. posts a **pull-request comment** with the top findings and their data flow,
-4. optionally **sends the report** to your GapScan project (hybrid/cloud),
-5. saves the findings JSON as a build artifact.
+4. saves the findings JSON as a build artifact.
 
-The engine makes no network call during the scan (hard rule 2). The only outbound calls are the
-SARIF upload, the comment and the optional project push.
+Nothing needs to be installed: by default the action runs GapScan from the public image
+`ghcr.io/shawaf/gapscan`, which carries every scanner and vulnerability data refreshed every week.
+The scan step runs that container with `--network none` (hard rule 2). The only outbound calls are
+pulling the image, the SARIF upload and the comment.
 
 ## Quick start
 
@@ -27,24 +28,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0          # the diff against the base branch needs history
-      - uses: <owner>/gapscan@v1
+      - uses: shawaf/gapscan@v1
         with:
           base: ${{ github.base_ref }}
 ```
 
-The runner must have `gapscan` on `PATH`. On a **self-hosted** runner, install the offline bundle
-(see [`offline.md`](offline.md)) and use the template in `integrations/ci/github-actions.yml`. On a
-**hosted** runner, pass `install:` with the command that installs the engine, for example:
+That is the whole setup. `@v1` follows the newest 1.x release and runs the image tag `:1`; pin
+`@v1.1.0` for an exact version (image `:1.1.0`).
+
+### Which GapScan runs
+
+| `engine` | What runs | When to use it |
+|---|---|---|
+| `docker` (default) | `ghcr.io/shawaf/gapscan` at the action's version, or the image you name in `image:` | GitHub-hosted runners, and self-hosted runners with Docker |
+| `path` | the `gapscan` on the runner's `PATH`, optionally installed first by `install:` | self-hosted runners without Docker, for example with the offline bundle ([`offline.md`](offline.md)) |
 
 ```yaml
-      - uses: <owner>/gapscan@v1
+      - uses: shawaf/gapscan@v1
         with:
           base: ${{ github.base_ref }}
-          install: pipx install gapscan
+          engine: path
+          install: pipx install gapscan && gapscan setup
 ```
 
-The project decides which **capabilities** run (SAST, Dependencies, Secrets, IaC) from its Security
-service settings; see the platform model in `ARCHITECTURE.md`.
+To stop a pull request on serious findings, add a `gapscan.policy.toml` to the repository (see
+[What blocks a pull request](#what-blocks-a-pull-request)).
 
 ## Inputs
 
@@ -56,10 +64,9 @@ service settings; see the platform model in `ARCHITECTURE.md`.
 | `upload-sarif` | `true` | Upload SARIF to the Security tab (needs `security-events: write`) |
 | `sarif-category` | `gapscan` | Code-scanning category for the SARIF |
 | `github-token` | `${{ github.token }}` | Token for the PR comment |
-| `server-url` | `""` | GapScan server URL (enables the push step) |
-| `project-id` | `""` | GapScan project id (required to push) |
-| `team-token` | `""` | GapScan server token, a secret (push only) |
-| `install` | `""` | Shell command to install `gapscan` before scanning |
+| `engine` | `docker` | `docker` runs the public image; `path` uses `gapscan` on `PATH` |
+| `image` | `""` | With `engine: docker`, the image to run (empty: `ghcr.io/shawaf/gapscan` at the action's version) |
+| `install` | `""` | With `engine: path`, a shell command that installs `gapscan` before scanning |
 
 ## What blocks a pull request
 
@@ -70,6 +77,9 @@ judged false positives never block.
 ## Security notes
 
 - Every third-party action is pinned to a commit SHA.
+- The scan runs in a container with no network, as the runner's own user, with only the workspace
+  mounted. The image is built and attested by this repository's `docker.yml` workflow; check it with
+  `gh attestation verify oci://ghcr.io/shawaf/gapscan:1 --repo shawaf/gapscan`.
 - Event values (branch names, PR numbers) reach the shell through `env:` only, never interpolated
   into a script, so a crafted branch name cannot become code.
 - The comment and SARIF steps run with `if: always()`, so results are reported even when the policy

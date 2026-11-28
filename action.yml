@@ -13,7 +13,9 @@
 # `engine: path` uses a `gapscan` already on PATH instead (a self-hosted runner with the offline
 # bundle, or one installed with `install:`). Values from the event reach the shell through env only,
 # never interpolated into a script.
-name: GapScan
+# The Marketplace lists the action under `name`, which must be unique there and must not equal a
+# GitHub user or organization login (`gapscan` is taken), so it is not just "GapScan".
+name: GapScan OWASP Security Scan
 description: Find, prove and prioritize security gaps against OWASP, in your pull requests.
 branding:
   icon: shield

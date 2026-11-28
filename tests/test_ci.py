@@ -38,3 +38,15 @@ def test_the_composite_action_is_pinned_and_never_interpolates_into_scripts() ->
         assert "${{" not in step.get("run", ""), step.get("name")
         if "uses" in step:
             assert re.search(r"@[0-9a-f]{40}\b", step["uses"]), f"pin {step['uses']} to a SHA"
+
+
+def test_the_action_metadata_can_be_listed_on_the_marketplace() -> None:
+    """GitHub Marketplace reads `name`, `description` and `branding` from the root `action.yml`. The
+    name must not equal a GitHub login (the account `gapscan` belongs to someone else), and the
+    listing card shows at most 125 characters of the description."""
+    yaml = pytest.importorskip("yaml")
+    repo = Path(__file__).resolve().parent.parent
+    action = yaml.safe_load((repo / "action.yml").read_text())
+    assert action["name"].strip().lower() not in {"gapscan", "github", "actions"}
+    assert 0 < len(action["description"]) <= 125
+    assert action["branding"]["icon"] and action["branding"]["color"]

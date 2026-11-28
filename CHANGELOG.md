@@ -18,6 +18,9 @@ All notable changes to GapScan are listed here. Versions follow [semantic versio
 ### Added
 
 - `gapscan --version` / `-V`.
+- The GitHub Action can be listed on GitHub Marketplace: its listing name is now
+  "GapScan OWASP Security Scan" (a bare "GapScan" clashes with an existing GitHub account).
+  `uses: shawaf/gapscan@v1` is unchanged.
 
 ## [1.1.1] - 2026-11-26
 

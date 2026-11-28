@@ -95,3 +95,17 @@ judged false positives never block.
   into a script, so a crafted branch name cannot become code.
 - The comment and SARIF steps run with `if: always()`, so results are reported even when the policy
   fails the job.
+
+## GitHub Marketplace
+
+The action is listed on GitHub Marketplace as **GapScan OWASP Security Scan** (the name comes from
+`action.yml`). Listing is a manual step on a release, because GitHub offers no API for it:
+
+1. Once, the repository owner accepts the GitHub Marketplace Developer Agreement and has two-factor
+   authentication turned on.
+2. Open the release (Releases, then the pencil icon on the newest `v1.x.y`), tick **Publish this
+   Action to the GitHub Marketplace**, wait for "Everything looks good!", pick the categories
+   (primary **Security**, secondary **Code quality**) and click **Update release**.
+
+Tick the box on each new release that `release.yml` publishes, so the listing shows the newest
+version.
